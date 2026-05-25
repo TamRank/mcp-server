@@ -1,6 +1,6 @@
 # @tam-rank/mcp-server
 
-> **The first MCP server for WordPress SEO.**  
+> **The SEO plugin built for agents, not adapted from a generic CMS bridge.**  
 > Connect Claude, Cursor, and other AI agents directly to your WordPress site — read issues, fix meta titles, create redirects, and roll back changes, all from a single chat message.
 
 [![npm version](https://img.shields.io/npm/v/@tam-rank/mcp-server)](https://www.npmjs.com/package/@tam-rank/mcp-server)
@@ -22,7 +22,7 @@ Instead of opening your WordPress dashboard to find and fix SEO issues, you tell
 
 Claude reads your site health, prioritizes fixes, proposes changes, and — after your approval — applies them. Every action is logged. Everything is reversible.
 
-**No SEO plugin has shipped an MCP server before this one.**
+TamRank is purpose-built for agent workflows: structured improvement schema, dry-run by default, scoped PAT auth with full audit trail, and a strategy layer that tells Claude *what to fix first and why* — not just a list of CRUD endpoints.
 
 ---
 
@@ -31,7 +31,7 @@ Claude reads your site health, prioritizes fixes, proposes changes, and — afte
 ```
 ┌─────────────────┐         ┌──────────────────┐         ┌────────────────┐
 │   MCP Client    │◄────────│   MCP Server     │◄────────│  TamRank       │
-│  (Claude        │ JSON-RPC│  (@tamrank/      │  REST   │  (WordPress    │
+│  (Claude        │ JSON-RPC│  (@tam-rank/     │  REST   │  (WordPress    │
 │   Desktop,      │  over   │   mcp-server)    │  HTTP   │   plugin       │
 │   Cursor,       │  stdio  │                  │         │   + VPS API)   │
 │   Claude Code)  │         │                  │         │                │
