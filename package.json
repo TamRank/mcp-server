@@ -1,0 +1,29 @@
+{
+  "name": "@tamrank/mcp-server",
+  "version": "0.1.0-preview",
+  "description": "MCP server for TamRank WordPress SEO — connect Claude and Cursor to your site",
+  "bin": {
+    "tamrank-mcp": "./index.js"
+  },
+  "main": "./index.js",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "wordpress",
+    "seo",
+    "claude",
+    "anthropic",
+    "cursor",
+    "tamrank",
+    "ai-agent"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TamRank/mcp-server"
+  },
+  "homepage": "https://tamrank.com/agents"
+}
