@@ -1,9 +1,9 @@
-# @tamrank/mcp-server
+# @tam-rank/mcp-server
 
 > **The first MCP server for WordPress SEO.**  
 > Connect Claude, Cursor, and other AI agents directly to your WordPress site — read issues, fix meta titles, create redirects, and roll back changes, all from a single chat message.
 
-[![npm version](https://img.shields.io/npm/v/@tamrank/mcp-server)](https://www.npmjs.com/package/@tamrank/mcp-server)
+[![npm version](https://img.shields.io/npm/v/@tam-rank/mcp-server)](https://www.npmjs.com/package/@tam-rank/mcp-server)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Stable release: August 31, 2026](https://img.shields.io/badge/stable-August%2031%2C%202026-blue)](https://tamrank.com/agents)
 
@@ -57,7 +57,7 @@ Log in at [tamrank.com/account/agent-tokens](https://tamrank.com/account/agent-t
   "mcpServers": {
     "tamrank": {
       "command": "npx",
-      "args": ["-y", "@tamrank/mcp-server"],
+      "args": ["-y", "@tam-rank/mcp-server"],
       "env": {
         "TAMRANK_PAT": "tamrank_pat_xxxxxxxxxxxx",
         "TAMRANK_SITE_URL": "https://your-site.com"

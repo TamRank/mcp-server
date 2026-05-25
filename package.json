@@ -1,5 +1,5 @@
 {
-  "name": "@tamrank/mcp-server",
+  "name": "@tam-rank/mcp-server",
   "version": "0.1.0-preview",
   "description": "MCP server for TamRank WordPress SEO — connect Claude and Cursor to your site",
   "bin": {
