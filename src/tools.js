@@ -140,7 +140,7 @@ export function registerTools(server, client) {
 
   server.registerTool('get_meta', {
     title: 'Get post meta',
-    description: 'Current SEO meta of one post plus structured findings (F39). Use before update_meta.',
+    description: 'Current SEO meta of one post, its score breakdown (total plus the meta and content legs behind it — so you can see whether the meta or the content is dragging the page down), and structured findings (F39). Use before update_meta.',
     inputSchema: {
       post_id: z.number().int().positive().describe('The post/page id.'),
     },
