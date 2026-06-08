@@ -53,6 +53,32 @@ function writeResult(data) {
   return ok(data, 'Applied.');
 }
 
+/** Largest image we will inline as MCP image-content (base64 bloats ~33%). */
+const MAX_INLINE_IMAGE_BYTES = 4 * 1024 * 1024;
+
+/**
+ * Fetch an image URL and return it as an MCP image-content block so a vision model
+ * can see it. Returns null on any failure (unreachable, non-image, too large) — the
+ * caller keeps the text entry so the listing is still useful.
+ *
+ * @param {string} url Absolute image URL (the WordPress preview_url).
+ * @returns {Promise<{type:'image',data:string,mimeType:string}|null>}
+ */
+async function fetchImageBlock(url) {
+  if (!url) return null;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    if (!res.ok) return null;
+    const mime = (res.headers.get('content-type') || 'image/jpeg').split(';')[0].trim();
+    if (!mime.startsWith('image/')) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length === 0 || buf.length > MAX_INLINE_IMAGE_BYTES) return null;
+    return { type: 'image', data: buf.toString('base64'), mimeType: mime };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Register every tool on the server.
  *
@@ -147,6 +173,61 @@ export function registerTools(server, client) {
     },
   }, read((a) => client.get('/audit-log', { limit: a.limit, post_id: a.post_id, source: a.source })));
 
+  server.registerTool('get_images_missing_alt', {
+    title: 'Get images missing alt text',
+    description: 'Image attachments that have no alt text, returned WITH each image so you can look at it and write an accurate, specific alt. Then call update_image_alt per image. Credit-free — your own model does the captioning, TamRank only stores the result.',
+    inputSchema: {
+      limit: z.number().int().min(1).max(50).optional().describe('Max images (default 10).'),
+      offset: z.number().int().min(0).optional().describe('Pagination offset.'),
+      include_images: z.boolean().optional().describe('Embed each image so a vision model can see it (default true). Set false for a fast text-only listing.'),
+    },
+  }, async (args) => {
+    const a = args || {};
+    try {
+      const data = await client.get('/images/missing-alt', { limit: a.limit ?? 10, offset: a.offset });
+      const images = Array.isArray(data.images) ? data.images : [];
+      const content = [{ type: 'text', text: JSON.stringify(data, null, 2) }];
+      if (a.include_images !== false) {
+        for (const img of images) {
+          content.push({ type: 'text', text: `image id ${img.id} — "${img.title || ''}" (${img.width || '?'}×${img.height || '?'}, ${img.mime_type || ''})` });
+          const block = await fetchImageBlock(img.preview_url || img.url);
+          if (block) content.push(block);
+          else content.push({ type: 'text', text: '(preview unavailable — caption from the title/context above or skip)' });
+        }
+      }
+      return { content };
+    } catch (err) {
+      return fail(err);
+    }
+  });
+
+  // ---- Search Console reads (site:read) ----
+
+  server.registerTool('get_gsc_pages', {
+    title: 'Get Search Console pages',
+    description: 'Page performance from Google Search Console: clicks, impressions, CTR and average position over a period. Returns connected=false (with a note) when GSC is not linked.',
+    inputSchema: {
+      period: z.number().int().optional().describe('Look-back window in days: 7, 28 or 90 (default 28).'),
+    },
+  }, read((a) => client.get('/gsc/pages', { period: a.period })));
+
+  server.registerTool('get_gsc_keywords', {
+    title: 'Get Search Console keywords',
+    description: 'Keyword performance for one page, each enriched with click-uplift potential (estimated search volume, projected extra clicks at the target position, and a confidence tier). Get a page URL from get_gsc_pages first.',
+    inputSchema: {
+      page_url: z.string().describe('The full page URL (as returned by get_gsc_pages).'),
+      period: z.number().int().optional().describe('7, 28 or 90 days (default 28).'),
+    },
+  }, read((a) => client.get('/gsc/keywords', { page_url: a.page_url, period: a.period })));
+
+  server.registerTool('get_keyword_stability', {
+    title: 'Get keyword position stability',
+    description: 'Per-keyword position stability for one page (stable / moderate / volatile over the last 28 days) plus a direction trend (improving / declining / flat). Use it to tell a real ranking drop from normal day-to-day volatility before reacting.',
+    inputSchema: {
+      page_url: z.string().describe('The full page URL (as returned by get_gsc_pages).'),
+    },
+  }, read((a) => client.get('/gsc/keyword-stability', { page_url: a.page_url })));
+
   // ---- writes (dry-run by default) ----
 
   server.registerTool('update_meta', {
@@ -228,5 +309,19 @@ export function registerTools(server, client) {
   }, write((a) => {
     const { control } = splitWriteArgs(a, []);
     return client.post(`/rollback/${a.action_id}`, undefined, control);
+  }));
+
+  server.registerTool('update_image_alt', {
+    title: 'Update image alt text',
+    description: 'Write alt text on an image attachment. Dry-run by default: call without execute to preview the diff + change_token, then call again with execute=true and that change_token to apply. Pair with get_images_missing_alt. Reversible via rollback.',
+    inputSchema: {
+      image_id: z.number().int().positive().describe('The image attachment id (from get_images_missing_alt).'),
+      alt_text: z.string().describe('The alt text to write.'),
+      execute: z.boolean().optional().describe('Set true (with change_token) to apply. Omit for a dry run.'),
+      change_token: z.string().optional().describe('The change_token returned by the dry run.'),
+    },
+  }, write((a) => {
+    const { body, control } = splitWriteArgs(a, ['alt_text']);
+    return client.post(`/image/${a.image_id}/alt`, body, control);
   }));
 }

@@ -84,7 +84,12 @@ Setup time: under 5 minutes.
 | `get_site_overview` | All pages, posts, products with SEO status | `site:read` |
 | `get_site_health` | Priority issues ranked by impact | `site:read` |
 | `get_priority_actions` | "What should I fix first?" — filtered by focus area | `site:read` |
+| `get_gsc_pages` | Search Console page performance (clicks, impressions, CTR, position) | `site:read` |
+| `get_gsc_keywords` | Per-page keyword performance + click-uplift potential | `site:read` |
+| `get_keyword_stability` | Per-keyword position stability + direction trend | `site:read` |
+| `get_images_missing_alt` | Images without alt text, returned so the model can see and caption them (credit-free) | `site:read` |
 | `update_meta` | Write meta title and description to any post | `meta:write` |
+| `update_image_alt` | Write alt text to an image attachment | `meta:write` |
 | `manage_redirects` | Create, update, or delete 301/302 redirects | `redirects:write` |
 | `resolve_404` | Mark a 404 as resolved (with optional redirect) | `redirects:write` |
 | `get_audit_log` | Full history of agent-applied changes | `audit:read` |
