@@ -118,6 +118,7 @@ on the [V2 agency roadmap](#roadmap).
 | `get_site_overview` | All pages, posts, products with SEO status | `site:read` |
 | `get_site_health` | Priority issues ranked by impact | `site:read` |
 | `get_priority_actions` | "What should I fix first?" — filtered by focus area | `site:read` |
+| `get_page_analysis` | Deep per-page audit: score breakdown (meta vs content, live + stale flag) + every content check with fix tips and evidence | `site:read` |
 | `get_gsc_pages` | Search Console page performance (clicks, impressions, CTR, position) | `site:read` |
 | `get_gsc_keywords` | Per-page keyword performance + click-uplift potential | `site:read` |
 | `get_keyword_stability` | Per-keyword position stability + direction trend | `site:read` |

@@ -146,6 +146,14 @@ export function registerTools(server, client) {
     },
   }, read((a) => client.get(`/post/${a.post_id}/meta`)));
 
+  server.registerTool('get_page_analysis', {
+    title: 'Get page analysis (deep dive)',
+    description: 'Full per-page SEO audit — the deep dive get_meta is not. Returns the score breakdown (meta vs content legs, the LIVE content score, and a stale flag when the stored/dashboard score is out of date) plus the content analysis: every category and check with status, the top issues each with a ready-made fix tip, and the extracted evidence (heading tree, images, links, word count). Each check is flagged actionable_by_agent — you can fix image-alt issues (via update_image_alt) and the focus keyword (via update_meta); headings/readability/links/length need page-content edits, so report those to the site owner. The human-facing labels and tips are canonical English (content_analysis.language); each check has a stable, language-neutral `code` — present findings to the user in their own language using the codes, do not just echo the English text. Heavier than get_meta (recomputes live).',
+    inputSchema: {
+      post_id: z.number().int().positive().describe('The post/page id.'),
+    },
+  }, read((a) => client.get(`/post/${a.post_id}/analysis`)));
+
   server.registerTool('get_redirects', {
     title: 'List redirects',
     description: 'Existing redirects with their chain status.',
