@@ -1,11 +1,22 @@
 {
   "name": "@tam-rank/mcp-server",
-  "version": "0.1.0-preview",
+  "version": "0.2.0-preview",
   "description": "MCP server for TamRank WordPress SEO — connect Claude and Cursor to your site",
+  "type": "module",
   "bin": {
     "tamrank-mcp": "./index.js"
   },
   "main": "./index.js",
+  "files": [
+    "index.js",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node index.js",
+    "test": "node test/smoke.mjs"
+  },
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -20,6 +31,10 @@
   "license": "MIT",
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.23.8"
   },
   "repository": {
     "type": "git",
