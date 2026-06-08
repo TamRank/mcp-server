@@ -27,6 +27,22 @@ import { registerTools } from './src/tools.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf8'));
 
+/**
+ * The TamRank logo as a data: URI, advertised in the server's Implementation so
+ * MCP clients that render server icons (per the spec's `icons` field) show the
+ * brand mark instead of an auto-generated letter avatar. Loaded best-effort — a
+ * missing asset must never stop the server from starting.
+ */
+function loadIcons() {
+  try {
+    const png = readFileSync(join(__dirname, 'assets', 'icon.png')).toString('base64');
+    return [{ src: `data:image/png;base64,${png}`, mimeType: 'image/png', sizes: ['256x256'] }];
+  } catch {
+    return undefined;
+  }
+}
+const ICONS = loadIcons();
+
 const PAT = process.env.TAMRANK_PAT;
 const SITE_URL = process.env.TAMRANK_SITE_URL;
 const TIMEOUT = Number(process.env.TAMRANK_TIMEOUT) || 30000;
@@ -101,7 +117,13 @@ async function preflight() {
 async function main() {
   await preflight();
 
-  const server = new McpServer({ name: 'tamrank', version: pkg.version });
+  const server = new McpServer({
+    name: 'tamrank',
+    title: 'TamRank',
+    version: pkg.version,
+    websiteUrl: 'https://tamrank.com/agents',
+    ...(ICONS ? { icons: ICONS } : {}),
+  });
   registerTools(server, client);
 
   const transport = new StdioServerTransport();
