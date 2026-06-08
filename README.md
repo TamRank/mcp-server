@@ -73,6 +73,40 @@ Log in at [tamrank.com/account/agent-tokens](https://tamrank.com/account/agent-t
 
 Setup time: under 5 minutes.
 
+### Multiple sites
+
+Each server instance talks to one site. To manage several sites, add one entry
+per site to your MCP config — each with its own token and URL. This is the same
+pattern the GitHub, Slack, and Postgres MCP servers use for multiple targets:
+
+```json
+{
+  "mcpServers": {
+    "tamrank-blog": {
+      "command": "npx",
+      "args": ["-y", "@tam-rank/mcp-server"],
+      "env": {
+        "TAMRANK_PAT": "tamrank_pat_AAA",
+        "TAMRANK_SITE_URL": "https://blog.example.com"
+      }
+    },
+    "tamrank-shop": {
+      "command": "npx",
+      "args": ["-y", "@tam-rank/mcp-server"],
+      "env": {
+        "TAMRANK_PAT": "tamrank_pat_BBB",
+        "TAMRANK_SITE_URL": "https://shop.example.com"
+      }
+    }
+  }
+}
+```
+
+Each site appears as its own set of tools — ask Claude to *"fix the meta on the
+blog"* and it uses that site's tools. Managing many client sites from a single
+entry — one tool set with in-chat site switching backed by your OS keychain — is
+on the [V2 agency roadmap](#roadmap).
+
 ---
 
 ## Available tools (V1.1)
