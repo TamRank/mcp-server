@@ -117,7 +117,7 @@ export function registerTools(server, client) {
 
   server.registerTool('get_site_overview', {
     title: 'Get site overview',
-    description: 'All pages/posts with their SEO status (paginated).',
+    description: 'All pages/posts with their SEO status (paginated) — a SHALLOW triage list (audit score + the meta/content legs + meta flags), NOT the deep analysis. When the user asks to look deeper across the pages, prefer get_site_analysis (one call, deep-analyses the weakest pages); for one specific page use get_page_analysis. Do not present this shallow list as the deep look.',
     inputSchema: {
       page: z.number().int().positive().optional().describe('Page number (1-based).'),
       per_page: z.number().int().min(1).max(100).optional().describe('Items per page.'),
@@ -148,11 +148,20 @@ export function registerTools(server, client) {
 
   server.registerTool('get_page_analysis', {
     title: 'Get page analysis (deep dive)',
-    description: 'Full per-page SEO audit — the deep dive get_meta is not. Returns the score breakdown (meta vs content legs, the LIVE content score, and a stale flag when the stored/dashboard score is out of date) plus the content analysis: every category and check with status, the top issues each with a ready-made fix tip, and the extracted evidence (heading tree, images, links, word count). Each check is flagged actionable_by_agent — you can fix image-alt issues (via update_image_alt) and the focus keyword (via update_meta); headings/readability/links/length need page-content edits, so report those to the site owner. The human-facing labels and tips are canonical English (content_analysis.language); each check has a stable, language-neutral `code` — present findings to the user in their own language using the codes, do not just echo the English text. Heavier than get_meta (recomputes live).',
+    description: 'Look deeper at / diagnose ONE page — why it scores low and exactly what to fix. This is the tool to reach for whenever the user wants to go deeper than the overview on a specific page (or, after get_site_overview, on each of the weakest pages). Full per-page SEO audit — the deep dive get_meta is not. Returns the score breakdown (meta vs content legs, the LIVE content score, and a stale flag when the stored/dashboard score is out of date) plus the content analysis: every category and check with status, the top issues each with a ready-made fix tip, and the extracted evidence (heading tree, images, links, word count). Each check is flagged actionable_by_agent — you can fix image-alt issues (via update_image_alt) and the focus keyword (via update_meta); headings/readability/links/length need page-content edits, so report those to the site owner. The human-facing labels and tips are canonical English (content_analysis.language); each check has a stable, language-neutral `code` — present findings to the user in their own language using the codes, do not just echo the English text. Heavier than get_meta (recomputes live).',
     inputSchema: {
       post_id: z.number().int().positive().describe('The post/page id.'),
     },
   }, read((a) => client.get(`/post/${a.post_id}/analysis`)));
+
+  server.registerTool('get_site_analysis', {
+    title: 'Analyse the site (deep, multi-page)',
+    description: 'The reliable deep pass across MULTIPLE pages in one call — reach for this when the user says "look deeper at my pages", "what is wrong across my site", or "analyse my worst pages". Ranks the managed published pages by score and deep-analyses the lowest-scoring few, returning each weak page\'s score legs (live + stale flag) and its top issues with ready-made fixes plus an agent_fixable list. Heavier than other reads (analyses up to 5 pages live). For the full breakdown of any single page that surfaces, follow up with get_page_analysis; for one specific page from the start, use get_page_analysis directly.',
+    inputSchema: {
+      limit: z.number().int().min(1).max(5).optional().describe('How many of the lowest-scoring pages to deep-analyse (default 3, max 5).'),
+      post_type: z.string().optional().describe('Restrict to one managed post type (e.g. page, post).'),
+    },
+  }, read((a) => client.get('/site/analysis', { limit: a.limit, post_type: a.post_type })));
 
   server.registerTool('get_redirects', {
     title: 'List redirects',
