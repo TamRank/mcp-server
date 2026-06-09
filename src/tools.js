@@ -24,6 +24,14 @@ const HINTS = {
   429: 'Rate limited. Wait for the window to reset before retrying.',
 };
 
+/** A 402 can also mean depleted AI credits (index actions) — different advice. */
+const CREDITS_HINT = 'The site\'s AI credits are depleted — they reset monthly. Check the error details (balance.resets_at) or get_capabilities for the reset date; the TamRank backend remains the final authority.';
+
+function isInsufficientCredits(err) {
+  return err.code === 'insufficient_credits'
+    || (err.data && err.data.backend_code === 'insufficient_credits');
+}
+
 /** Build a successful tool result from arbitrary JSON. */
 function ok(data, prefix) {
   const body = JSON.stringify(data, null, 2);
@@ -51,7 +59,7 @@ function okWithVisual(data, prefix) {
 /** Build an error tool result from an ApiError (or any error). */
 function fail(err) {
   if (err instanceof ApiError) {
-    const hint = HINTS[err.status];
+    const hint = isInsufficientCredits(err) ? CREDITS_HINT : HINTS[err.status];
     const lines = [`Error ${err.status || ''} ${err.code}: ${err.message}`.trim()];
     if (hint) lines.push(hint);
     if (err.data && Object.keys(err.data).length) lines.push('Details: ' + JSON.stringify(err.data));
@@ -165,6 +173,33 @@ export function registerTools(server, client) {
     },
   }, read((a) => client.get('/priority-actions', { focus: a.focus })));
 
+  server.registerTool('get_next_action', {
+    title: 'Get the single best next action',
+    description: 'The ONE highest-impact thing to do right now: the top card of the site\'s priority ranking reduced to a concrete instruction — the problem (`action.type`), the target (`action.target` — for post targets the title/URL are live-resolved; attachment and url targets carry the cached card\'s snapshot values), and the MCP tool that fixes it (`action.tool.name` + how; `actionable_by_agent` says whether you can do it or should advise the owner). IMPORTANT: the ranking is a cached snapshot (10-min TTL, refreshed only when the dashboard is viewed) that does NOT update after your writes — calling this again right after a fix returns the SAME action; act on it once, verify with rescore_page, then work through get_priority_actions or search_posts for the rest. available=false when no ranking is cached (this tool never recomputes) — the note then gives a concrete fallback. Rely on type/tool, not the prose (may be localized).',
+    inputSchema: {},
+  }, read(() => client.get('/agent/next-action')));
+
+  server.registerTool('search_posts', {
+    title: 'Search / filter the managed pages',
+    description: 'Find pages without paging through the whole overview: `q` matches title OR slug; filter by post_type, score range (score_below / score_above — both STRICT bounds, also when combined), missing meta (missing_meta: title | description | any), or list never-audited pages (unscored=true). Sort worst-first with orderby=score&order=asc — the quickest way to "the N worst pages about X". Items have the same shape as get_site_overview. Honest edges: score filters and orderby=score EXCLUDE never-audited posts (no score meta is not score 0) — use unscored=true to find those (it cannot combine with score filters or orderby=score: 400); missing_meta misses whitespace-only values — the has_meta_* flags per item are authoritative. Same published+managed boundary as the overview. Drill into results with get_meta / get_page_analysis.',
+    inputSchema: {
+      q: z.string().optional().describe('Search term — matches post title or slug.'),
+      post_type: z.string().optional().describe('Restrict to one managed post type (e.g. page, post).'),
+      score_below: z.number().int().min(0).max(100).optional().describe('Only pages with audit score strictly below this.'),
+      score_above: z.number().int().min(0).max(100).optional().describe('Only pages with audit score strictly above this.'),
+      missing_meta: z.enum(['title', 'description', 'any']).optional().describe('Only pages missing this meta field.'),
+      unscored: z.boolean().optional().describe('Only never-audited pages (cannot combine with score filters).'),
+      orderby: z.enum(['date', 'score']).optional().describe('Sort key (default date).'),
+      order: z.enum(['asc', 'desc']).optional().describe('Sort direction (default desc).'),
+      page: z.number().int().min(1).optional(),
+      per_page: z.number().int().min(1).max(100).optional().describe('Default 25.'),
+    },
+  }, read((a) => client.get('/search', {
+    q: a.q, post_type: a.post_type, score_below: a.score_below, score_above: a.score_above,
+    missing_meta: a.missing_meta, unscored: a.unscored === true ? 'true' : undefined,
+    orderby: a.orderby, order: a.order, page: a.page, per_page: a.per_page,
+  })));
+
   server.registerTool('get_meta', {
     title: 'Get post meta',
     description: 'Current SEO meta of one post, its score breakdown (total plus the meta and content legs behind it — so you can see whether the meta or the content is dragging the page down), and structured findings (F39). Use before update_meta. The score here is the stored value; if you just wrote meta it may be stale until you call rescore_page.',
@@ -213,6 +248,12 @@ export function registerTools(server, client) {
     },
   }, read((a) => client.get('/redirects', { limit: a.limit, offset: a.offset })));
 
+  server.registerTool('get_redirect_chains', {
+    title: 'Get redirect chains and loops',
+    description: 'Redirect chains (A→B→C) and loops, computed LIVE from the active redirects (the stored chain_status in get_redirects can lag; this does not use it). Each chain lists its hops, the final_destination, and a ready-made `fix`: flatten by updating the FIRST redirect to point straight at final_destination via manage_redirects (dry-run first; repeat per hop to flatten every row). Chains longer than 10 hops are cut off (truncated=true) and get NO fix — their final_destination may itself redirect further; flatten the listed hops, then call again. Lists are capped at 200 entries (capped=true: counts reflect only what is listed). Loops are listed separately and cannot be flattened — break one by changing or deleting one of its rows. length counts redirect rows; healthy single redirects are not listed.',
+    inputSchema: {},
+  }, read(() => client.get('/redirects/chains')));
+
   server.registerTool('get_404s', {
     title: 'List 404s',
     description: 'Open 404s grouped by URL and ranked by hits (with a has_redirect flag). Feeds resolve_404.',
@@ -230,6 +271,17 @@ export function registerTools(server, client) {
       source: z.enum(['manual', 'agent']).optional().describe('Filter by origin.'),
     },
   }, read((a) => client.get('/audit-log', { limit: a.limit, post_id: a.post_id, source: a.source })));
+
+  server.registerTool('get_changes', {
+    title: 'Get changes since a timestamp',
+    description: 'Incremental "what changed since X" feed — the cursor-driven counterpart of get_audit_log. Requires `since` (ISO-8601 or unix, INCLUSIVE); returns entries OLDEST FIRST with a `next_since` cursor: process the page, poll again with next_since, and ALWAYS dedupe by source+id — rows sharing the boundary second (at minimum the last one) repeat by design so none are lost. If `cursor_stalled` is true a single second held more rows than the limit: retry with a higher limit (max 100). Each entry is tagged source=manual (a human edit of the tracked SEO fields, captured on save — repeat saves within 5 minutes are debounced/skipped) or source=agent (an MCP write, with its audit_id for rollback; never pruned). All timestamps are UTC ISO-8601. Coverage is partial by design and the response says so: only tracked SEO meta fields + content stats of published managed posts are recorded — publish/unpublish/delete transitions and ordinary content edits are not logged, and manual entries for since-deleted posts drop out. Manual history is pruned after ~180 days (`since_before_retention` flags when your window predates it). Needs audit:read.',
+    inputSchema: {
+      since: z.string().describe('Lower bound, exclusive — ISO-8601 (2026-06-01T00:00:00Z) or unix timestamp. Use the previous response\'s next_since to continue.'),
+      limit: z.number().int().min(1).max(100).optional().describe('Max entries (default 25).'),
+      post_id: z.number().int().positive().optional().describe('Filter to one post.'),
+      source: z.enum(['manual', 'agent']).optional().describe('Filter by origin.'),
+    },
+  }, read((a) => client.get('/changes', { since: a.since, limit: a.limit, post_id: a.post_id, source: a.source })));
 
   server.registerTool('get_images_missing_alt', {
     title: 'Get images missing alt text',
@@ -288,7 +340,7 @@ export function registerTools(server, client) {
 
   server.registerTool('get_index_status', {
     title: 'Get page index status',
-    description: 'Google index status of ONE page, from the cached result of the last time the page was checked — a site index scan or the publish-time auto-check (credit-free; never queries Google live). `status` is indexed | crawled (crawled but not indexed) | not_found (not on Google) | noindex | error | null (no usable cached status: never checked, or the last check stored no verdict — a non-null `checked_at` tells you which), with `checked_at` + a `stale` flag (older than 48h; null when never checked) and Google\'s `last_crawl` of the page. `batch_running` is read passively from the site and can stay true after a scan already finished, until the site dashboard next syncs — treat it as advisory and do not poll in a loop waiting for it to flip. Advisory (actionable_by_agent=false): a live re-check or re-crawl request consumes credits and runs from the TamRank dashboard, not from the agent. For the site-wide picture use get_site_index.',
+    description: 'Google index status of ONE page, from the cached result of the last time the page was checked — a site index scan or the publish-time auto-check (credit-free; never queries Google live). `status` is indexed | crawled (crawled but not indexed) | not_found (not on Google) | noindex | error | null (no usable cached status: never checked, or the last check stored no verdict — a non-null `checked_at` tells you which), with `checked_at` + a `stale` flag (older than 48h; null when never checked), Google\'s `last_crawl` of the page, and `requested_at` (when a recrawl was last requested via request_recrawl — null only means no request via THAT tool; dashboard or publish-time auto-index requests are not recorded here). `batch_running` is read passively from the site and can stay true after a scan already finished, until the site dashboard next syncs — treat it as advisory and do not poll in a loop waiting for it to flip. To act on a bad status (not_found / crawled-not-indexed), fix the page first, then use request_recrawl (consumes credits, index:write). For the site-wide picture use get_site_index.',
     inputSchema: {
       post_id: z.number().int().positive().describe('The post/page id.'),
     },
@@ -296,7 +348,7 @@ export function registerTools(server, client) {
 
   server.registerTool('get_site_index', {
     title: 'Get site index rollup',
-    description: 'Site-wide Google index coverage from the cached results of the last index scan (credit-free; never queries Google live): `published` (the denominator) and `counts` per status (indexed / crawled / not_found / noindex / error / unchecked — where unchecked means never checked OR the last check stored no usable status; such pages show a non-null checked_at in get_index_status) over the published managed pages, `last_checked` + `stale` (older than 48h; null when the site was never scanned), scan state (`scan` — the engine\'s own site-global approximate counter over ALL public post types: it can exceed `published`, can lag behind a finished scan, and the `counts` block is the authoritative per-page view), and the 48h manual-refresh cooldown (`cooldowns.manual_refresh`). Use this to spot indexing problems site-wide, then inspect a specific page with get_index_status. When `gsc.connected` is false or `gsc.property_mismatch` is true everything is withheld (available=false, fields null) — fixing the GSC connection is a dashboard action. Refreshing the scan is also a dashboard action, not an agent action.',
+    description: 'Site-wide Google index coverage from the cached results of the last index scan (credit-free; never queries Google live): `published` (the denominator) and `counts` per status (indexed / crawled / not_found / noindex / error / unchecked — where unchecked means never checked OR the last check stored no usable status; such pages show a non-null checked_at in get_index_status) over the published managed pages, `last_checked` + `stale` (older than 48h; null when the site was never scanned), scan state (`scan` — the engine\'s own site-global approximate counter over ALL public post types: it can exceed `published`, can lag behind a finished scan, and the `counts` block is the authoritative per-page view), and the 48h manual-refresh cooldown (`cooldowns.manual_refresh`). Use this to spot indexing problems site-wide, then inspect a specific page with get_index_status. When `gsc.connected` is false or `gsc.property_mismatch` is true everything is withheld (available=false, fields null) — fixing the GSC connection is a dashboard action. Refresh site-wide with start_index_scan (consumes credits, index:write) — it shares the 48h cooldown with the dashboard.',
     inputSchema: {},
   }, read(() => client.get('/site/index')));
 
@@ -396,6 +448,39 @@ export function registerTools(server, client) {
     const { body, control } = splitWriteArgs(a, ['alt_text']);
     return client.post(`/image/${a.image_id}/alt`, body, control);
   }));
+
+  // ---- index actions (index:write — default-off scope; TamRank AI credits) ----
+
+  server.registerTool('request_recrawl', {
+    title: 'Request Google recrawl of a page',
+    description: 'Ask Google to (re)crawl ONE page via the TamRank backend. CONSUMES AI CREDITS (the per-call cost is decided by the backend; the response carries the cached `credits.balance`) and needs the index:write scope (default-off — the site owner must mint a token with it). Dry-run by default: the preview shows the credits balance plus a low-credits warning when the balance is at the soft limit; re-send with execute=true and the change_token to apply. Refuses: noindex pages (409 — remove the noindex via update_meta first), a second request within the 24h per-post cooldown (429), and a missing/mismatched GSC connection (409). On success the page enters its 24h requested window (`requested_at` in get_index_status). Google typically takes days to act — do NOT poll for an immediate status change; the request is not rollbackable. Best used after fixing a page (update_meta + rescore_page) so Google sees the improvement sooner.',
+    inputSchema: {
+      post_id: z.number().int().positive().describe('The post/page id.'),
+      execute: z.boolean().optional().describe('Set true (with change_token) to apply. Omit for a dry run.'),
+      change_token: z.string().optional().describe('The change_token returned by the dry run.'),
+    },
+  }, write((a) => {
+    const { control } = splitWriteArgs(a, []);
+    return client.post(`/post/${a.post_id}/recrawl`, undefined, control);
+  }));
+
+  server.registerTool('start_index_scan', {
+    title: 'Start a site-wide index scan',
+    description: 'Submit the never-checked and stale (>48h) published URLs across ALL public post types (a wider set than get_site_index\'s managed-only counts — treat counts.unchecked as a lower bound) to the TamRank backend index checker, in capped engine batches — the bulk refresh behind get_site_index. CONSUMES AI CREDITS (batch-size dependent) and needs index:write (default-off scope). Dry-run by default (the preview shows scope + the cached credits balance; execute=true + change_token to apply). Shares the 48h refresh cooldown with the TamRank dashboard (429 with next_allowed_at when armed) and refuses while a scan is already running (409). After starting, poll get_index_scan_status sparingly (each poll is a metered op) or read the free passive `scan` block in get_site_index; results land in the cached statuses as they complete.',
+    inputSchema: {
+      execute: z.boolean().optional().describe('Set true (with change_token) to apply. Omit for a dry run.'),
+      change_token: z.string().optional().describe('The change_token returned by the dry run.'),
+    },
+  }, write((a) => {
+    const { control } = splitWriteArgs(a, []);
+    return client.post('/site/index/scan', undefined, control);
+  }));
+
+  server.registerTool('get_index_scan_status', {
+    title: 'Index scan progress (live poll)',
+    description: 'Progress of a running index scan. When a batch is running this LIVE-POLLS the TamRank backend (a metered op on the credit burst bucket; needs index:write) and folds finished results into the cached statuses; when nothing is running it answers passively and free (done=true, nothing polled). Poll sparingly — once every few minutes is plenty; the credit-free passive alternative is the `scan` block in get_site_index.',
+    inputSchema: {},
+  }, read(() => client.get('/site/index/scan')));
 
   server.registerTool('rescore_page', {
     title: 'Re-score a page (persist a fresh audit)',

@@ -118,6 +118,8 @@ on the [V2 agency roadmap](#roadmap).
 | `get_site_overview` | All pages, posts, products with SEO status | `site:read` |
 | `get_site_health` | Priority issues ranked by impact | `site:read` |
 | `get_priority_actions` | "What should I fix first?" — filtered by focus area | `site:read` |
+| `get_next_action` | The ONE highest-impact action right now — top priority card with a resolved target and the tool that fixes it | `site:read` |
+| `search_posts` | Search/filter the managed pages — title/slug match, score range, missing meta, never-audited (worst-first sort) | `site:read` |
 | `get_meta` | Current SEO meta + score breakdown of one post (use before update_meta) | `site:read` |
 | `get_page_analysis` | Deep per-page audit: score breakdown (meta vs content, live + stale flag) + every content check with fix tips and evidence + a cached PageSpeed signal | `site:read` |
 | `get_site_analysis` | Deep pass across the lowest-scoring pages in one call | `site:read` |
@@ -131,7 +133,11 @@ on the [V2 agency roadmap](#roadmap).
 | `get_site_index` | Site-wide index coverage rollup: counts per status, scan progress, refresh cooldown | `site:read` |
 | `get_images_missing_alt` | Images without alt text, returned so the model can see and caption them (credit-free) | `site:read` |
 | `get_redirects` | List existing redirects with chain status | `site:read` |
+| `get_redirect_chains` | Redirect chains (A→B→C) and loops computed live, each with a ready-made flatten fix | `site:read` |
 | `get_404s` | Open 404s grouped by URL, ranked by hits | `site:read` |
+| `request_recrawl` | Ask Google to (re)crawl one page via the TamRank backend (dry-run first; consumes AI credits) | `index:write` |
+| `start_index_scan` | Site-wide index scan of unchecked + stale pages (dry-run first; consumes AI credits; shares the dashboard's 48h cooldown) | `index:write` |
+| `get_index_scan_status` | Live-poll a running index scan (metered); passive and free when idle | `index:write` |
 | `update_meta` | Write meta title and description to any post (response shows the projected new score) | `meta:write` |
 | `update_image_alt` | Write alt text to an image attachment | `meta:write` |
 | `rescore_page` | Persist a fresh audit so the stored/dashboard score catches up — the verify step after a fix | `meta:write` |
@@ -139,6 +145,7 @@ on the [V2 agency roadmap](#roadmap).
 | `manage_redirects` | Create, update, or delete 301/302 redirects | `redirects:write` |
 | `resolve_404` | Mark a 404 as resolved (with optional redirect) | `redirects:write` |
 | `get_audit_log` | Full history of agent-applied changes | `audit:read` |
+| `get_changes` | Incremental "what changed since X" feed (manual + agent), cursor-driven | `audit:read` |
 | `rollback` | Undo any logged action by event ID | `rollback` |
 
 All write tools default to **dry-run mode** — Claude shows you exactly what it will change before touching anything.
@@ -164,7 +171,7 @@ Token prefix: `tamrank_pat_` — detectable by GitGuardian and Trufflehog. **Do 
 
 | Release | What |
 |---|---|
-| **V1.1 — August 31, 2026** | Stable npm package · 10 tools · PAT auth · Claude Desktop + Cursor |
+| **V1.1 — August 31, 2026** | Stable npm package · full read/write tool set · PAT auth · Claude Desktop + Cursor |
 | **V1.2 — September 22, 2026** | Hosted connector (`https://mcp.tamrank.com`) · OAuth flow · Custom connector URL for Claude.ai web |
 | **V1.3 — Q4 2026** | Anthropic Directory listing · ChatGPT Custom GPT · Apps in ChatGPT |
 | **V2 — Q1 2027** | Agency multi-tenant · 50+ client sites · white-label |
