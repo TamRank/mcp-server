@@ -144,9 +144,18 @@ export function registerTools(server, client) {
 
   server.registerTool('get_site_health', {
     title: 'Get site health',
-    description: 'One-call diagnosis: meta gaps, redirects, 404s, chains/loops and scores.',
-    inputSchema: {},
-  }, read(() => client.get('/site/health')));
+    description: 'One-call diagnosis: meta gaps, redirects, 404s, chains/loops and the category scores — plus an inline score card (a mini-donut per category: SEO, Content, Schema, Images, PageSpeed; a "—" ring means not scanned yet).',
+    inputSchema: {
+      include_visual: z.boolean().optional().describe('Return the inline score-card image (default true).'),
+    },
+  }, async (args) => {
+    const a = args || {};
+    try {
+      return okWithVisual(await client.get('/site/health', { include_visual: a.include_visual === false ? 'false' : undefined }));
+    } catch (err) {
+      return fail(err);
+    }
+  });
 
   server.registerTool('get_priority_actions', {
     title: 'Get priority actions',
