@@ -140,7 +140,7 @@ export function registerTools(server, client) {
 
   server.registerTool('get_meta', {
     title: 'Get post meta',
-    description: 'Current SEO meta of one post, its score breakdown (total plus the meta and content legs behind it — so you can see whether the meta or the content is dragging the page down), and structured findings (F39). Use before update_meta.',
+    description: 'Current SEO meta of one post, its score breakdown (total plus the meta and content legs behind it — so you can see whether the meta or the content is dragging the page down), and structured findings (F39). Use before update_meta. The score here is the stored value; if you just wrote meta it may be stale until you call rescore_page.',
     inputSchema: {
       post_id: z.number().int().positive().describe('The post/page id.'),
     },
@@ -148,7 +148,7 @@ export function registerTools(server, client) {
 
   server.registerTool('get_page_analysis', {
     title: 'Get page analysis (deep dive)',
-    description: 'Look deeper at / diagnose ONE page — why it scores low and exactly what to fix. This is the tool to reach for whenever the user wants to go deeper than the overview on a specific page (or, after get_site_overview, on each of the weakest pages). Full per-page SEO audit — the deep dive get_meta is not. Returns the score breakdown (meta vs content legs, the LIVE content score, and a stale flag when the stored/dashboard score is out of date) plus the content analysis: every category and check with status, the top issues each with a ready-made fix tip, and the extracted evidence (heading tree, images, links, word count). Each check is flagged actionable_by_agent — you can fix image-alt issues (via update_image_alt) and the focus keyword (via update_meta); headings/readability/links/length need page-content edits, so report those to the site owner. The human-facing labels and tips are canonical English (content_analysis.language); each check has a stable, language-neutral `code` — present findings to the user in their own language using the codes, do not just echo the English text. Heavier than get_meta (recomputes live).',
+    description: 'Look deeper at / diagnose ONE page — why it scores low and exactly what to fix. This is the tool to reach for whenever the user wants to go deeper than the overview on a specific page (or, after get_site_overview, on each of the weakest pages). Full per-page SEO audit — the deep dive get_meta is not. Returns the score breakdown (meta vs content legs, the LIVE content score, and a stale flag when the stored/dashboard score is out of date — call rescore_page to persist a fresh score and clear it) plus the content analysis: every category and check with status, the top issues each with a ready-made fix tip, and the extracted evidence (heading tree, images, links, word count). Each check is flagged actionable_by_agent — you can fix image-alt issues (via update_image_alt) and the focus keyword (via update_meta); headings/readability/links/length need page-content edits, so report those to the site owner. The human-facing labels and tips are canonical English (content_analysis.language); each check has a stable, language-neutral `code` — present findings to the user in their own language using the codes, do not just echo the English text. Heavier than get_meta (recomputes live).',
     inputSchema: {
       post_id: z.number().int().positive().describe('The post/page id.'),
     },
@@ -249,7 +249,7 @@ export function registerTools(server, client) {
 
   server.registerTool('update_meta', {
     title: 'Update post meta',
-    description: 'Write SEO meta on a post. Dry-run by default: call without execute to preview the diff + change_token, then call again with execute=true and that change_token to apply.',
+    description: 'Write SEO meta on a post. Dry-run by default: call without execute to preview the diff + change_token, then call again with execute=true and that change_token to apply. On execute the response carries a `score` projection (the live meta leg + the projected total, with the before→after delta) so you can see immediately whether the fix helped — no second read needed. That projection is cheap and does NOT persist: the stored/dashboard score stays as it was until you call rescore_page to commit a full re-audit.',
     inputSchema: {
       post_id: z.number().int().positive().describe('The post/page id.'),
       meta_title: z.string().optional(),
@@ -341,4 +341,19 @@ export function registerTools(server, client) {
     const { body, control } = splitWriteArgs(a, ['alt_text']);
     return client.post(`/image/${a.image_id}/alt`, body, control);
   }));
+
+  server.registerTool('rescore_page', {
+    title: 'Re-score a page (persist a fresh audit)',
+    description: 'Recompute and PERSIST a page\'s SEO score (meta + content + total) so get_meta, get_site_overview and the WordPress dashboard catch up to reality. This is the VERIFY step of fix → verify: update_meta already shows a cheap projected score in its response, but the stored/dashboard number stays stale until you rescore. Call it after writing meta (or an image alt) to confirm the stored score actually moved, or whenever get_meta/get_page_analysis reports stale=true. Heavier than a read — it re-runs the content analyzer, which may fetch the live page. Needs meta:write. Not a dry-run tool: it writes the refreshed scores immediately and is idempotent (running it twice yields the same numbers); it changes no page content, only the derived score caches.',
+    inputSchema: {
+      post_id: z.number().int().positive().describe('The post/page id to re-score.'),
+    },
+  }, async (args) => {
+    const a = args || {};
+    try {
+      return ok(await client.post(`/post/${a.post_id}/rescore`), 'Re-scored — the stored scores now reflect the page\'s current meta and content.');
+    } catch (err) {
+      return fail(err);
+    }
+  });
 }

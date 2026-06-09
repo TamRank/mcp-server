@@ -123,8 +123,9 @@ on the [V2 agency roadmap](#roadmap).
 | `get_gsc_keywords` | Per-page keyword performance + click-uplift potential | `site:read` |
 | `get_keyword_stability` | Per-keyword position stability + direction trend | `site:read` |
 | `get_images_missing_alt` | Images without alt text, returned so the model can see and caption them (credit-free) | `site:read` |
-| `update_meta` | Write meta title and description to any post | `meta:write` |
+| `update_meta` | Write meta title and description to any post (response shows the projected new score) | `meta:write` |
 | `update_image_alt` | Write alt text to an image attachment | `meta:write` |
+| `rescore_page` | Persist a fresh audit so the stored/dashboard score catches up — the verify step after a fix | `meta:write` |
 | `manage_redirects` | Create, update, or delete 301/302 redirects | `redirects:write` |
 | `resolve_404` | Mark a 404 as resolved (with optional redirect) | `redirects:write` |
 | `get_audit_log` | Full history of agent-applied changes | `audit:read` |
