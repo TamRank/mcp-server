@@ -118,13 +118,20 @@ on the [V2 agency roadmap](#roadmap).
 | `get_site_overview` | All pages, posts, products with SEO status | `site:read` |
 | `get_site_health` | Priority issues ranked by impact | `site:read` |
 | `get_priority_actions` | "What should I fix first?" — filtered by focus area | `site:read` |
+| `get_meta` | Current SEO meta + score breakdown of one post (use before update_meta) | `site:read` |
 | `get_page_analysis` | Deep per-page audit: score breakdown (meta vs content, live + stale flag) + every content check with fix tips and evidence + a cached PageSpeed signal | `site:read` |
+| `get_site_analysis` | Deep pass across the lowest-scoring pages in one call | `site:read` |
+| `get_topical_authority` | Topical-authority map: pillar, clusters, coverage %, content gaps | `site:read` |
 | `get_pagespeed` | PageSpeed for one page — score + Core Web Vitals + opportunities (cached; refresh=true for a live test) | `site:read` |
 | `get_pagespeed_scan_status` | Progress of a background bulk PageSpeed scan | `site:read` |
 | `get_gsc_pages` | Search Console page performance (clicks, impressions, CTR, position) | `site:read` |
 | `get_gsc_keywords` | Per-page keyword performance + click-uplift potential | `site:read` |
 | `get_keyword_stability` | Per-keyword position stability + direction trend | `site:read` |
+| `get_index_status` | Google index status of one page from the last index scan (cached, credit-free) | `site:read` |
+| `get_site_index` | Site-wide index coverage rollup: counts per status, scan progress, refresh cooldown | `site:read` |
 | `get_images_missing_alt` | Images without alt text, returned so the model can see and caption them (credit-free) | `site:read` |
+| `get_redirects` | List existing redirects with chain status | `site:read` |
+| `get_404s` | Open 404s grouped by URL, ranked by hits | `site:read` |
 | `update_meta` | Write meta title and description to any post (response shows the projected new score) | `meta:write` |
 | `update_image_alt` | Write alt text to an image attachment | `meta:write` |
 | `rescore_page` | Persist a fresh audit so the stored/dashboard score catches up — the verify step after a fix | `meta:write` |

@@ -286,6 +286,20 @@ export function registerTools(server, client) {
     },
   }, read((a) => client.get('/gsc/keyword-stability', { page_url: a.page_url })));
 
+  server.registerTool('get_index_status', {
+    title: 'Get page index status',
+    description: 'Google index status of ONE page, from the cached result of the last time the page was checked — a site index scan or the publish-time auto-check (credit-free; never queries Google live). `status` is indexed | crawled (crawled but not indexed) | not_found (not on Google) | noindex | error | null (no usable cached status: never checked, or the last check stored no verdict — a non-null `checked_at` tells you which), with `checked_at` + a `stale` flag (older than 48h; null when never checked) and Google\'s `last_crawl` of the page. `batch_running` is read passively from the site and can stay true after a scan already finished, until the site dashboard next syncs — treat it as advisory and do not poll in a loop waiting for it to flip. Advisory (actionable_by_agent=false): a live re-check or re-crawl request consumes credits and runs from the TamRank dashboard, not from the agent. For the site-wide picture use get_site_index.',
+    inputSchema: {
+      post_id: z.number().int().positive().describe('The post/page id.'),
+    },
+  }, read((a) => client.get(`/post/${a.post_id}/index`)));
+
+  server.registerTool('get_site_index', {
+    title: 'Get site index rollup',
+    description: 'Site-wide Google index coverage from the cached results of the last index scan (credit-free; never queries Google live): `published` (the denominator) and `counts` per status (indexed / crawled / not_found / noindex / error / unchecked — where unchecked means never checked OR the last check stored no usable status; such pages show a non-null checked_at in get_index_status) over the published managed pages, `last_checked` + `stale` (older than 48h; null when the site was never scanned), scan state (`scan` — the engine\'s own site-global approximate counter over ALL public post types: it can exceed `published`, can lag behind a finished scan, and the `counts` block is the authoritative per-page view), and the 48h manual-refresh cooldown (`cooldowns.manual_refresh`). Use this to spot indexing problems site-wide, then inspect a specific page with get_index_status. When `gsc.connected` is false or `gsc.property_mismatch` is true everything is withheld (available=false, fields null) — fixing the GSC connection is a dashboard action. Refreshing the scan is also a dashboard action, not an agent action.',
+    inputSchema: {},
+  }, read(() => client.get('/site/index')));
+
   // ---- writes (dry-run by default) ----
 
   server.registerTool('update_meta', {
