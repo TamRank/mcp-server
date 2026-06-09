@@ -30,6 +30,24 @@ function ok(data, prefix) {
   return { content: [{ type: 'text', text: prefix ? `${prefix}\n\n${body}` : body }] };
 }
 
+/**
+ * Like ok(), but if the payload carries a `visual` block (a base64 PNG score
+ * gauge/donut from the plugin), surface it as an inline MCP image block and strip
+ * the base64 out of the text so it is not dumped as a giant string.
+ */
+function okWithVisual(data, prefix) {
+  const visual = data && data.visual && data.visual.base64 ? data.visual : null;
+  const jsonForText = visual
+    ? { ...data, visual: { ...data.visual, base64: undefined, rendered_inline: true } }
+    : data;
+  const body = JSON.stringify(jsonForText, null, 2);
+  const content = [{ type: 'text', text: prefix ? `${prefix}\n\n${body}` : body }];
+  if (visual) {
+    content.push({ type: 'image', data: visual.base64, mimeType: visual.mime || 'image/png' });
+  }
+  return { content };
+}
+
 /** Build an error tool result from an ApiError (or any error). */
 function fail(err) {
   if (err instanceof ApiError) {
@@ -148,11 +166,19 @@ export function registerTools(server, client) {
 
   server.registerTool('get_page_analysis', {
     title: 'Get page analysis (deep dive)',
-    description: 'Look deeper at / diagnose ONE page — why it scores low and exactly what to fix. This is the tool to reach for whenever the user wants to go deeper than the overview on a specific page (or, after get_site_overview, on each of the weakest pages). Full per-page SEO audit — the deep dive get_meta is not. Returns the score breakdown (meta vs content legs, the LIVE content score, and a stale flag when the stored/dashboard score is out of date — call rescore_page to persist a fresh score and clear it) plus the content analysis: every category and check with status, the top issues each with a ready-made fix tip, and the extracted evidence (heading tree, images, links, word count). Each check is flagged actionable_by_agent — you can fix image-alt issues (via update_image_alt) and the focus keyword (via update_meta); headings/readability/links/length need page-content edits, so report those to the site owner. The human-facing labels and tips are canonical English (content_analysis.language); each check has a stable, language-neutral `code` — present findings to the user in their own language using the codes, do not just echo the English text. Heavier than get_meta (recomputes live).',
+    description: 'Look deeper at / diagnose ONE page — why it scores low and exactly what to fix. This is the tool to reach for whenever the user wants to go deeper than the overview on a specific page (or, after get_site_overview, on each of the weakest pages). Full per-page SEO audit — the deep dive get_meta is not. Returns the score breakdown (meta vs content legs, the LIVE content score, and a stale flag when the stored/dashboard score is out of date — call rescore_page to persist a fresh score and clear it) plus the content analysis: every category and check with status, the top issues each with a ready-made fix tip, and the extracted evidence (heading tree, images, links, word count). Each check is flagged actionable_by_agent — you can fix image-alt issues (via update_image_alt) and the focus keyword (via update_meta); headings/readability/links/length need page-content edits, so report those to the site owner. The human-facing labels and tips are canonical English (content_analysis.language); each check has a stable, language-neutral `code` — present findings to the user in their own language using the codes, do not just echo the English text. Heavier than get_meta (recomputes live). Also returns an inline SEO score donut image (total + meta/content legs).',
     inputSchema: {
       post_id: z.number().int().positive().describe('The post/page id.'),
+      include_visual: z.boolean().optional().describe('Return an inline SEO score donut image (default true).'),
     },
-  }, read((a) => client.get(`/post/${a.post_id}/analysis`)));
+  }, async (args) => {
+    const a = args || {};
+    try {
+      return okWithVisual(await client.get(`/post/${a.post_id}/analysis`, { include_visual: a.include_visual === false ? 'false' : undefined }));
+    } catch (err) {
+      return fail(err);
+    }
+  });
 
   server.registerTool('get_site_analysis', {
     title: 'Analyse the site (deep, multi-page)',
@@ -366,8 +392,20 @@ export function registerTools(server, client) {
       post_id: z.number().int().positive().describe('The post/page id.'),
       strategy: z.enum(['mobile', 'desktop']).optional().describe('Device strategy (default mobile).'),
       refresh: z.boolean().optional().describe('Run a fresh live test instead of the cache (slow). Default false.'),
+      include_visual: z.boolean().optional().describe('Return an inline PageSpeed score gauge image (default true).'),
     },
-  }, read((a) => client.get(`/post/${a.post_id}/pagespeed`, { strategy: a.strategy, refresh: a.refresh ? 'true' : undefined })));
+  }, async (args) => {
+    const a = args || {};
+    try {
+      return okWithVisual(await client.get(`/post/${a.post_id}/pagespeed`, {
+        strategy: a.strategy,
+        refresh: a.refresh ? 'true' : undefined,
+        include_visual: a.include_visual === false ? 'false' : undefined,
+      }));
+    } catch (err) {
+      return fail(err);
+    }
+  });
 
   server.registerTool('start_pagespeed_scan', {
     title: 'Start a bulk PageSpeed scan',
