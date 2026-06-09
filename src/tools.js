@@ -356,4 +356,38 @@ export function registerTools(server, client) {
       return fail(err);
     }
   });
+
+  // ---- PageSpeed (Google PSI — the site's own API key, no TamRank credits) ----
+
+  server.registerTool('get_pagespeed', {
+    title: 'Get PageSpeed for a page',
+    description: 'Google PageSpeed Insights for one page: performance score + Core Web Vitals (LCP/INP/CLS/TBT/FCP) + the top opportunities + CrUX field data. Cached by default (instant); set refresh=true to run ONE live test (slow — a real external Google call). strategy defaults to mobile (mobile-first indexing). Returns available:false when the site has no PageSpeed API key. PageSpeed issues are server/theme/file-level — advise the site owner; they are NOT fixable via the write tools (actionable_by_agent is always false).',
+    inputSchema: {
+      post_id: z.number().int().positive().describe('The post/page id.'),
+      strategy: z.enum(['mobile', 'desktop']).optional().describe('Device strategy (default mobile).'),
+      refresh: z.boolean().optional().describe('Run a fresh live test instead of the cache (slow). Default false.'),
+    },
+  }, read((a) => client.get(`/post/${a.post_id}/pagespeed`, { strategy: a.strategy, refresh: a.refresh ? 'true' : undefined })));
+
+  server.registerTool('start_pagespeed_scan', {
+    title: 'Start a bulk PageSpeed scan',
+    description: 'Queue a PageSpeed scan across the site and return immediately with a scan_id — it runs in the BACKGROUND (roughly one page every few seconds, mobile + desktop each), so a large site takes minutes. This is how you do PageSpeed "in bulk" without waiting: start it, then poll get_pagespeed_scan_status; finished pages appear in get_pagespeed, get_page_analysis and get_site_overview as they complete. Optionally limit to the N lowest-scoring pages, or restrict to one post type. Needs meta:write and a PageSpeed API key on the site.',
+    inputSchema: {
+      limit: z.number().int().min(1).max(200).optional().describe('Scan only the N lowest-scoring pages (default: all managed pages, capped at 200).'),
+      post_type: z.string().optional().describe('Restrict to one managed post type (e.g. page, post).'),
+    },
+  }, async (args) => {
+    const a = args || {};
+    try {
+      return ok(await client.post('/pagespeed/scan', undefined, { limit: a.limit, post_type: a.post_type }), 'Scan queued and running in the background — poll get_pagespeed_scan_status for progress.');
+    } catch (err) {
+      return fail(err);
+    }
+  });
+
+  server.registerTool('get_pagespeed_scan_status', {
+    title: 'PageSpeed scan progress',
+    description: 'Progress of the background bulk PageSpeed scan: processed / total / completed / failed / pending plus an ETA. Poll this after start_pagespeed_scan (each poll also nudges the background worker along). is_running flips to false when the scan is done.',
+    inputSchema: {},
+  }, read(() => client.get('/pagespeed/scan')));
 }

@@ -118,7 +118,9 @@ on the [V2 agency roadmap](#roadmap).
 | `get_site_overview` | All pages, posts, products with SEO status | `site:read` |
 | `get_site_health` | Priority issues ranked by impact | `site:read` |
 | `get_priority_actions` | "What should I fix first?" — filtered by focus area | `site:read` |
-| `get_page_analysis` | Deep per-page audit: score breakdown (meta vs content, live + stale flag) + every content check with fix tips and evidence | `site:read` |
+| `get_page_analysis` | Deep per-page audit: score breakdown (meta vs content, live + stale flag) + every content check with fix tips and evidence + a cached PageSpeed signal | `site:read` |
+| `get_pagespeed` | PageSpeed for one page — score + Core Web Vitals + opportunities (cached; refresh=true for a live test) | `site:read` |
+| `get_pagespeed_scan_status` | Progress of a background bulk PageSpeed scan | `site:read` |
 | `get_gsc_pages` | Search Console page performance (clicks, impressions, CTR, position) | `site:read` |
 | `get_gsc_keywords` | Per-page keyword performance + click-uplift potential | `site:read` |
 | `get_keyword_stability` | Per-keyword position stability + direction trend | `site:read` |
@@ -126,6 +128,7 @@ on the [V2 agency roadmap](#roadmap).
 | `update_meta` | Write meta title and description to any post (response shows the projected new score) | `meta:write` |
 | `update_image_alt` | Write alt text to an image attachment | `meta:write` |
 | `rescore_page` | Persist a fresh audit so the stored/dashboard score catches up — the verify step after a fix | `meta:write` |
+| `start_pagespeed_scan` | Queue a background bulk PageSpeed scan across the site (poll get_pagespeed_scan_status) | `meta:write` |
 | `manage_redirects` | Create, update, or delete 301/302 redirects | `redirects:write` |
 | `resolve_404` | Mark a 404 as resolved (with optional redirect) | `redirects:write` |
 | `get_audit_log` | Full history of agent-applied changes | `audit:read` |
