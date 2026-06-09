@@ -198,6 +198,12 @@ export function registerTools(server, client) {
     },
   }, read((a) => client.get('/site/analysis', { limit: a.limit, post_type: a.post_type })));
 
+  server.registerTool('get_topical_authority', {
+    title: 'Get topical authority map',
+    description: 'The site\'s topical-authority map: the pillar topic, its topic clusters (`clusters` — each with the still-published pages it covers and the `missing_topics` it still needs), the overall `coverage` %, the content `gaps`, and the top recommended actions (`top_actions`). Use this to see where the site is topically strong vs thin and what content to add to build authority. `counts` holds the true totals; the arrays are capped on very large maps. Read-only and advisory (actionable_by_agent=false): act on a gap by creating or improving the relevant page, then run get_page_analysis / update_meta on it. If has_map=false, no map exists yet — a topical-authority analysis must be run from the TamRank dashboard first (it consumes credits and is async, so it is not an agent action); `processing` says whether one is already running.',
+    inputSchema: {},
+  }, read(() => client.get('/site/topical-authority')));
+
   server.registerTool('get_redirects', {
     title: 'List redirects',
     description: 'Existing redirects with their chain status.',
