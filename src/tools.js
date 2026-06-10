@@ -137,7 +137,7 @@ export function registerTools(server, client) {
 
   server.registerTool('get_capabilities', {
     title: 'Get capabilities',
-    description: 'Licence tier, feature availability, AI-credit balance, GSC connection, the token\'s granted scopes, and rate-limit headroom. The reflex opening call.',
+    description: 'Licence tier, feature availability, AI-credit balance, GSC state, the token\'s granted scopes, and rate-limit headroom. The reflex opening call. The `gsc` block reports not just `connected` but `indexing_available` + `property_mismatch`: a connected-but-mismatched GSC property (its host differs from the site) means Google has no data for these URLs, so request_recrawl / start_index_scan are refused (409) — check `gsc.indexing_available` before attempting any indexing action; reads are unaffected.',
     inputSchema: {},
   }, read(() => client.get('/capabilities')));
 
