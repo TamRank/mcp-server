@@ -179,6 +179,16 @@ export function registerTools(server, client) {
     inputSchema: {},
   }, read(() => client.get('/agent/next-action')));
 
+  server.registerTool('get_issues', {
+    title: 'Get the issues list',
+    description: 'The site-wide diagnostic roll-up: every category of SEO problem TamRank can see right now, in ONE read, ranked by impact — sits between get_site_health (just the category scores) and the per-tool detail reads. A category roll-up, NOT a per-page dump: one row per issue type (e.g. grp_missing_titles, grp_404, not_indexed, low_ctr, cwv_failure) carrying a severity bucket (high/medium/low), the affected-page `count`, an `impact_score`, up to 3 example pages, and a `drill_down` hint naming the tool that lists/fixes that type. Start here to triage "what is wrong?", then follow drill_down (get_site_overview, get_404s, get_images_missing_alt, get_index_status, get_pagespeed, get_gsc_pages, search_posts) to the specifics and fix with update_meta / manage_redirects / resolve_404 / update_image_alt, verifying with rescore_page. Filter with severity (e.g. high,medium) and/or type (comma-separated type ids). Counts/examples are a cached snapshot (10-min TTL) that refreshes when the dashboard is viewed — it does NOT update right after your writes, so do not loop on it; computed=false means the ranking has not been cached for this site yet (the note gives a fallback).',
+    inputSchema: {
+      severity: z.string().optional().describe('Filter to these severities, comma-separated (high, medium, low).'),
+      type: z.string().optional().describe('Filter to these issue types, comma-separated (e.g. grp_404,not_indexed). Omit for all.'),
+      limit: z.number().int().min(1).max(100).optional().describe('Max issue rows (default 50; the list is one row per type, so usually small).'),
+    },
+  }, read((a) => client.get('/issues', { severity: a.severity, type: a.type, limit: a.limit })));
+
   server.registerTool('search_posts', {
     title: 'Search / filter the managed pages',
     description: 'Find pages without paging through the whole overview: `q` matches title OR slug; filter by post_type, score range (score_below / score_above — both STRICT bounds, also when combined), missing meta (missing_meta: title | description | any), or list never-audited pages (unscored=true). Sort worst-first with orderby=score&order=asc — the quickest way to "the N worst pages about X". Items have the same shape as get_site_overview. Honest edges: score filters and orderby=score EXCLUDE never-audited posts (no score meta is not score 0) — use unscored=true to find those (it cannot combine with score filters or orderby=score: 400); missing_meta misses whitespace-only values — the has_meta_* flags per item are authoritative. Same published+managed boundary as the overview. Drill into results with get_meta / get_page_analysis.',

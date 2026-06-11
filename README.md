@@ -119,6 +119,7 @@ on the [V2 agency roadmap](#roadmap).
 | `get_site_health` | Priority issues ranked by impact | `site:read` |
 | `get_priority_actions` | "What should I fix first?" — filtered by focus area | `site:read` |
 | `get_next_action` | The ONE highest-impact action right now — top priority card with a resolved target and the tool that fixes it | `site:read` |
+| `get_issues` | Site-wide issue roll-up — one row per problem type (severity, count, impact, examples, drill-down tool), filterable by severity/type | `site:read` |
 | `search_posts` | Search/filter the managed pages — title/slug match, score range, missing meta, never-audited (worst-first sort) | `site:read` |
 | `get_meta` | Current SEO meta + score breakdown of one post (use before update_meta) | `site:read` |
 | `get_page_analysis` | Deep per-page audit: score breakdown (meta vs content, live + stale flag) + every content check with fix tips and evidence + a cached PageSpeed signal | `site:read` |
