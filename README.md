@@ -144,6 +144,7 @@ on the [V2 agency roadmap](#roadmap).
 | `get_index_scan_status` | Live-poll a running index scan (metered); passive and free when idle | `index:write` |
 | `update_meta` | Write meta title and description to any post (response shows the projected new score) | `meta:write` |
 | `update_image_alt` | Write alt text to an image attachment | `meta:write` |
+| `detect_schema` | Run auto schema detection on a page so it renders JSON-LD (for not_yet_detected pages); recompute, never overrides a manual choice | `meta:write` |
 | `update_schema_settings` | Write the site-wide Organization/WebSite schema identity (name, logo, contact, address, socials); dry-run first, reversible | `schema:write` |
 | `rescore_page` | Persist a fresh audit so the stored/dashboard score catches up — the verify step after a fix | `meta:write` |
 | `start_pagespeed_scan` | Queue a background bulk PageSpeed scan across the site (poll get_pagespeed_scan_status) | `meta:write` |

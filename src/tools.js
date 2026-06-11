@@ -253,7 +253,7 @@ export function registerTools(server, client) {
 
   server.registerTool('get_schema_overview', {
     title: 'Get site-wide schema coverage',
-    description: 'Shallow site-wide structured-data roll-up: how many published pages have schema, the coverage %, the type distribution (BlogPosting/Product/…), and counts of disabled / template-based / manually-overridden / not-yet-detected pages, plus whether a third-party SEO plugin is also emitting schema. Because TamRank auto-detects schema on every page, coverage is normally near-complete; not_yet_detected flags pages awaiting first detection. This is the SHALLOW overview (no per-page missing-field detail) — for one page\'s validity call get_schema on its post_id.',
+    description: 'Shallow site-wide structured-data roll-up: how many published pages have schema, the coverage %, the type distribution (BlogPosting/Product/…), and counts of disabled / template-based / manually-overridden / not-yet-detected pages, plus whether a third-party SEO plugin is also emitting schema. IMPORTANT: detection only runs when a page is saved (no automatic backfill) and the renderer emits NO schema for a page with no detected type, so not_yet_detected pages (common on imported/migrated sites) stay schema-less until acted on. The response includes not_yet_detected_ids (up to 50 such pages) — give each one schema by calling detect_schema on its post_id. This is the SHALLOW overview (no per-page missing-field detail); for one page\'s validity call get_schema on its post_id.',
     inputSchema: {},
   }, read(() => client.get('/schema/overview')));
 
@@ -478,6 +478,14 @@ export function registerTools(server, client) {
     const { body, control } = splitWriteArgs(a, ['alt_text']);
     return client.post(`/image/${a.image_id}/alt`, body, control);
   }));
+
+  server.registerTool('detect_schema', {
+    title: 'Detect schema for a page',
+    description: 'Run TamRank\'s auto schema detection on ONE page and store the result, giving the page a schema type so it renders JSON-LD. Use this on the not_yet_detected_ids that get_schema_overview reports: detection otherwise only runs when a page is saved (there is no automatic backfill) and the renderer emits NO schema without a stored type, so imported/migrated/never-re-saved pages stay schema-less until you do this. It is a recompute, not a destructive edit — idempotent, and it never overrides a manual schema choice (source stays handmatig) — so there is NO dry-run/change_token here; it applies immediately. The response shows before -> after type and `changed`. Heavier than a read (it may fetch the rendered page), so do not blast it across hundreds of pages at once. Needs meta:write. Re-check rendered state with get_schema; this does not change the page content or its audit score.',
+    inputSchema: {
+      post_id: z.number().int().positive().describe('The post/page id (e.g. from get_schema_overview not_yet_detected_ids).'),
+    },
+  }, write((a) => client.post(`/post/${a.post_id}/schema/detect`, {})));
 
   // ---- schema identity (schema:write) ----
 
