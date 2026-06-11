@@ -126,6 +126,7 @@ on the [V2 agency roadmap](#roadmap).
 | `get_site_analysis` | Deep pass across the lowest-scoring pages in one call | `site:read` |
 | `get_schema` | One page's Schema.org markup: effective type, source, confidence, validity + third-party conflict warning and a fix hint | `site:read` |
 | `get_schema_overview` | Site-wide schema coverage: % covered, type distribution, disabled/template/manual counts | `site:read` |
+| `get_schema_settings` | Site-wide Organization/WebSite schema identity (name, logo, contact, address, socials) + completeness | `site:read` |
 | `get_topical_authority` | Topical-authority map: pillar, clusters, coverage %, content gaps | `site:read` |
 | `get_pagespeed` | PageSpeed for one page — score + Core Web Vitals + opportunities (cached; refresh=true for a live test) | `site:read` |
 | `get_pagespeed_scan_status` | Progress of a background bulk PageSpeed scan | `site:read` |
@@ -143,6 +144,7 @@ on the [V2 agency roadmap](#roadmap).
 | `get_index_scan_status` | Live-poll a running index scan (metered); passive and free when idle | `index:write` |
 | `update_meta` | Write meta title and description to any post (response shows the projected new score) | `meta:write` |
 | `update_image_alt` | Write alt text to an image attachment | `meta:write` |
+| `update_schema_settings` | Write the site-wide Organization/WebSite schema identity (name, logo, contact, address, socials); dry-run first, reversible | `schema:write` |
 | `rescore_page` | Persist a fresh audit so the stored/dashboard score catches up — the verify step after a fix | `meta:write` |
 | `start_pagespeed_scan` | Queue a background bulk PageSpeed scan across the site (poll get_pagespeed_scan_status) | `meta:write` |
 | `manage_redirects` | Create, update, or delete 301/302 redirects | `redirects:write` |

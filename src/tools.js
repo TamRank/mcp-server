@@ -257,6 +257,12 @@ export function registerTools(server, client) {
     inputSchema: {},
   }, read(() => client.get('/schema/overview')));
 
+  server.registerTool('get_schema_settings', {
+    title: 'Get site schema identity',
+    description: 'Read the site-wide Organization/WebSite schema identity (organization name, URL, logo, contact, postal address, social profiles) that TamRank renders in EVERY page\'s JSON-LD @graph, with the rendered Organization node and a completeness check (which high-value fields are still empty). This is the part auto-detection cannot fill in — your real business data, normally the biggest schema gap on a site. Read this before update_schema_settings.',
+    inputSchema: {},
+  }, read(() => client.get('/schema/settings')));
+
   server.registerTool('get_topical_authority', {
     title: 'Get topical authority map',
     description: 'The site\'s topical-authority map: the pillar topic, its topic clusters (`clusters` — each with the still-published pages it covers and the `missing_topics` it still needs), the overall `coverage` %, the content `gaps`, and the top recommended actions (`top_actions`). Use this to see where the site is topically strong vs thin and what content to add to build authority. `counts` holds the true totals; the arrays are capped on very large maps. Read-only and advisory (actionable_by_agent=false): act on a gap by creating or improving the relevant page, then run get_page_analysis / update_meta on it. If has_map=false, no map exists yet — a topical-authority analysis must be run from the TamRank dashboard first (it consumes credits and is async, so it is not an agent action); `processing` says whether one is already running.',
@@ -471,6 +477,33 @@ export function registerTools(server, client) {
   }, write((a) => {
     const { body, control } = splitWriteArgs(a, ['alt_text']);
     return client.post(`/image/${a.image_id}/alt`, body, control);
+  }));
+
+  // ---- schema identity (schema:write) ----
+
+  server.registerTool('update_schema_settings', {
+    title: 'Update site schema identity',
+    description: 'Write the site-wide Organization/WebSite identity that TamRank renders in EVERY page\'s JSON-LD @graph: organization name, website URL, logo, email, telephone, postal address, social profiles. This is the part auto-detection cannot fill in — your real business data — and it is normally the biggest schema gap on a site, so filling it improves structured data site-wide in one write. Dry-run by default: call without execute to preview the diff + change_token, then call again with execute=true and that change_token to apply. Reversible via rollback (it snapshots the whole settings object). Read the current values + completeness with get_schema_settings first. Guardrails: entity_type is limited to Organization or LocalBusiness; raw custom JSON-LD and entity_type=Custom stay admin-only and cannot be set here. Needs the schema:write scope (the owner must mint a token with it).',
+    inputSchema: {
+      entity_type: z.enum(['Organization', 'LocalBusiness']).optional().describe('Site entity type.'),
+      organization_name: z.string().optional().describe('Organization / business name.'),
+      website_url: z.string().optional().describe('Canonical site URL.'),
+      logo_url: z.string().optional().describe('Absolute URL to the logo image.'),
+      email: z.string().optional().describe('Public contact email.'),
+      telephone: z.string().optional().describe('Public contact phone number.'),
+      address: z.object({
+        street: z.string().optional(),
+        postal_code: z.string().optional(),
+        city: z.string().optional(),
+        country: z.string().optional().describe('2-letter country code, e.g. NL.'),
+      }).optional().describe('Postal address (renders as PostalAddress).'),
+      social_profiles: z.array(z.string()).optional().describe('Social profile URLs (schema sameAs).'),
+      execute: z.boolean().optional().describe('Set true (with change_token) to apply. Omit for a dry run.'),
+      change_token: z.string().optional().describe('The change_token returned by the dry run.'),
+    },
+  }, write((a) => {
+    const { body, control } = splitWriteArgs(a, ['entity_type', 'organization_name', 'website_url', 'logo_url', 'email', 'telephone', 'address', 'social_profiles']);
+    return client.post('/schema/settings', body, control);
   }));
 
   // ---- index actions (index:write — default-off scope; TamRank AI credits) ----
