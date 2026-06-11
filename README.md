@@ -124,6 +124,8 @@ on the [V2 agency roadmap](#roadmap).
 | `get_meta` | Current SEO meta + score breakdown of one post (use before update_meta) | `site:read` |
 | `get_page_analysis` | Deep per-page audit: score breakdown (meta vs content, live + stale flag) + every content check with fix tips and evidence + a cached PageSpeed signal | `site:read` |
 | `get_site_analysis` | Deep pass across the lowest-scoring pages in one call | `site:read` |
+| `get_schema` | One page's Schema.org markup: effective type, source, confidence, validity + third-party conflict warning and a fix hint | `site:read` |
+| `get_schema_overview` | Site-wide schema coverage: % covered, type distribution, disabled/template/manual counts | `site:read` |
 | `get_topical_authority` | Topical-authority map: pillar, clusters, coverage %, content gaps | `site:read` |
 | `get_pagespeed` | PageSpeed for one page — score + Core Web Vitals + opportunities (cached; refresh=true for a live test) | `site:read` |
 | `get_pagespeed_scan_status` | Progress of a background bulk PageSpeed scan | `site:read` |

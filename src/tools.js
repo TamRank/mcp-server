@@ -243,6 +243,20 @@ export function registerTools(server, client) {
     },
   }, read((a) => client.get('/site/analysis', { limit: a.limit, post_type: a.post_type })));
 
+  server.registerTool('get_schema', {
+    title: 'Get a page\'s schema',
+    description: 'Diagnostic read of the structured data (Schema.org JSON-LD) TamRank renders for ONE page, and how complete/healthy it is. Returns the effective type + extra types, the source (automatisch = auto-detected, handmatig = manually set, template, or disabled), an auto-detection confidence, a validity verdict, any active third-party SEO plugin that also emits schema (Yoast/RankMath/…) with a conflict warning, and a concrete next_action. Validity mirrors TamRank itself: auto-detected pages are "active_auto" and counted as covered (required fields are auto-sourced from the post, so there is no false "missing field" noise); template pages get a real required-field check ("active_template" with the audit detail); pages with schema off are "disabled". Read-only: fix gaps with update_meta (e.g. add a featured image or description) then rescore_page. For the whole site use get_schema_overview.',
+    inputSchema: {
+      post_id: z.number().int().positive().describe('The post/page id.'),
+    },
+  }, read((a) => client.get(`/post/${a.post_id}/schema`)));
+
+  server.registerTool('get_schema_overview', {
+    title: 'Get site-wide schema coverage',
+    description: 'Shallow site-wide structured-data roll-up: how many published pages have schema, the coverage %, the type distribution (BlogPosting/Product/…), and counts of disabled / template-based / manually-overridden / not-yet-detected pages, plus whether a third-party SEO plugin is also emitting schema. Because TamRank auto-detects schema on every page, coverage is normally near-complete; not_yet_detected flags pages awaiting first detection. This is the SHALLOW overview (no per-page missing-field detail) — for one page\'s validity call get_schema on its post_id.',
+    inputSchema: {},
+  }, read(() => client.get('/schema/overview')));
+
   server.registerTool('get_topical_authority', {
     title: 'Get topical authority map',
     description: 'The site\'s topical-authority map: the pillar topic, its topic clusters (`clusters` — each with the still-published pages it covers and the `missing_topics` it still needs), the overall `coverage` %, the content `gaps`, and the top recommended actions (`top_actions`). Use this to see where the site is topically strong vs thin and what content to add to build authority. `counts` holds the true totals; the arrays are capped on very large maps. Read-only and advisory (actionable_by_agent=false): act on a gap by creating or improving the relevant page, then run get_page_analysis / update_meta on it. If has_map=false, no map exists yet — a topical-authority analysis must be run from the TamRank dashboard first (it consumes credits and is async, so it is not an agent action); `processing` says whether one is already running.',
