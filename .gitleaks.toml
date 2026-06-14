@@ -1,0 +1,30 @@
+# gitleaks configuration — @tam-rank/mcp-server
+#
+# Adds a custom rule so gitleaks flags a leaked TamRank Personal Access Token
+# (PAT). Used by the CI secret-scan workflow and by `npm run scan`. The
+# zero-dependency pre-commit hook (.githooks/pre-commit) enforces the same
+# pattern locally without needing gitleaks installed.
+#
+# Token shape: `tamrank_pat_` + 40 url-safe alphanumerics, no special chars
+# (minted by the TamRank plugin, class-agent-tokens.php). Documentation
+# placeholders such as `tamrank_pat_xxxxxxxxxxxx` are far shorter than the
+# 32-char floor below and so never match.
+
+title = "tam-rank mcp-server gitleaks config"
+
+[extend]
+# Keep gitleaks' built-in rules (AWS, GitHub, Stripe, ...) and add ours on top.
+useDefault = true
+
+[[rules]]
+id = "tamrank-pat"
+description = "TamRank Personal Access Token (tamrank_pat_)"
+regex = '''tamrank_pat_[A-Za-z0-9]{32,}'''
+keywords = ["tamrank_pat_"]
+
+  [rules.allowlist]
+  description = "Documentation placeholders (repeated x / AAA / BBB) are not real tokens"
+  regexes = [
+    '''tamrank_pat_x+''',
+    '''tamrank_pat_(AAA|BBB)''',
+  ]

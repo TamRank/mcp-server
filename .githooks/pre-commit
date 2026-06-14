@@ -1,0 +1,29 @@
+#!/bin/sh
+#
+# pre-commit — block accidental commit of a real TamRank Personal Access Token.
+#
+# Token shape: tamrank_pat_ + 40 url-safe alphanumerics (class-agent-tokens.php).
+# Doc placeholders (tamrank_pat_xxx / _AAA / _BBB) are short and never match the
+# 32-char floor below. Zero dependencies: scans only the lines this commit adds.
+# Broader, multi-vendor + full-history scanning runs in CI and via `npm run scan`
+# (gitleaks, see .gitleaks.toml).
+#
+# Installed via core.hooksPath=.githooks (set by the package.json "prepare"
+# script on npm install, or run: git config core.hooksPath .githooks).
+
+set -eu
+
+matches=$(git diff --cached --unified=0 --no-color \
+    | grep -E '^\+' \
+    | grep -Ec 'tamrank_pat_[A-Za-z0-9]{32,}' || true)
+
+if [ "${matches:-0}" -gt 0 ]; then
+    echo "" >&2
+    echo "X  Possible TamRank Personal Access Token in ${matches} staged line(s)." >&2
+    echo "   Never commit a token (shape: tamrank_pat_ + 40 chars). Remove it, then" >&2
+    echo "   commit again. Revoke a leaked token at" >&2
+    echo "   https://tamrank.com/account/agent-tokens." >&2
+    exit 1
+fi
+
+exit 0

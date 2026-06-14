@@ -16,7 +16,9 @@
   ],
   "scripts": {
     "start": "node index.js",
-    "test": "node test/smoke.mjs"
+    "test": "node test/smoke.mjs",
+    "scan": "gitleaks detect --config .gitleaks.toml --no-banner --redact",
+    "prepare": "git config core.hooksPath .githooks 2>/dev/null || true"
   },
   "keywords": [
     "mcp",

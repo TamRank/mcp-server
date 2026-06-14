@@ -169,7 +169,7 @@ Each token:
 - Can be revoked instantly from [tamrank.com/account/agent-tokens](https://tamrank.com/account/agent-tokens)
 - Is automatically invalidated if your license expires or is refunded
 
-Token prefix: `tamrank_pat_` — detectable by GitGuardian and Trufflehog. **Do not commit tokens to version control.**
+Token prefix: `tamrank_pat_`. The prefix is distinctive so secret scanners can spot it. This repo ships a pre-commit hook plus a [gitleaks](https://github.com/gitleaks/gitleaks) rule ([`.gitleaks.toml`](.gitleaks.toml)) that block accidental token commits, and a CI scan runs on every push. **Never commit a token to version control.** If one leaks, revoke it instantly from your account.
 
 ---
 
