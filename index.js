@@ -22,26 +22,23 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
 import { TamRankClient, ApiError } from './src/rest.js';
-import { registerTools } from './src/tools.js';
+import { registerTools, INSTRUCTIONS } from './src/tools.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf8'));
 
 /**
- * The TamRank logo as a data: URI, advertised in the server's Implementation so
- * MCP clients that render server icons (per the spec's `icons` field) show the
- * brand mark instead of an auto-generated letter avatar. Loaded best-effort — a
- * missing asset must never stop the server from starting.
+ * The TamRank logo, advertised in the server's Implementation so MCP clients that
+ * render server icons (per the spec's `icons` field) show the brand mark instead
+ * of an auto-generated letter avatar. A URL, not a data: URI — the inline base64
+ * cost 12.3k characters in EVERY initialize response, more than a small server's
+ * entire tool surface.
  */
-function loadIcons() {
-  try {
-    const png = readFileSync(join(__dirname, 'assets', 'icon.png')).toString('base64');
-    return [{ src: `data:image/png;base64,${png}`, mimeType: 'image/png', sizes: ['256x256'] }];
-  } catch {
-    return undefined;
-  }
-}
-const ICONS = loadIcons();
+const ICONS = [{
+  src: 'https://tamrank.com/wp-content/uploads/2026/02/cropped-tamrank-favicon-192x192.png',
+  mimeType: 'image/png',
+  sizes: ['192x192'],
+}];
 
 const PAT = process.env.TAMRANK_PAT;
 const SITE_URL = process.env.TAMRANK_SITE_URL;
@@ -52,6 +49,8 @@ function die(message, code = 1) {
   process.exit(code);
 }
 
+// A configuration error stays fatal: there is nothing to connect to yet, so there
+// is no session in which a diagnosis could be delivered.
 if (!PAT || !SITE_URL) {
   die(
     'Missing configuration. Set both environment variables:\n\n' +
@@ -67,22 +66,46 @@ if (!PAT.startsWith('tamrank_pat_')) {
 
 const client = new TamRankClient({ siteUrl: SITE_URL, pat: PAT, timeoutMs: TIMEOUT });
 
+const AUTH_FAILED = 'Authentication failed — the TAMRANK_PAT was rejected. Check the token (it may be revoked or expired).';
+const NOT_PRO =
+  `${SITE_URL} is not on TamRank PRO.\n` +
+  'The agent API requires an active PRO licence.\n\n' +
+  'Upgrade: https://tamrank.com/pricing';
+
 /**
- * Preflight: confirm the site is reachable, the token is valid, and PRO is active
- * before exposing any tools (4d FREE-upgrade-exit). A FREE/unlicensed site can do
- * nothing through the agent API, so we surface the upgrade and exit cleanly rather
- * than start a server whose every call 402s.
+ * The preflight verdict, remembered for the life of the process.
+ *
+ * A rejected token or a missing PRO licence used to exit here, so the client saw
+ * only "MCP error -32000: Connection closed" and could not tell an expired token
+ * from a crashed server. The server now always starts: the diagnosis travels in the
+ * initialize `instructions` and every tool call returns it as a tool error, without
+ * touching the network.
+ *
+ * @type {{ok: boolean, status: number|null, code: string|null, message: string|null}}
+ */
+const PREFLIGHT = { ok: true, status: null, code: null, message: null };
+
+function refuse(status, code, message) {
+  PREFLIGHT.ok = false;
+  PREFLIGHT.status = status;
+  PREFLIGHT.code = code;
+  PREFLIGHT.message = message;
+  console.error(
+    `\nTamRank MCP Server\n──────────────────\n${message}\n\n` +
+    'The server keeps running so this reason reaches the client; every tool call returns it until it is fixed.\n'
+  );
+}
+
+/**
+ * Preflight: confirm the site is reachable, the token is valid and PRO is active.
+ * Records the verdict in PREFLIGHT — it never exits.
  */
 async function preflight() {
   try {
     const caps = await client.get('/capabilities');
     if (caps && caps.pro_active === false) {
-      die(
-        `${SITE_URL} is not on TamRank PRO.\n` +
-        'The agent API requires an active PRO licence.\n\n' +
-        'Upgrade: https://tamrank.com/pricing',
-        0
-      );
+      refuse(402, 'pro_required', NOT_PRO);
+      return;
     }
     const scopes = caps?.agent?.scopes;
     console.error(
@@ -91,27 +114,34 @@ async function preflight() {
     );
   } catch (err) {
     if (err instanceof ApiError) {
-      if (err.status === 401) {
-        die('Authentication failed — the TAMRANK_PAT was rejected. Check the token (it may be revoked or expired).');
-      }
-      if (err.status === 402) {
-        die(
-          `${SITE_URL} is not on TamRank PRO.\n` +
-          'The agent API requires an active PRO licence.\n\n' +
-          'Upgrade: https://tamrank.com/pricing',
-          0
-        );
-      }
+      if (err.status === 401) return refuse(401, 'unauthorized', AUTH_FAILED);
+      if (err.status === 402) return refuse(402, 'pro_required', NOT_PRO);
       if (err.status === 0) {
-        // Network/timeout — do not hard-fail; the client may retry once the site
-        // is reachable. Tools will report the same error per call.
+        // Network/timeout — not a verdict about the site or the token. The client
+        // may retry once the site is reachable, so the tools stay live and report
+        // the same error per call.
         console.error(`TamRank MCP Server: warning — ${err.message}. Starting anyway.`);
         return;
       }
-      die(`Preflight failed (${err.status} ${err.code}): ${err.message}`);
+      return refuse(err.status, err.code, `Preflight failed (${err.status} ${err.code}): ${err.message}`);
     }
-    die(`Preflight failed: ${err.message}`);
+    refuse(null, 'preflight_failed', `Preflight failed: ${err.message}`);
   }
+}
+
+/**
+ * The instructions string the client reads at initialize. On a healthy connection
+ * it carries the sequencing advice that used to be repeated across 40 tool
+ * descriptions; on a refused one it carries the diagnosis, so a client that reads
+ * only the handshake still learns why nothing works.
+ *
+ * @returns {string}
+ */
+function buildInstructions() {
+  if (!PREFLIGHT.ok) {
+    return `${PREFLIGHT.message}\n\nEvery tool call returns this same error until it is resolved.`;
+  }
+  return INSTRUCTIONS;
 }
 
 async function main() {
@@ -122,9 +152,11 @@ async function main() {
     title: 'TamRank',
     version: pkg.version,
     websiteUrl: 'https://tamrank.com/agents',
-    ...(ICONS ? { icons: ICONS } : {}),
+    icons: ICONS,
+  }, {
+    instructions: buildInstructions(),
   });
-  registerTools(server, client);
+  registerTools(server, client, PREFLIGHT);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

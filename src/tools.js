@@ -6,6 +6,11 @@
  * dry-run: call it once to get a diff + change_token, then call again with
  * execute=true and that change_token to apply. The discipline is enforced
  * server-side; this layer only forwards and formats.
+ *
+ * Sequencing advice lives in INSTRUCTIONS (sent once, at initialize) instead of
+ * being repeated in every tool description: a description is read on every
+ * tools/list, so prose there is a fixed cost the agent pays before it asks
+ * anything. Descriptions say what the tool does, what goes in and what comes out.
  */
 
 import { z } from 'zod';
@@ -13,15 +18,44 @@ import { ApiError, splitWriteArgs } from './rest.js';
 
 const REDIRECT_TYPES = ['301', '302', '307', '410'];
 
+/**
+ * The server's operating manual, delivered once in the initialize result. Keep it
+ * under ~1.5k characters: it is a fixed session cost, like tools/list.
+ */
+export const INSTRUCTIONS = `TamRank manages the SEO of ONE WordPress site. Read, fix, verify.
+
+Open with get_capabilities (tier, granted scopes, AI credits, rate-limit headroom), then get_signals: what the detectors saw move since the last scan, each with its window, its numbers and the tool that acts on it. Triage further with get_issues (one row per problem type) or get_next_action (the single best next step); get_site_health for the category scores. Narrow with get_site_overview or search_posts, then get_page_analysis on one page.
+
+Writes are dry-run by default: call the tool once to get the diff plus a change_token, then call it again with execute=true and that change_token. The token binds the exact diff you reviewed — changing a value first returns 409 change_token_mismatch and writes nothing. Every applied write carries an audit_id that rollback undoes (see get_audit_log). update_meta_batch reviews and applies up to 25 posts under one token, each item still separately rollback-able.
+
+A meta write persists a fresh score by default, so rescore_page is not needed after it; pass rescore=false to defer that and rescore_page once at the end.
+
+The ranking behind get_next_action, get_priority_actions and get_issues is a cached snapshot that does NOT move on your writes. When ranking.writes_since is above 0, call again with refresh=true to recompute once — do not poll in a loop.
+
+Titles and notes may be localised to the site language. Key off the stable fields (type, code, tool.name), not the prose.`;
+
 /** Per-status guidance appended to an error so the agent knows what to do. */
 const HINTS = {
   401: 'Authentication failed. Check the TAMRANK_PAT environment variable.',
   402: 'This site is not on TamRank PRO. The agent API requires an active PRO licence — see https://tamrank.com/pricing.',
   403: 'The token lacks the scope this tool needs. Mint a token with the required scope at tamrank.com/account/agent-tokens.',
   404: 'The target was not found.',
-  409: 'Conflict. For a write this usually means the change_token did not match — re-run the dry run and use the change_token it returns.',
   422: 'The change is not valid (for example, a redirect that would create a loop).',
   429: 'Rate limited. Wait for the window to reset before retrying.',
+};
+
+/**
+ * A 409 is not one thing. A mismatched token, an already-undone rollback and an
+ * existing redirect all land on the same status and each needs a different next
+ * step, so a single generic hint sent the agent into a pointless dry-run loop on
+ * conflicts that have nothing to do with tokens. Codes not listed here get no
+ * hint: their server message already says what happened.
+ */
+const CONFLICT_HINTS = {
+  change_token_mismatch: 'The change_token did not match — re-run the dry run and use the change_token it returns.',
+  already_reverted: 'This action was already rolled back; nothing to do.',
+  redirect_exists: 'A redirect for this source already exists; read get_redirects.',
+  signals_unavailable: 'This site\'s TamRank plugin predates the signal store, so get_signals has nothing to read. Every other tool works; use get_404s with sort=newest for what changed recently.',
 };
 
 /** A 402 can also mean depleted AI credits (index actions) — different advice. */
@@ -30,6 +64,13 @@ const CREDITS_HINT = 'The site\'s AI credits are depleted — they reset monthly
 function isInsufficientCredits(err) {
   return err.code === 'insufficient_credits'
     || (err.data && err.data.backend_code === 'insufficient_credits');
+}
+
+/** The follow-up advice for one error, or undefined when the message stands alone. */
+function hintFor(err) {
+  if (isInsufficientCredits(err)) return CREDITS_HINT;
+  if (err.status === 409) return CONFLICT_HINTS[err.code];
+  return HINTS[err.status];
 }
 
 /** Build a successful tool result from arbitrary JSON. */
@@ -59,13 +100,28 @@ function okWithVisual(data, prefix) {
 /** Build an error tool result from an ApiError (or any error). */
 function fail(err) {
   if (err instanceof ApiError) {
-    const hint = isInsufficientCredits(err) ? CREDITS_HINT : HINTS[err.status];
+    const hint = hintFor(err);
     const lines = [`Error ${err.status || ''} ${err.code}: ${err.message}`.trim()];
     if (hint) lines.push(hint);
     if (err.data && Object.keys(err.data).length) lines.push('Details: ' + JSON.stringify(err.data));
     return { content: [{ type: 'text', text: lines.join('\n') }], isError: true };
   }
   return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
+}
+
+/**
+ * The answer to every tool call once the startup preflight refused the connection
+ * (rejected PAT, no PRO licence). No request is sent: the verdict is already known
+ * and repeating it per call is what lets the agent read it at all.
+ */
+function preflightRefusal(preflight) {
+  return {
+    content: [{
+      type: 'text',
+      text: `${preflight.message}\n\nThis is the verdict from the connection check at startup; no request was sent. Fix it, then restart the MCP server.`,
+    }],
+    isError: true,
+  };
 }
 
 /** Format a write result, prefixing a clear hint when it is a dry run. */
@@ -110,8 +166,16 @@ async function fetchImageBlock(url) {
  *
  * @param {import('@modelcontextprotocol/sdk/server/mcp.js').McpServer} server
  * @param {import('./rest.js').TamRankClient} client
+ * @param {{ok: boolean, status: number|null, code: string|null, message: string|null}} [preflight]
+ *   The startup connection verdict. When it failed, every tool answers with it.
  */
-export function registerTools(server, client) {
+export function registerTools(server, client, preflight = { ok: true }) {
+  /** Register one tool, gated on the preflight verdict. */
+  const tool = (name, config, handler) => server.registerTool(name, config, async (args, extra) => {
+    if (!preflight.ok) return preflightRefusal(preflight);
+    return handler(args, extra);
+  });
+
   const read = (handler) => async (args) => {
     try {
       return ok(await handler(args || {}));
@@ -129,30 +193,32 @@ export function registerTools(server, client) {
 
   // ---- reads (site:read) ----
 
-  server.registerTool('get_site_context', {
+  tool('get_site_context', {
     title: 'Get site context',
-    description: 'Brand, language and site type so the agent understands the site before acting.',
+    description: 'Brand, language and site type.',
     inputSchema: {},
   }, read(() => client.get('/site/context')));
 
-  server.registerTool('get_capabilities', {
+  tool('get_capabilities', {
     title: 'Get capabilities',
-    description: 'Licence tier, feature availability, AI-credit balance, GSC state, the token\'s granted scopes, and rate-limit headroom. The reflex opening call. The `gsc` block reports not just `connected` but `indexing_available` + `property_mismatch`: a connected-but-mismatched GSC property (its host differs from the site) means Google has no data for these URLs, so request_recrawl / start_index_scan are refused (409) — check `gsc.indexing_available` before attempting any indexing action; reads are unaffected.',
-    inputSchema: {},
-  }, read(() => client.get('/capabilities')));
+    description: 'Licence tier, scopes, credits, GSC state, rate limit, feature counts.',
+    inputSchema: {
+      verbose: z.boolean().optional().describe('Return the full feature registry instead of counts + unavailable.'),
+    },
+  }, read((a) => client.get('/capabilities', { verbose: a.verbose ? 1 : undefined })));
 
-  server.registerTool('get_site_overview', {
+  tool('get_site_overview', {
     title: 'Get site overview',
-    description: 'All pages/posts with their SEO status (paginated) — a SHALLOW triage list (audit score + the meta/content legs + meta flags), NOT the deep analysis. When the user asks to look deeper across the pages, prefer get_site_analysis (one call, deep-analyses the weakest pages); for one specific page use get_page_analysis. Do not present this shallow list as the deep look.',
+    description: 'Paginated triage list of managed pages: scores, meta flags.',
     inputSchema: {
       page: z.number().int().positive().optional().describe('Page number (1-based).'),
       per_page: z.number().int().min(1).max(100).optional().describe('Items per page.'),
     },
   }, read((a) => client.get('/site/overview', { page: a.page, per_page: a.per_page })));
 
-  server.registerTool('get_site_health', {
+  tool('get_site_health', {
     title: 'Get site health',
-    description: 'One-call diagnosis: meta gaps, redirects, 404s, chains/loops and the category scores — plus an inline score card (a mini-donut per category: SEO, Content, Schema, Images, PageSpeed; a "—" ring means not scanned yet).',
+    description: 'Meta gaps, redirects, 404s, chains and category scores.',
     inputSchema: {
       include_visual: z.boolean().optional().describe('Return the inline score-card image (default true).'),
     },
@@ -165,23 +231,26 @@ export function registerTools(server, client) {
     }
   });
 
-  server.registerTool('get_priority_actions', {
+  tool('get_priority_actions', {
     title: 'Get priority actions',
-    description: 'Impact-ranked "what to fix first", optionally filtered by focus area.',
+    description: 'Impact-ranked what to fix first. refresh=true recomputes.',
     inputSchema: {
       focus: z.string().optional().describe('Optional focus filter (e.g. quick-wins, money-pages, traffic).'),
+      refresh: z.boolean().optional().describe('Recompute the ranking first (throttled).'),
     },
-  }, read((a) => client.get('/priority-actions', { focus: a.focus })));
+  }, read((a) => client.get('/priority-actions', { focus: a.focus, refresh: a.refresh ? 1 : undefined })));
 
-  server.registerTool('get_next_action', {
+  tool('get_next_action', {
     title: 'Get the single best next action',
-    description: 'The ONE highest-impact thing to do right now: the top card of the site\'s priority ranking reduced to a concrete instruction — the problem (`action.type`), the target (`action.target` — for post targets the title/URL are live-resolved; attachment and url targets carry the cached card\'s snapshot values), and the MCP tool that fixes it (`action.tool.name` + how; `actionable_by_agent` says whether you can do it or should advise the owner). IMPORTANT: the ranking is a cached snapshot (10-min TTL, refreshed only when the dashboard is viewed) that does NOT update after your writes — calling this again right after a fix returns the SAME action; act on it once, verify with rescore_page, then work through get_priority_actions or search_posts for the rest. available=false when no ranking is cached (this tool never recomputes) — the note then gives a concrete fallback. Rely on type/tool, not the prose (may be localized).',
-    inputSchema: {},
-  }, read(() => client.get('/agent/next-action')));
+    description: 'The single best next action: type, target, and its tool. refresh=true recomputes.',
+    inputSchema: {
+      refresh: z.boolean().optional().describe('Recompute the ranking first (throttled).'),
+    },
+  }, read((a) => client.get('/agent/next-action', { refresh: a.refresh ? 1 : undefined })));
 
-  server.registerTool('get_issues', {
+  tool('get_issues', {
     title: 'Get the issues list',
-    description: 'The site-wide diagnostic roll-up: every category of SEO problem TamRank can see right now, in ONE read, ranked by impact — sits between get_site_health (just the category scores) and the per-tool detail reads. A category roll-up, NOT a per-page dump: one row per issue type (e.g. grp_missing_titles, grp_404, not_indexed, low_ctr, cwv_failure) carrying a severity bucket (high/medium/low), the affected-page `count`, an `impact_score`, up to 3 example pages, and a `drill_down` hint naming the tool that lists/fixes that type. Start here to triage "what is wrong?", then follow drill_down (get_site_overview, get_404s, get_images_missing_alt, get_index_status, get_pagespeed, get_gsc_pages, search_posts) to the specifics and fix with update_meta / manage_redirects / resolve_404 / update_image_alt, verifying with rescore_page. Filter with severity (e.g. high,medium) and/or type (comma-separated type ids). Counts/examples are a cached snapshot (10-min TTL) that refreshes when the dashboard is viewed — it does NOT update right after your writes, so do not loop on it; computed=false means the ranking has not been cached for this site yet (the note gives a fallback).',
+    description: 'Site-wide roll-up per problem type: severity, count, impact.',
     inputSchema: {
       severity: z.string().optional().describe('Filter to these severities, comma-separated (high, medium, low).'),
       type: z.string().optional().describe('Filter to these issue types, comma-separated (e.g. grp_404,not_indexed). Omit for all.'),
@@ -189,15 +258,15 @@ export function registerTools(server, client) {
     },
   }, read((a) => client.get('/issues', { severity: a.severity, type: a.type, limit: a.limit })));
 
-  server.registerTool('search_posts', {
+  tool('search_posts', {
     title: 'Search / filter the managed pages',
-    description: 'Find pages without paging through the whole overview: `q` matches title OR slug; filter by post_type, score range (score_below / score_above — both STRICT bounds, also when combined), missing meta (missing_meta: title | description | any), or list never-audited pages (unscored=true). Sort worst-first with orderby=score&order=asc — the quickest way to "the N worst pages about X". Items have the same shape as get_site_overview. Honest edges: score filters and orderby=score EXCLUDE never-audited posts (no score meta is not score 0) — use unscored=true to find those (it cannot combine with score filters or orderby=score: 400); missing_meta misses whitespace-only values — the has_meta_* flags per item are authoritative. Same published+managed boundary as the overview. Drill into results with get_meta / get_page_analysis.',
+    description: 'Find managed pages by term, type, score bounds or missing meta.',
     inputSchema: {
       q: z.string().optional().describe('Search term — matches post title or slug.'),
       post_type: z.string().optional().describe('Restrict to one managed post type (e.g. page, post).'),
       score_below: z.number().int().min(0).max(100).optional().describe('Only pages with audit score strictly below this.'),
       score_above: z.number().int().min(0).max(100).optional().describe('Only pages with audit score strictly above this.'),
-      missing_meta: z.enum(['title', 'description', 'any']).optional().describe('Only pages missing this meta field.'),
+      missing_meta: z.enum(['title', 'description', 'any']).optional().describe('Which meta field must be missing: title, description, or any. Not a boolean.'),
       unscored: z.boolean().optional().describe('Only never-audited pages (cannot combine with score filters).'),
       orderby: z.enum(['date', 'score']).optional().describe('Sort key (default date).'),
       order: z.enum(['asc', 'desc']).optional().describe('Sort direction (default desc).'),
@@ -210,17 +279,17 @@ export function registerTools(server, client) {
     orderby: a.orderby, order: a.order, page: a.page, per_page: a.per_page,
   })));
 
-  server.registerTool('get_meta', {
+  tool('get_meta', {
     title: 'Get post meta',
-    description: 'Current SEO meta of one post, its score breakdown (total plus the meta and content legs behind it — so you can see whether the meta or the content is dragging the page down), and structured findings (F39). Use before update_meta. The score here is the stored value; if you just wrote meta it may be stale until you call rescore_page.',
+    description: 'One post\'s SEO meta, its stored score legs, and findings.',
     inputSchema: {
       post_id: z.number().int().positive().describe('The post/page id.'),
     },
   }, read((a) => client.get(`/post/${a.post_id}/meta`)));
 
-  server.registerTool('get_page_analysis', {
+  tool('get_page_analysis', {
     title: 'Get page analysis (deep dive)',
-    description: 'Look deeper at / diagnose ONE page — why it scores low and exactly what to fix. This is the tool to reach for whenever the user wants to go deeper than the overview on a specific page (or, after get_site_overview, on each of the weakest pages). Full per-page SEO audit — the deep dive get_meta is not. Returns the score breakdown (meta vs content legs, the LIVE content score, and a stale flag when the stored/dashboard score is out of date — call rescore_page to persist a fresh score and clear it) plus the content analysis: every category and check with status, the top issues each with a ready-made fix tip, and the extracted evidence (heading tree, images, links, word count). Each check is flagged actionable_by_agent — you can fix image-alt issues (via update_image_alt) and the focus keyword (via update_meta); headings/readability/links/length need page-content edits, so report those to the site owner. The human-facing labels and tips are canonical English (content_analysis.language); each check has a stable, language-neutral `code` — present findings to the user in their own language using the codes, do not just echo the English text. Heavier than get_meta (recomputes live). Also returns an inline SEO score donut image (total + meta/content legs).',
+    description: 'Full audit of one page: score legs, each check with code and fix tip.',
     inputSchema: {
       post_id: z.number().int().positive().describe('The post/page id.'),
       include_visual: z.boolean().optional().describe('Return an inline SEO score donut image (default true).'),
@@ -234,42 +303,42 @@ export function registerTools(server, client) {
     }
   });
 
-  server.registerTool('get_site_analysis', {
+  tool('get_site_analysis', {
     title: 'Analyse the site (deep, multi-page)',
-    description: 'The reliable deep pass across MULTIPLE pages in one call — reach for this when the user says "look deeper at my pages", "what is wrong across my site", or "analyse my worst pages". Ranks the managed published pages by score and deep-analyses the lowest-scoring few, returning each weak page\'s score legs (live + stale flag) and its top issues with ready-made fixes plus an agent_fixable list. Heavier than other reads (analyses up to 5 pages live). For the full breakdown of any single page that surfaces, follow up with get_page_analysis; for one specific page from the start, use get_page_analysis directly.',
+    description: 'Deep pass over the lowest-scoring pages (max 5), with fixes.',
     inputSchema: {
       limit: z.number().int().min(1).max(5).optional().describe('How many of the lowest-scoring pages to deep-analyse (default 3, max 5).'),
       post_type: z.string().optional().describe('Restrict to one managed post type (e.g. page, post).'),
     },
   }, read((a) => client.get('/site/analysis', { limit: a.limit, post_type: a.post_type })));
 
-  server.registerTool('get_schema', {
+  tool('get_schema', {
     title: 'Get a page\'s schema',
-    description: 'Diagnostic read of the structured data (Schema.org JSON-LD) TamRank renders for ONE page, and how complete/healthy it is. Returns the effective type + extra types, the source (automatisch = auto-detected, handmatig = manually set, template, or disabled), an auto-detection confidence, a validity verdict, any active third-party SEO plugin that also emits schema (Yoast/RankMath/…) with a conflict warning, and a concrete next_action. Validity mirrors TamRank itself: auto-detected pages are "active_auto" and counted as covered (required fields are auto-sourced from the post, so there is no false "missing field" noise); template pages get a real required-field check ("active_template" with the audit detail); pages with schema off are "disabled". Read-only: fix gaps with update_meta (e.g. add a featured image or description) then rescore_page. For the whole site use get_schema_overview.',
+    description: 'One page\'s JSON-LD: type, source, validity, next action.',
     inputSchema: {
       post_id: z.number().int().positive().describe('The post/page id.'),
     },
   }, read((a) => client.get(`/post/${a.post_id}/schema`)));
 
-  server.registerTool('get_schema_overview', {
+  tool('get_schema_overview', {
     title: 'Get site-wide schema coverage',
-    description: 'Shallow site-wide structured-data roll-up: how many published pages have schema, the coverage %, the type distribution (BlogPosting/Product/…), and counts of disabled / template-based / manually-overridden / not-yet-detected pages, plus whether a third-party SEO plugin is also emitting schema. IMPORTANT: detection only runs when a page is saved (no automatic backfill) and the renderer emits NO schema for a page with no detected type, so not_yet_detected pages (common on imported/migrated sites) stay schema-less until acted on. The response includes not_yet_detected_ids (up to 50 such pages) — give each one schema by calling detect_schema on its post_id. This is the SHALLOW overview (no per-page missing-field detail); for one page\'s validity call get_schema on its post_id.',
+    description: 'Site-wide schema coverage, types, not_yet_detected_ids.',
     inputSchema: {},
   }, read(() => client.get('/schema/overview')));
 
-  server.registerTool('get_schema_settings', {
+  tool('get_schema_settings', {
     title: 'Get site schema identity',
-    description: 'Read the site-wide Organization/WebSite schema identity (organization name, URL, logo, contact, postal address, social profiles) that TamRank renders in EVERY page\'s JSON-LD @graph, with the rendered Organization node and a completeness check (which high-value fields are still empty). This is the part auto-detection cannot fill in — your real business data, normally the biggest schema gap on a site. Read this before update_schema_settings.',
+    description: 'The site-wide Organization/WebSite identity.',
     inputSchema: {},
   }, read(() => client.get('/schema/settings')));
 
-  server.registerTool('get_topical_authority', {
+  tool('get_topical_authority', {
     title: 'Get topical authority map',
-    description: 'The site\'s topical-authority map: the pillar topic, its topic clusters (`clusters` — each with the still-published pages it covers and the `missing_topics` it still needs), the overall `coverage` %, the content `gaps`, and the top recommended actions (`top_actions`). Use this to see where the site is topically strong vs thin and what content to add to build authority. `counts` holds the true totals; the arrays are capped on very large maps. Read-only and advisory (actionable_by_agent=false): act on a gap by creating or improving the relevant page, then run get_page_analysis / update_meta on it. If has_map=false, no map exists yet — a topical-authority analysis must be run from the TamRank dashboard first (it consumes credits and is async, so it is not an agent action); `processing` says whether one is already running.',
+    description: 'Topical-authority map: pillar, clusters, coverage, gaps.',
     inputSchema: {},
   }, read(() => client.get('/site/topical-authority')));
 
-  server.registerTool('get_redirects', {
+  tool('get_redirects', {
     title: 'List redirects',
     description: 'Existing redirects with their chain status.',
     inputSchema: {
@@ -278,23 +347,35 @@ export function registerTools(server, client) {
     },
   }, read((a) => client.get('/redirects', { limit: a.limit, offset: a.offset })));
 
-  server.registerTool('get_redirect_chains', {
+  tool('get_redirect_chains', {
     title: 'Get redirect chains and loops',
-    description: 'Redirect chains (A→B→C) and loops, computed LIVE from the active redirects (the stored chain_status in get_redirects can lag; this does not use it). Each chain lists its hops, the final_destination, and a ready-made `fix`: flatten by updating the FIRST redirect to point straight at final_destination via manage_redirects (dry-run first; repeat per hop to flatten every row). Chains longer than 10 hops are cut off (truncated=true) and get NO fix — their final_destination may itself redirect further; flatten the listed hops, then call again. Lists are capped at 200 entries (capped=true: counts reflect only what is listed). Loops are listed separately and cannot be flattened — break one by changing or deleting one of its rows. length counts redirect rows; healthy single redirects are not listed.',
+    description: 'Live redirect chains and loops; each chain carries a fix.',
     inputSchema: {},
   }, read(() => client.get('/redirects/chains')));
 
-  server.registerTool('get_404s', {
+  tool('get_404s', {
     title: 'List 404s',
-    description: 'Open 404s grouped by URL and ranked by hits (with a has_redirect flag). Feeds resolve_404.',
+    description: 'Open 404s per URL with hits, first_seen and is_new. Feeds resolve_404.',
     inputSchema: {
       limit: z.number().int().min(1).max(100).optional(),
+      since: z.string().optional().describe('Newness baseline (ISO-8601 or site datetime). Defaults to the last signal scan; is_new is first_seen >= since.'),
+      sort: z.enum(['hits', 'newest']).optional().describe('hits (default, lifetime hits) or newest (first seen first).'),
     },
-  }, read((a) => client.get('/404s', { limit: a.limit })));
+  }, read((a) => client.get('/404s', { limit: a.limit, since: a.since, sort: a.sort })));
 
-  server.registerTool('get_audit_log', {
+  tool('get_signals', {
+    title: 'Get open signals',
+    description: 'Open detector signals: window, delta, evidence, score and the tool that acts on each.',
+    inputSchema: {
+      limit: z.number().int().min(1).max(50).optional().describe('Max signals (default 20).'),
+      type: z.string().optional().describe('Filter to one exact signal type (e.g. tech_404_new).'),
+      subject_id: z.number().int().min(0).optional().describe('Filter to one subject (post id; 0 is site-wide).'),
+    },
+  }, read((a) => client.get('/signals', { limit: a.limit, type: a.type, subject_id: a.subject_id })));
+
+  tool('get_audit_log', {
     title: 'Get audit log',
-    description: 'Combined history of changes — manual edits and agent actions — each tagged with its source. Agent actions carry the audit id rollback needs.',
+    description: 'Manual edits and agent actions, with the audit id for rollback.',
     inputSchema: {
       limit: z.number().int().min(1).max(50).optional(),
       post_id: z.number().int().positive().optional().describe('Filter to one post.'),
@@ -302,9 +383,9 @@ export function registerTools(server, client) {
     },
   }, read((a) => client.get('/audit-log', { limit: a.limit, post_id: a.post_id, source: a.source })));
 
-  server.registerTool('get_changes', {
+  tool('get_changes', {
     title: 'Get changes since a timestamp',
-    description: 'Incremental "what changed since X" feed — the cursor-driven counterpart of get_audit_log. Requires `since` (ISO-8601 or unix, INCLUSIVE); returns entries OLDEST FIRST with a `next_since` cursor: process the page, poll again with next_since, and ALWAYS dedupe by source+id — rows sharing the boundary second (at minimum the last one) repeat by design so none are lost. If `cursor_stalled` is true a single second held more rows than the limit: retry with a higher limit (max 100). Each entry is tagged source=manual (a human edit of the tracked SEO fields, captured on save — repeat saves within 5 minutes are debounced/skipped) or source=agent (an MCP write, with its audit_id for rollback; never pruned). All timestamps are UTC ISO-8601. Coverage is partial by design and the response says so: only tracked SEO meta fields + content stats of published managed posts are recorded — publish/unpublish/delete transitions and ordinary content edits are not logged, and manual entries for since-deleted posts drop out. Manual history is pruned after ~180 days (`since_before_retention` flags when your window predates it). Needs audit:read.',
+    description: 'Changes since a timestamp, oldest first. Dedupe by source+id.',
     inputSchema: {
       since: z.string().describe('Lower bound, exclusive — ISO-8601 (2026-06-01T00:00:00Z) or unix timestamp. Use the previous response\'s next_since to continue.'),
       limit: z.number().int().min(1).max(100).optional().describe('Max entries (default 25).'),
@@ -313,9 +394,9 @@ export function registerTools(server, client) {
     },
   }, read((a) => client.get('/changes', { since: a.since, limit: a.limit, post_id: a.post_id, source: a.source })));
 
-  server.registerTool('get_images_missing_alt', {
+  tool('get_images_missing_alt', {
     title: 'Get images missing alt text',
-    description: 'Image attachments that have no alt text, returned WITH each image so you can look at it and write an accurate, specific alt. Then call update_image_alt per image. Credit-free — your own model does the captioning, TamRank only stores the result.',
+    description: 'Images with no alt text, returned with the image to caption.',
     inputSchema: {
       limit: z.number().int().min(1).max(50).optional().describe('Max images (default 10).'),
       offset: z.number().int().min(0).optional().describe('Pagination offset.'),
@@ -343,50 +424,50 @@ export function registerTools(server, client) {
 
   // ---- Search Console reads (site:read) ----
 
-  server.registerTool('get_gsc_pages', {
+  tool('get_gsc_pages', {
     title: 'Get Search Console pages',
-    description: 'Page performance from Google Search Console: clicks, impressions, CTR and average position over a period. Returns connected=false (with a note) when GSC is not linked.',
+    description: 'Search Console pages: clicks, impressions, CTR, position.',
     inputSchema: {
       period: z.number().int().optional().describe('Look-back window in days: 7, 28 or 90 (default 28).'),
     },
   }, read((a) => client.get('/gsc/pages', { period: a.period })));
 
-  server.registerTool('get_gsc_keywords', {
+  tool('get_gsc_keywords', {
     title: 'Get Search Console keywords',
-    description: 'Keyword performance for one page, each enriched with click-uplift potential (estimated search volume, projected extra clicks at the target position, and a confidence tier). Get a page URL from get_gsc_pages first.',
+    description: 'Search Console keywords for one page, with uplift potential.',
     inputSchema: {
       page_url: z.string().describe('The full page URL (as returned by get_gsc_pages).'),
       period: z.number().int().optional().describe('7, 28 or 90 days (default 28).'),
     },
   }, read((a) => client.get('/gsc/keywords', { page_url: a.page_url, period: a.period })));
 
-  server.registerTool('get_keyword_stability', {
+  tool('get_keyword_stability', {
     title: 'Get keyword position stability',
-    description: 'Per-keyword position stability for one page (stable / moderate / volatile over the last 28 days) plus a direction trend (improving / declining / flat). Use it to tell a real ranking drop from normal day-to-day volatility before reacting.',
+    description: 'Per-keyword position stability and trend for one page.',
     inputSchema: {
       page_url: z.string().describe('The full page URL (as returned by get_gsc_pages).'),
     },
   }, read((a) => client.get('/gsc/keyword-stability', { page_url: a.page_url })));
 
-  server.registerTool('get_index_status', {
+  tool('get_index_status', {
     title: 'Get page index status',
-    description: 'Google index status of ONE page, from the cached result of the last time the page was checked — a site index scan or the publish-time auto-check (credit-free; never queries Google live). `status` is indexed | crawled (crawled but not indexed) | not_found (not on Google) | noindex | error | null (no usable cached status: never checked, or the last check stored no verdict — a non-null `checked_at` tells you which), with `checked_at` + a `stale` flag (older than 48h; null when never checked), Google\'s `last_crawl` of the page, and `requested_at` (when indexing was last requested for this page via ANY surface — request_recrawl, the dashboard\'s manual button, and publish-time auto-index all record it; null means no recent request at all. All surfaces share one ~48h cooldown keyed on it). `batch_running` is read passively from the site and can stay true after a scan already finished, until the site dashboard next syncs — treat it as advisory and do not poll in a loop waiting for it to flip. To act on a bad status (not_found / crawled-not-indexed), fix the page first, then use request_recrawl (consumes credits, index:write). For the site-wide picture use get_site_index.',
+    description: 'Cached Google index status of one page, with staleness.',
     inputSchema: {
       post_id: z.number().int().positive().describe('The post/page id.'),
     },
   }, read((a) => client.get(`/post/${a.post_id}/index`)));
 
-  server.registerTool('get_site_index', {
+  tool('get_site_index', {
     title: 'Get site index rollup',
-    description: 'Site-wide Google index coverage from the cached results of the last index scan (credit-free; never queries Google live): `published` (the denominator) and `counts` per status (indexed / crawled / not_found / noindex / error / unchecked — where unchecked means never checked OR the last check stored no usable status; such pages show a non-null checked_at in get_index_status) over the published managed pages, `last_checked` + `stale` (older than 48h; null when the site was never scanned), scan state (`scan` — the engine\'s own site-global approximate counter over ALL public post types: it can exceed `published`, can lag behind a finished scan, and the `counts` block is the authoritative per-page view), and the 48h manual-refresh cooldown (`cooldowns.manual_refresh`). Use this to spot indexing problems site-wide, then inspect a specific page with get_index_status. When `gsc.connected` is false or `gsc.property_mismatch` is true everything is withheld (available=false, fields null) — fixing the GSC connection is a dashboard action. Refresh site-wide with start_index_scan (consumes credits, index:write) — it shares the 48h cooldown with the dashboard.',
+    description: 'Site-wide index coverage from the last scan.',
     inputSchema: {},
   }, read(() => client.get('/site/index')));
 
   // ---- writes (dry-run by default) ----
 
-  server.registerTool('update_meta', {
+  tool('update_meta', {
     title: 'Update post meta',
-    description: 'Write SEO meta on a post. Dry-run by default: call without execute to preview the diff + change_token, then call again with execute=true and that change_token to apply. On execute the response carries a `score` projection (the live meta leg + the projected total, with the before→after delta) so you can see immediately whether the fix helped — no second read needed. That projection is cheap and does NOT persist: the stored/dashboard score stays as it was until you call rescore_page to commit a full re-audit.',
+    description: 'Write SEO meta on a post. Dry-run; the score is a projection.',
     inputSchema: {
       post_id: z.number().int().positive().describe('The post/page id.'),
       meta_title: z.string().optional(),
@@ -400,6 +481,7 @@ export function registerTools(server, client) {
       social_image: z.string().optional(),
       noindex: z.boolean().optional(),
       nofollow: z.boolean().optional(),
+      rescore: z.boolean().optional().describe('Persist a fresh audit with the write (default true). false returns a projection with needs_rescore.'),
       execute: z.boolean().optional().describe('Set true (with change_token) to apply. Omit for a dry run.'),
       change_token: z.string().optional().describe('The change_token returned by the dry run.'),
     },
@@ -408,12 +490,42 @@ export function registerTools(server, client) {
       'meta_title', 'meta_description', 'focus_keyword', 'secondary_keywords', 'custom_slug',
       'canonical_url', 'social_title', 'social_description', 'social_image', 'noindex', 'nofollow',
     ]);
+    if (a.rescore === false) body.rescore = false;
     return client.post(`/post/${a.post_id}/meta`, body, control);
   }));
 
-  server.registerTool('manage_redirects', {
+  tool('update_meta_batch', {
+    title: 'Update post meta in a batch',
+    description: 'Write SEO meta on 1-25 posts in one dry-run/execute pair. One change_token binds the whole set; each applied item gets its own audit_id.',
+    inputSchema: {
+      items: z.array(z.object({
+        post_id: z.number().int().positive(),
+        meta_title: z.string().optional(),
+        meta_description: z.string().optional(),
+        focus_keyword: z.string().optional(),
+        secondary_keywords: z.array(z.string()).optional(),
+        custom_slug: z.string().optional(),
+        canonical_url: z.string().optional(),
+        social_title: z.string().optional(),
+        social_description: z.string().optional(),
+        social_image: z.string().optional(),
+        noindex: z.boolean().optional(),
+        nofollow: z.boolean().optional(),
+      })).min(1).max(25).describe('One entry per post; each post at most once.'),
+      rescore: z.boolean().optional().describe('Persist a fresh audit per applied item (default true).'),
+      execute: z.boolean().optional().describe('Set true (with change_token) to apply. Omit for a dry run.'),
+      change_token: z.string().optional().describe('The change_token returned by the dry run — it binds the exact item list.'),
+    },
+  }, write((a) => {
+    const { control } = splitWriteArgs(a, []);
+    const body = { items: a.items };
+    if (a.rescore === false) body.rescore = false;
+    return client.post('/posts/meta/batch', body, control);
+  }));
+
+  tool('manage_redirects', {
     title: 'Manage redirects',
-    description: 'Create, update or delete a redirect. Dry-run by default (preview + change_token, then execute=true to apply). Delete snapshots the row so rollback can recreate it.',
+    description: 'Create, update or delete a redirect. Dry-run by default.',
     inputSchema: {
       action: z.enum(['create', 'update', 'delete']).describe('What to do.'),
       id: z.number().int().positive().optional().describe('Redirect id (required for update/delete).'),
@@ -437,9 +549,9 @@ export function registerTools(server, client) {
     return client.del(`/redirects/${a.id}`, control);
   }));
 
-  server.registerTool('resolve_404', {
+  tool('resolve_404', {
     title: 'Resolve a 404',
-    description: 'Turn a logged 404 into a redirect. Dry-run by default (preview + change_token, then execute=true to apply).',
+    description: 'Turn a logged 404 into a redirect. Dry-run by default.',
     inputSchema: {
       url: z.string().describe('The 404 URL to resolve (e.g. /old-page).'),
       target_url: z.string().describe('Where it should redirect to.'),
@@ -452,9 +564,9 @@ export function registerTools(server, client) {
     return client.post('/404s/resolve', body, control);
   }));
 
-  server.registerTool('rollback', {
+  tool('rollback', {
     title: 'Roll back an action',
-    description: 'Undo a logged agent action by its audit id (from get_audit_log). Dry-run by default (describes the reversal + change_token, then execute=true to apply). Only rollback-eligible, not-yet-reverted actions qualify.',
+    description: 'Undo a logged agent action by its audit id. Dry-run by default.',
     inputSchema: {
       action_id: z.number().int().positive().describe('The audit id of the action to undo.'),
       execute: z.boolean().optional(),
@@ -465,9 +577,9 @@ export function registerTools(server, client) {
     return client.post(`/rollback/${a.action_id}`, undefined, control);
   }));
 
-  server.registerTool('update_image_alt', {
+  tool('update_image_alt', {
     title: 'Update image alt text',
-    description: 'Write alt text on an image attachment. Dry-run by default: call without execute to preview the diff + change_token, then call again with execute=true and that change_token to apply. Pair with get_images_missing_alt. Reversible via rollback.',
+    description: 'Write alt text on an image attachment. Dry-run by default.',
     inputSchema: {
       image_id: z.number().int().positive().describe('The image attachment id (from get_images_missing_alt).'),
       alt_text: z.string().describe('The alt text to write.'),
@@ -479,9 +591,9 @@ export function registerTools(server, client) {
     return client.post(`/image/${a.image_id}/alt`, body, control);
   }));
 
-  server.registerTool('detect_schema', {
+  tool('detect_schema', {
     title: 'Detect schema for a page',
-    description: 'Run TamRank\'s auto schema detection on ONE page and store the result, giving the page a schema type so it renders JSON-LD. Use this on the not_yet_detected_ids that get_schema_overview reports: detection otherwise only runs when a page is saved (there is no automatic backfill) and the renderer emits NO schema without a stored type, so imported/migrated/never-re-saved pages stay schema-less until you do this. It is a recompute, not a destructive edit — idempotent, and it never overrides a manual schema choice (source stays handmatig) — so there is NO dry-run/change_token here; it applies immediately. The response shows before -> after type and `changed`. Heavier than a read (it may fetch the rendered page), so do not blast it across hundreds of pages at once. Needs meta:write. Re-check rendered state with get_schema; this does not change the page content or its audit score.',
+    description: 'Detect and store one page\'s schema type. Applies immediately.',
     inputSchema: {
       post_id: z.number().int().positive().describe('The post/page id (e.g. from get_schema_overview not_yet_detected_ids).'),
     },
@@ -489,9 +601,9 @@ export function registerTools(server, client) {
 
   // ---- schema identity (schema:write) ----
 
-  server.registerTool('update_schema_settings', {
+  tool('update_schema_settings', {
     title: 'Update site schema identity',
-    description: 'Write the site-wide Organization/WebSite identity that TamRank renders in EVERY page\'s JSON-LD @graph: organization name, website URL, logo, email, telephone, postal address, social profiles. This is the part auto-detection cannot fill in — your real business data — and it is normally the biggest schema gap on a site, so filling it improves structured data site-wide in one write. Dry-run by default: call without execute to preview the diff + change_token, then call again with execute=true and that change_token to apply. Reversible via rollback (it snapshots the whole settings object). Read the current values + completeness with get_schema_settings first. Guardrails: entity_type is limited to Organization or LocalBusiness; raw custom JSON-LD and entity_type=Custom stay admin-only and cannot be set here. Needs the schema:write scope (the owner must mint a token with it).',
+    description: 'Write the site-wide Organization/WebSite identity. Dry-run.',
     inputSchema: {
       entity_type: z.enum(['Organization', 'LocalBusiness']).optional().describe('Site entity type.'),
       organization_name: z.string().optional().describe('Organization / business name.'),
@@ -516,9 +628,9 @@ export function registerTools(server, client) {
 
   // ---- index actions (index:write — default-off scope; TamRank AI credits) ----
 
-  server.registerTool('request_recrawl', {
+  tool('request_recrawl', {
     title: 'Request Google recrawl of a page',
-    description: 'Ask Google to (re)crawl ONE page via the TamRank backend. CONSUMES AI CREDITS (the per-call cost is decided by the backend; the response carries the cached `credits.balance`) and needs the index:write scope (default-off — the site owner must mint a token with it). Dry-run by default: the preview shows the credits balance plus a low-credits warning when the balance is at the soft limit; re-send with execute=true and the change_token to apply. Refuses: noindex pages (409 — remove the noindex via update_meta first), a second request within the shared ~48h per-post cooldown (429 — the dashboard, the manual button and this tool share one window), the per-site daily recrawl cap (429 — a backstop under Google\'s own indexing quota; the dry-run\'s `daily_recrawl` block shows how many remain today), and a missing/mismatched GSC connection (409). On success the page enters its ~48h requested window (`requested_at` in get_index_status). Google typically takes days to act — do NOT poll for an immediate status change; the request is not rollbackable. Best used after fixing a page (update_meta + rescore_page) so Google sees the improvement sooner.',
+    description: 'Ask Google to recrawl one page. Costs AI credits. Dry-run.',
     inputSchema: {
       post_id: z.number().int().positive().describe('The post/page id.'),
       execute: z.boolean().optional().describe('Set true (with change_token) to apply. Omit for a dry run.'),
@@ -529,9 +641,9 @@ export function registerTools(server, client) {
     return client.post(`/post/${a.post_id}/recrawl`, undefined, control);
   }));
 
-  server.registerTool('start_index_scan', {
+  tool('start_index_scan', {
     title: 'Start a site-wide index scan',
-    description: 'Submit the never-checked and stale (>48h) published URLs across ALL public post types (a wider set than get_site_index\'s managed-only counts — treat counts.unchecked as a lower bound) to the TamRank backend index checker, in capped engine batches — the bulk refresh behind get_site_index. CONSUMES AI CREDITS (batch-size dependent) and needs index:write (default-off scope). Dry-run by default (the preview shows scope + the cached credits balance; execute=true + change_token to apply). Shares the 48h refresh cooldown with the TamRank dashboard (429 with next_allowed_at when armed) and refuses while a scan is already running (409). After starting, poll get_index_scan_status sparingly (each poll is a metered op) or read the free passive `scan` block in get_site_index; results land in the cached statuses as they complete.',
+    description: 'Bulk-check unchecked and stale URLs. Costs credits. Dry-run.',
     inputSchema: {
       execute: z.boolean().optional().describe('Set true (with change_token) to apply. Omit for a dry run.'),
       change_token: z.string().optional().describe('The change_token returned by the dry run.'),
@@ -541,15 +653,15 @@ export function registerTools(server, client) {
     return client.post('/site/index/scan', undefined, control);
   }));
 
-  server.registerTool('get_index_scan_status', {
+  tool('get_index_scan_status', {
     title: 'Index scan progress (live poll)',
-    description: 'Progress of a running index scan. When a batch is running this LIVE-POLLS the TamRank backend (a metered op on the credit burst bucket; needs index:write) and folds finished results into the cached statuses; when nothing is running it answers passively and free (done=true, nothing polled). Poll sparingly — once every few minutes is plenty; the credit-free passive alternative is the `scan` block in get_site_index.',
+    description: 'Progress of a running index scan; live-polls while one runs.',
     inputSchema: {},
   }, read(() => client.get('/site/index/scan')));
 
-  server.registerTool('rescore_page', {
+  tool('rescore_page', {
     title: 'Re-score a page (persist a fresh audit)',
-    description: 'Recompute and PERSIST a page\'s SEO score (meta + content + total) so get_meta, get_site_overview and the WordPress dashboard catch up to reality. This is the VERIFY step of fix → verify: update_meta already shows a cheap projected score in its response, but the stored/dashboard number stays stale until you rescore. Call it after writing meta (or an image alt) to confirm the stored score actually moved, or whenever get_meta/get_page_analysis reports stale=true. Heavier than a read — it re-runs the content analyzer, which may fetch the live page. Needs meta:write. Not a dry-run tool: it writes the refreshed scores immediately and is idempotent (running it twice yields the same numbers); it changes no page content, only the derived score caches.',
+    description: 'Recompute and persist a page\'s score. The verify step after a write.',
     inputSchema: {
       post_id: z.number().int().positive().describe('The post/page id to re-score.'),
     },
@@ -564,9 +676,9 @@ export function registerTools(server, client) {
 
   // ---- PageSpeed (Google PSI — the site's own API key, no TamRank credits) ----
 
-  server.registerTool('get_pagespeed', {
+  tool('get_pagespeed', {
     title: 'Get PageSpeed for a page',
-    description: 'Google PageSpeed Insights for one page: performance score + Core Web Vitals (LCP/INP/CLS/TBT/FCP) + the top opportunities + CrUX field data. Cached by default (instant); set refresh=true to run ONE live test (slow — a real external Google call). strategy defaults to mobile (mobile-first indexing). Returns available:false when the site has no PageSpeed API key. PageSpeed issues are server/theme/file-level — advise the site owner; they are NOT fixable via the write tools (actionable_by_agent is always false).',
+    description: 'PageSpeed for one page: score, Core Web Vitals, opportunities.',
     inputSchema: {
       post_id: z.number().int().positive().describe('The post/page id.'),
       strategy: z.enum(['mobile', 'desktop']).optional().describe('Device strategy (default mobile).'),
@@ -586,9 +698,9 @@ export function registerTools(server, client) {
     }
   });
 
-  server.registerTool('start_pagespeed_scan', {
+  tool('start_pagespeed_scan', {
     title: 'Start a bulk PageSpeed scan',
-    description: 'Queue a PageSpeed scan across the site and return immediately with a scan_id — it runs in the BACKGROUND (roughly one page every few seconds, mobile + desktop each), so a large site takes minutes. This is how you do PageSpeed "in bulk" without waiting: start it, then poll get_pagespeed_scan_status; finished pages appear in get_pagespeed, get_page_analysis and get_site_overview as they complete. Optionally limit to the N lowest-scoring pages, or restrict to one post type. Needs meta:write and a PageSpeed API key on the site.',
+    description: 'Queue a background PageSpeed scan; returns a scan_id.',
     inputSchema: {
       limit: z.number().int().min(1).max(200).optional().describe('Scan only the N lowest-scoring pages (default: all managed pages, capped at 200).'),
       post_type: z.string().optional().describe('Restrict to one managed post type (e.g. page, post).'),
@@ -602,9 +714,9 @@ export function registerTools(server, client) {
     }
   });
 
-  server.registerTool('get_pagespeed_scan_status', {
+  tool('get_pagespeed_scan_status', {
     title: 'PageSpeed scan progress',
-    description: 'Progress of the background bulk PageSpeed scan: processed / total / completed / failed / pending plus an ETA. Poll this after start_pagespeed_scan (each poll also nudges the background worker along). is_running flips to false when the scan is done.',
+    description: 'Progress of the background PageSpeed scan.',
     inputSchema: {},
   }, read(() => client.get('/pagespeed/scan')));
 }

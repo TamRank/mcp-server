@@ -114,13 +114,13 @@ on the [V2 agency roadmap](#roadmap).
 | Tool | What it does | Scope required |
 |---|---|---|
 | `get_site_context` | Brand, language, site type — Claude knows your site before it acts | `site:read` |
-| `get_capabilities` | Check tier + available credits | `site:read` |
+| `get_capabilities` | Check tier + available credits + feature counts (`verbose=true` for the full feature registry) | `site:read` |
 | `get_site_overview` | All pages, posts, products with SEO status | `site:read` |
 | `get_site_health` | Priority issues ranked by impact | `site:read` |
-| `get_priority_actions` | "What should I fix first?" — filtered by focus area | `site:read` |
-| `get_next_action` | The ONE highest-impact action right now — top priority card with a resolved target and the tool that fixes it | `site:read` |
+| `get_priority_actions` | "What should I fix first?" — filtered by focus area; `refresh=true` recomputes the ranking first | `site:read` |
+| `get_next_action` | The ONE highest-impact action right now — top priority card with a resolved target, `targets[]` when it covers more than one page, and the tool that fixes it; `refresh=true` recomputes the ranking first | `site:read` |
 | `get_issues` | Site-wide issue roll-up — one row per problem type (severity, count, impact, examples, drill-down tool), filterable by severity/type | `site:read` |
-| `search_posts` | Search/filter the managed pages — title/slug match, score range, missing meta, never-audited (worst-first sort) | `site:read` |
+| `search_posts` | Search/filter the managed pages — title/slug match, score range, missing meta (`title` \| `description` \| `any`), never-audited (worst-first sort) | `site:read` |
 | `get_meta` | Current SEO meta + score breakdown of one post (use before update_meta) | `site:read` |
 | `get_page_analysis` | Deep per-page audit: score breakdown (meta vs content, live + stale flag) + every content check with fix tips and evidence + a cached PageSpeed signal | `site:read` |
 | `get_site_analysis` | Deep pass across the lowest-scoring pages in one call | `site:read` |
@@ -138,15 +138,17 @@ on the [V2 agency roadmap](#roadmap).
 | `get_images_missing_alt` | Images without alt text, returned so the model can see and caption them (credit-free) | `site:read` |
 | `get_redirects` | List existing redirects with chain status | `site:read` |
 | `get_redirect_chains` | Redirect chains (A→B→C) and loops computed live, each with a ready-made flatten fix | `site:read` |
-| `get_404s` | Open 404s grouped by URL, ranked by hits | `site:read` |
+| `get_signals` | Open detector signals — what moved since the last scan, each with its window, delta, evidence and the tool that acts on it | `site:read` |
+| `get_404s` | Open 404s grouped by URL, with `first_seen` and `is_new`; `since` sets the newness baseline (default: the last signal scan), `sort=newest` puts fresh URLs first | `site:read` |
 | `request_recrawl` | Ask Google to (re)crawl one page via the TamRank backend (dry-run first; consumes AI credits) | `index:write` |
 | `start_index_scan` | Site-wide index scan of unchecked + stale pages (dry-run first; consumes AI credits; shares the dashboard's 48h cooldown) | `index:write` |
 | `get_index_scan_status` | Live-poll a running index scan (metered); passive and free when idle | `index:write` |
-| `update_meta` | Write meta title and description to any post (response shows the projected new score) | `meta:write` |
+| `update_meta` | Write meta title and description to any post; the response carries the newly persisted score (`rescore=false` to defer the re-audit) | `meta:write` |
+| `update_meta_batch` | Review and write meta on 1-25 posts in one dry-run/execute pair — one change_token binds the set, each applied item keeps its own audit_id | `meta:write` |
 | `update_image_alt` | Write alt text to an image attachment | `meta:write` |
 | `detect_schema` | Run auto schema detection on a page so it renders JSON-LD (for not_yet_detected pages); recompute, never overrides a manual choice | `meta:write` |
 | `update_schema_settings` | Write the site-wide Organization/WebSite schema identity (name, logo, contact, address, socials); dry-run first, reversible | `schema:write` |
-| `rescore_page` | Persist a fresh audit so the stored/dashboard score catches up — the verify step after a fix | `meta:write` |
+| `rescore_page` | Persist a fresh audit so the stored/dashboard score catches up — needed after `rescore=false`, or after an edit made outside the agent | `meta:write` |
 | `start_pagespeed_scan` | Queue a background bulk PageSpeed scan across the site (poll get_pagespeed_scan_status) | `meta:write` |
 | `manage_redirects` | Create, update, or delete 301/302 redirects | `redirects:write` |
 | `resolve_404` | Mark a 404 as resolved (with optional redirect) | `redirects:write` |
@@ -155,6 +157,10 @@ on the [V2 agency roadmap](#roadmap).
 | `rollback` | Undo any logged action by event ID | `rollback` |
 
 All write tools default to **dry-run mode** — Claude shows you exactly what it will change before touching anything.
+
+Sequencing advice — which tool to open with, the dry-run/execute handshake, when to
+rescore, when to refresh the ranking — is delivered once in the server's
+`instructions` at initialize, rather than repeated in every tool description.
 
 ---
 
@@ -168,6 +174,11 @@ Each token:
 - Generates a full audit trail
 - Can be revoked instantly from [tamrank.com/account/agent-tokens](https://tamrank.com/account/agent-tokens)
 - Is automatically invalidated if your license expires or is refunded
+
+If a token is rejected (revoked, expired) or the site has no active PRO licence, the
+server still starts: the reason appears in the server `instructions` and every tool
+call returns it as a tool error. Earlier versions exited on that check, and the client
+saw only `MCP error -32000: Connection closed`.
 
 Token prefix: `tamrank_pat_`. The prefix is distinctive so secret scanners can spot it. This repo ships a pre-commit hook plus a [gitleaks](https://github.com/gitleaks/gitleaks) rule ([`.gitleaks.toml`](.gitleaks.toml)) that block accidental token commits, and a CI scan runs on every push. **Never commit a token to version control.** If one leaks, revoke it instantly from your account.
 
