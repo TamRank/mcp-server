@@ -5,9 +5,8 @@ All notable changes to `@tam-rank/mcp-server` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-> This package has never been published to npm. `0.2.0-preview` is the version the
-> repository has carried since the first commit; the first release number is still an
-> open decision.
+> This package has never been published to npm. V1.1 is advertised as
+> `0.3.0-preview`; the first stable release number remains an open decision.
 
 ## [Unreleased]
 
@@ -54,6 +53,16 @@ and the new arguments are ignored, so an existing agent keeps working either way
 
 ### Changed
 
+- The bridge now explicitly requests `compact=1` from `get_capabilities`. The REST
+  endpoint's no-argument response keeps its original `features[]` list for scripted
+  consumers, while MCP retains the compact counts used to reduce session cost.
+- The surface test now requires 1,000 characters of `tools/list` headroom and 150
+  characters of instruction headroom, instead of passing immediately below a hard
+  ceiling. Repeated schema prose and the initialize instructions were tightened.
+- `npm test` now runs both the live smoke test and the surface gate. Smoke exits
+  non-zero on unexpected tool errors; `test:integration` and `test:all` expose the
+  write-and-rollback integration suite explicitly.
+
 - A meta write now persists a fresh score instead of projecting one. `update_meta`
   with `execute=true` runs the full re-audit itself and returns the persisted
   before/after, so `get_meta`, `get_site_overview` and the WordPress dashboard are
@@ -63,10 +72,11 @@ and the new arguments are ignored, so an existing agent keeps working either way
   the work; the response then carries the old projection with `needs_rescore: true`
   so the debt is visible. A rolled-back meta write refreshes the score the same way.
   Dry runs are unchanged. *(needs PRO)*
-- `get_capabilities` returns feature counts plus the unavailable ones by default,
-  instead of the full 64-entry registry in which every entry read `available: true`
-  on a PRO site. On PRO the whole response went from ~9.000 to ~1.450 characters.
-  `verbose=true` returns exactly the old array. *(needs PRO)*
+- The bridge's `get_capabilities` tool returns feature counts plus the unavailable
+  ones by default, instead of the full 64-entry registry in which every entry read
+  `available: true` on a PRO site. On PRO the response went from ~9.000 to ~1.450
+  characters. `verbose=true` returns exactly the old array. Direct REST calls
+  without arguments also keep that original array. *(needs PRO)*
 - `get_next_action` carries `targets[]` — the other pages the action covers, in the
   ranking's order — whenever the card stands for more than one object. It used to
   say "15 pages" and hand over exactly one, leaving the other fourteen to be hunted
@@ -100,6 +110,7 @@ and the new arguments are ignored, so an existing agent keeps working either way
 
 ### Fixed
 
+- `update_meta` no longer describes the persisted post-write score as a projection.
 - A revoked or expired token used to surface to the client as
   `MCP error -32000: Connection closed`, which is indistinguishable from a crashed
   server. It now reads as an authentication error, in the handshake and per call.

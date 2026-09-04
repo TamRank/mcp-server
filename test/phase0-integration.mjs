@@ -12,6 +12,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { TamRankClient } from '../src/rest.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const posts = String(process.env.TAMRANK_TEST_POSTS || '')
@@ -29,6 +30,11 @@ const transport = new StdioClientTransport({
   stderr: 'inherit',
 });
 const client = new Client({ name: 'tamrank-phase0-integration', version: '1.0.0' });
+const rest = new TamRankClient({
+  siteUrl: process.env.TAMRANK_SITE_URL,
+  pat: process.env.TAMRANK_PAT,
+  timeoutMs: Number(process.env.TAMRANK_TIMEOUT) || 30000,
+});
 
 function parse(result) {
   const text = result.content?.map((item) => item.type === 'text' ? item.text : '').join('\n') || '';
@@ -61,6 +67,11 @@ try {
   const capabilities = await call('get_capabilities');
   assert.equal(capabilities.data.tier, 'pro');
   assert.ok(capabilities.text.length <= 2000, `compact capabilities exceeded 2,000 chars (${capabilities.text.length})`);
+  assert.equal(Array.isArray(capabilities.data.features), false, 'bridge should opt into compact feature counts');
+  assert.ok(Number.isInteger(capabilities.data.features?.total), 'compact feature summary is missing');
+
+  const legacyCapabilities = await rest.get('/capabilities');
+  assert.ok(Array.isArray(legacyCapabilities.features), 'REST default must preserve the original features[] contract');
 
   const firstSignals = (await call('get_signals', { limit: 20 })).data;
   assert.ok(Array.isArray(firstSignals.signals));

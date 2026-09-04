@@ -31,6 +31,12 @@ const BUDGET = {
   instructions: Number(process.env.SURFACE_MAX_INSTRUCTIONS) || 1500,
 };
 
+/** Required space for growth; passing one character below the ceiling is not healthy. */
+const MIN_HEADROOM = {
+  toolsList: Number(process.env.SURFACE_MIN_TOOLS_HEADROOM) || 1000,
+  instructions: Number(process.env.SURFACE_MIN_INSTRUCTIONS_HEADROOM) || 150,
+};
+
 const jsonArgIndex = process.argv.indexOf('--json');
 const jsonOut = jsonArgIndex > -1 ? process.argv[jsonArgIndex + 1] : null;
 
@@ -82,6 +88,7 @@ console.log(`  tools                ${tools.length}`);
 console.log(`  tools/list           ${toolsListChars} chars   (budget ${BUDGET.toolsList})`);
 console.log(`  serverInfo           ${serverInfoChars} chars   (data: URI present: ${hasDataUri})`);
 console.log(`  instructions         ${instructionsChars} chars   (budget ${BUDGET.instructions})`);
+console.log(`  headroom             tools/list ${BUDGET.toolsList - toolsListChars}, instructions ${BUDGET.instructions - instructionsChars}`);
 console.log(`  handshake total      ${serverInfoChars + instructionsChars} chars`);
 console.log(`  longest description  ${rows[0] ? rows[0].description : 0} chars   (budget ${BUDGET.description})`);
 console.log(`  descriptions over    ${overLong.length}${overLong.length ? ' — ' + overLong.map((r) => r.name).join(', ') : ''}`);
@@ -109,6 +116,8 @@ const failures = [];
 if (toolsListChars > BUDGET.toolsList) failures.push(`tools/list ${toolsListChars} > ${BUDGET.toolsList}`);
 if (overLong.length) failures.push(`${overLong.length} description(s) over ${BUDGET.description}`);
 if (instructionsChars > BUDGET.instructions) failures.push(`instructions ${instructionsChars} > ${BUDGET.instructions}`);
+if (BUDGET.toolsList - toolsListChars < MIN_HEADROOM.toolsList) failures.push(`tools/list headroom ${BUDGET.toolsList - toolsListChars} < ${MIN_HEADROOM.toolsList}`);
+if (BUDGET.instructions - instructionsChars < MIN_HEADROOM.instructions) failures.push(`instructions headroom ${BUDGET.instructions - instructionsChars} < ${MIN_HEADROOM.instructions}`);
 if (hasDataUri) failures.push('serverInfo still carries a data: URI');
 
 await client.close();

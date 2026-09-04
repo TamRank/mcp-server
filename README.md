@@ -114,7 +114,7 @@ on the [V2 agency roadmap](#roadmap).
 | Tool | What it does | Scope required |
 |---|---|---|
 | `get_site_context` | Brand, language, site type — Claude knows your site before it acts | `site:read` |
-| `get_capabilities` | Check tier + available credits + feature counts (`verbose=true` for the full feature registry) | `site:read` |
+| `get_capabilities` | Check tier + available credits + compact feature counts (`verbose=true` for the full registry) | `site:read` |
 | `get_site_overview` | All pages, posts, products with SEO status | `site:read` |
 | `get_site_health` | Priority issues ranked by impact | `site:read` |
 | `get_priority_actions` | "What should I fix first?" — filtered by focus area; `refresh=true` recomputes the ranking first | `site:read` |

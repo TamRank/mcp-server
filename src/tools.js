@@ -22,17 +22,17 @@ const REDIRECT_TYPES = ['301', '302', '307', '410'];
  * The server's operating manual, delivered once in the initialize result. Keep it
  * under ~1.5k characters: it is a fixed session cost, like tools/list.
  */
-export const INSTRUCTIONS = `TamRank manages the SEO of ONE WordPress site. Read, fix, verify.
+export const INSTRUCTIONS = `TamRank manages ONE WordPress site's SEO. Read, fix, verify.
 
-Open with get_capabilities (tier, granted scopes, AI credits, rate-limit headroom), then get_signals: what the detectors saw move since the last scan, each with its window, its numbers and the tool that acts on it. Triage further with get_issues (one row per problem type) or get_next_action (the single best next step); get_site_health for the category scores. Narrow with get_site_overview or search_posts, then get_page_analysis on one page.
+Start with get_capabilities, then get_signals. Triage with get_issues or get_next_action; get_site_health shows category scores. Narrow with get_site_overview/search_posts, then get_page_analysis.
 
-Writes are dry-run by default: call the tool once to get the diff plus a change_token, then call it again with execute=true and that change_token. The token binds the exact diff you reviewed — changing a value first returns 409 change_token_mismatch and writes nothing. Every applied write carries an audit_id that rollback undoes (see get_audit_log). update_meta_batch reviews and applies up to 25 posts under one token, each item still separately rollback-able.
+Writes default to dry-run. First get the diff and change_token; then repeat with execute=true and that token. It binds the exact reviewed diff: changed input returns 409 and writes nothing. Applied writes return an audit_id for rollback. update_meta_batch handles up to 25 posts under one token, with one audit_id per item.
 
-A meta write persists a fresh score by default, so rescore_page is not needed after it; pass rescore=false to defer that and rescore_page once at the end.
+Meta writes persist a fresh score by default; do not call rescore_page afterward. Use rescore=false to defer, then rescore once after the set.
 
-The ranking behind get_next_action, get_priority_actions and get_issues is a cached snapshot that does NOT move on your writes. When ranking.writes_since is above 0, call again with refresh=true to recompute once — do not poll in a loop.
+Action ranking is cached. If ranking.writes_since > 0, repeat the ranking call once with refresh=true; do not poll.
 
-Titles and notes may be localised to the site language. Key off the stable fields (type, code, tool.name), not the prose.`;
+Prose may be localised. Key off stable fields such as type, code and tool.name.`;
 
 /** Per-status guidance appended to an error so the agent knows what to do. */
 const HINTS = {
@@ -205,7 +205,7 @@ export function registerTools(server, client, preflight = { ok: true }) {
     inputSchema: {
       verbose: z.boolean().optional().describe('Return the full feature registry instead of counts + unavailable.'),
     },
-  }, read((a) => client.get('/capabilities', { verbose: a.verbose ? 1 : undefined })));
+  }, read((a) => client.get('/capabilities', a.verbose ? { verbose: 1 } : { compact: 1 })));
 
   tool('get_site_overview', {
     title: 'Get site overview',
@@ -262,14 +262,14 @@ export function registerTools(server, client, preflight = { ok: true }) {
     title: 'Search / filter the managed pages',
     description: 'Find managed pages by term, type, score bounds or missing meta.',
     inputSchema: {
-      q: z.string().optional().describe('Search term — matches post title or slug.'),
-      post_type: z.string().optional().describe('Restrict to one managed post type (e.g. page, post).'),
-      score_below: z.number().int().min(0).max(100).optional().describe('Only pages with audit score strictly below this.'),
-      score_above: z.number().int().min(0).max(100).optional().describe('Only pages with audit score strictly above this.'),
-      missing_meta: z.enum(['title', 'description', 'any']).optional().describe('Which meta field must be missing: title, description, or any. Not a boolean.'),
-      unscored: z.boolean().optional().describe('Only never-audited pages (cannot combine with score filters).'),
-      orderby: z.enum(['date', 'score']).optional().describe('Sort key (default date).'),
-      order: z.enum(['asc', 'desc']).optional().describe('Sort direction (default desc).'),
+      q: z.string().optional().describe('Title or slug term.'),
+      post_type: z.string().optional().describe('One managed post type.'),
+      score_below: z.number().int().min(0).max(100).optional().describe('Score below this.'),
+      score_above: z.number().int().min(0).max(100).optional().describe('Score above this.'),
+      missing_meta: z.enum(['title', 'description', 'any']).optional().describe('Required missing meta field.'),
+      unscored: z.boolean().optional().describe('Only never-audited pages.'),
+      orderby: z.enum(['date', 'score']).optional().describe('Default date.'),
+      order: z.enum(['asc', 'desc']).optional().describe('Default desc.'),
       page: z.number().int().min(1).optional(),
       per_page: z.number().int().min(1).max(100).optional().describe('Default 25.'),
     },
@@ -467,13 +467,13 @@ export function registerTools(server, client, preflight = { ok: true }) {
 
   tool('update_meta', {
     title: 'Update post meta',
-    description: 'Write SEO meta on a post. Dry-run; the score is a projection.',
+    description: 'Write SEO meta. Dry-run first; execute persists a fresh score by default.',
     inputSchema: {
       post_id: z.number().int().positive().describe('The post/page id.'),
       meta_title: z.string().optional(),
       meta_description: z.string().optional(),
       focus_keyword: z.string().optional(),
-      secondary_keywords: z.array(z.string()).optional().describe('Up to 4 secondary keywords.'),
+      secondary_keywords: z.array(z.string()).optional().describe('Up to 4.'),
       custom_slug: z.string().optional(),
       canonical_url: z.string().optional(),
       social_title: z.string().optional(),
@@ -481,9 +481,9 @@ export function registerTools(server, client, preflight = { ok: true }) {
       social_image: z.string().optional(),
       noindex: z.boolean().optional(),
       nofollow: z.boolean().optional(),
-      rescore: z.boolean().optional().describe('Persist a fresh audit with the write (default true). false returns a projection with needs_rescore.'),
-      execute: z.boolean().optional().describe('Set true (with change_token) to apply. Omit for a dry run.'),
-      change_token: z.string().optional().describe('The change_token returned by the dry run.'),
+      rescore: z.boolean().optional().describe('Fresh audit on execute (default true).'),
+      execute: z.boolean().optional().describe('true + change_token applies.'),
+      change_token: z.string().optional().describe('Token from dry-run.'),
     },
   }, write((a) => {
     const { body, control } = splitWriteArgs(a, [
@@ -496,7 +496,7 @@ export function registerTools(server, client, preflight = { ok: true }) {
 
   tool('update_meta_batch', {
     title: 'Update post meta in a batch',
-    description: 'Write SEO meta on 1-25 posts in one dry-run/execute pair. One change_token binds the whole set; each applied item gets its own audit_id.',
+    description: 'Write meta on 1-25 posts. One token binds the set; each item gets an audit_id.',
     inputSchema: {
       items: z.array(z.object({
         post_id: z.number().int().positive(),
@@ -511,10 +511,10 @@ export function registerTools(server, client, preflight = { ok: true }) {
         social_image: z.string().optional(),
         noindex: z.boolean().optional(),
         nofollow: z.boolean().optional(),
-      })).min(1).max(25).describe('One entry per post; each post at most once.'),
-      rescore: z.boolean().optional().describe('Persist a fresh audit per applied item (default true).'),
-      execute: z.boolean().optional().describe('Set true (with change_token) to apply. Omit for a dry run.'),
-      change_token: z.string().optional().describe('The change_token returned by the dry run — it binds the exact item list.'),
+      })).min(1).max(25).describe('Unique post per item.'),
+      rescore: z.boolean().optional().describe('Fresh audit per item (default true).'),
+      execute: z.boolean().optional().describe('true + change_token applies.'),
+      change_token: z.string().optional().describe('Token binding the dry-run set.'),
     },
   }, write((a) => {
     const { control } = splitWriteArgs(a, []);
@@ -605,21 +605,21 @@ export function registerTools(server, client, preflight = { ok: true }) {
     title: 'Update site schema identity',
     description: 'Write the site-wide Organization/WebSite identity. Dry-run.',
     inputSchema: {
-      entity_type: z.enum(['Organization', 'LocalBusiness']).optional().describe('Site entity type.'),
-      organization_name: z.string().optional().describe('Organization / business name.'),
-      website_url: z.string().optional().describe('Canonical site URL.'),
-      logo_url: z.string().optional().describe('Absolute URL to the logo image.'),
-      email: z.string().optional().describe('Public contact email.'),
-      telephone: z.string().optional().describe('Public contact phone number.'),
+      entity_type: z.enum(['Organization', 'LocalBusiness']).optional(),
+      organization_name: z.string().optional(),
+      website_url: z.string().optional().describe('Canonical URL.'),
+      logo_url: z.string().optional().describe('Absolute logo URL.'),
+      email: z.string().optional().describe('Public email.'),
+      telephone: z.string().optional().describe('Public phone.'),
       address: z.object({
         street: z.string().optional(),
         postal_code: z.string().optional(),
         city: z.string().optional(),
-        country: z.string().optional().describe('2-letter country code, e.g. NL.'),
-      }).optional().describe('Postal address (renders as PostalAddress).'),
-      social_profiles: z.array(z.string()).optional().describe('Social profile URLs (schema sameAs).'),
-      execute: z.boolean().optional().describe('Set true (with change_token) to apply. Omit for a dry run.'),
-      change_token: z.string().optional().describe('The change_token returned by the dry run.'),
+        country: z.string().optional().describe('2-letter code.'),
+      }).optional().describe('PostalAddress fields.'),
+      social_profiles: z.array(z.string()).optional().describe('sameAs URLs.'),
+      execute: z.boolean().optional().describe('true + change_token applies.'),
+      change_token: z.string().optional().describe('Token from dry-run.'),
     },
   }, write((a) => {
     const { body, control } = splitWriteArgs(a, ['entity_type', 'organization_name', 'website_url', 'logo_url', 'email', 'telephone', 'address', 'social_profiles']);

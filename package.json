@@ -1,6 +1,6 @@
 {
   "name": "@tam-rank/mcp-server",
-  "version": "0.2.0-preview",
+  "version": "0.3.0-preview",
   "description": "MCP server for TamRank WordPress SEO — connect Claude and Cursor to your site",
   "type": "module",
   "bin": {
@@ -16,7 +16,11 @@
   ],
   "scripts": {
     "start": "node index.js",
-    "test": "node test/smoke.mjs",
+    "test": "node test/smoke.mjs && node test/surface.mjs",
+    "test:smoke": "node test/smoke.mjs",
+    "test:surface": "node test/surface.mjs",
+    "test:integration": "node test/phase0-integration.mjs",
+    "test:all": "npm test && npm run test:integration",
     "scan": "gitleaks detect --config .gitleaks.toml --no-banner --redact",
     "prepare": "git config core.hooksPath .githooks 2>/dev/null || true"
   },

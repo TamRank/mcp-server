@@ -102,7 +102,7 @@ function refuse(status, code, message) {
  */
 async function preflight() {
   try {
-    const caps = await client.get('/capabilities');
+    const caps = await client.get('/capabilities', { compact: 1 });
     if (caps && caps.pro_active === false) {
       refuse(402, 'pro_required', NOT_PRO);
       return;
