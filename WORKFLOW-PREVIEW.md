@@ -24,9 +24,10 @@ with `tasks:write`; `importance.update` uses the independent `importance:write` 
 Both require the exact operation to be advertised in server capabilities.
 Six optional specialists are connected: `get_gsc_pages`, `get_redirects`,
 `get_images_missing_alt`, `get_site_diagnostics`, `get_topical_authority` and
-passive `get_scan_status`, as described below.
-The remaining four core names and `start_scan` refuse requests;
-their presence is not a working website-write/scan/history implementation. Phase 4 is open.
+passive `get_scan_status`, as described below. `start_scan` additionally supports
+explicit PageSpeed preview only, never execution.
+The remaining four core names refuse requests; their presence is not a working
+website-write/history implementation. Actual scan execution and Phase 4 remain open.
 
 ## Stored PageSpeed diagnosis
 
@@ -223,9 +224,31 @@ recorded is not proof of completion. `done` remains unknown.
 Pass the returned opaque `scan_ref` as `expected_ref` to refuse replacement jobs.
 No backend IDs, target IDs/URLs or error strings are exposed. This read never
 polls, nudges a queue or spends credits. `poll`/`refresh`/`force` are refused;
-legacy status tools stay disabled. `start_scan` and explicit live refresh still
+legacy status tools stay disabled. Scan execution and explicit live refresh still
 need their own authorization, cost, target and uncertain-retry contract.
 See PRO `docs/mcp-phase4b-scan-status.md`.
+
+## Explicit PageSpeed preview
+
+In the specialist profile, call
+`start_scan({mode: "preview", type: "pagespeed", post_ids: [205, 1]})`.
+Choose 1–25 distinct published, unprotected, managed page IDs; no empty/all-pages
+default or score-based selection. Every exact current URL is returned, in order.
+MCP sends a GET to `/scans/preview`, never the old scan-start writer. Capabilities
+must advertise `specialist_reads.start_scan.available` and `modes: ["preview"]`.
+
+The preview reports stored queue/key/feature readiness and logical mobile/desktop
+test counts. Key validity, public reachability, remaining quota and monetary cost
+are not verified. Pending queue work is a blocker, not silently overwritten.
+Pass the returned `preview_revision` as optional `expected_revision` to detect
+changed context. It is not a saved plan, approval, reservation or execution token.
+There is no `execute` mode, index scan, force override, implicit refresh or remote
+request. `execution_enabled` and `plan_persisted` remain false. Never interpret
+this read as user approval, and never fall back to legacy start commands.
+
+Actual execution needs durable exact proposals, explicit chat approval, a shared
+atomic reservation for every queue writer, enforced budgets and uncertain-outcome
+reconciliation. See PRO `docs/mcp-phase4b-scan-preview.md` for the next job steps.
 
 ## Task administration
 

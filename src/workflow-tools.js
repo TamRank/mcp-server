@@ -108,6 +108,9 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         return failure('workflow_operation_unavailable','URL analytics are not available in this site preview. No request was sent.');
       if (def.specialist && capabilities && capabilities.specialist_reads?.[canonical]?.available!==true)
         return failure('workflow_operation_unavailable','This specialist read is unavailable on this site. No request was sent.');
+      if (canonical==='start_scan' && capabilities && (!Array.isArray(capabilities.specialist_reads?.start_scan?.modes)
+        || !capabilities.specialist_reads.start_scan.modes.includes('preview')))
+        return failure('workflow_operation_unavailable','Scan preview is unavailable on this site. No request was sent.');
       if (def.write && (capabilities?.work_administration?.available !== true || !capabilities.work_administration.operations?.includes(parsed.data.operation))) {
         return failure('workflow_operation_unavailable','Work administration is unavailable or this token lacks the operation-specific permission. No mutation was sent.');
       }
@@ -176,6 +179,11 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
     }:name==='get_scan_status'?{
       description:'Passive stored index/PageSpeed job state only. Optional expected_ref binds the returned opaque scan_ref. No backend poll, queue nudge, credit spend or result sync. No recorded job does not mean completed; index progress is unknown. Live polling and starting scans remain unavailable.',
       specialist:true,path:()=>'/scans/status',schema:{type:z.enum(['index','pagespeed']),expected_ref:z.string().regex(/^stored:[a-f0-9]{32}$/).optional()},
-    }:{ description: 'Specialist capability not yet connected in this preview; no implicit scan.', schema: {} });
+    }:{
+      description:'PageSpeed preview only: exact 1–25 published post IDs, URLs, queue/key readiness and unknown quota/cost. No stored plan, approval token, scan, refresh or provider call. Revision checks current context only. Execution/index scans remain unavailable.',
+      specialist:true,path:()=>'/scans/preview',schema:{mode:z.literal('preview'),type:z.literal('pagespeed'),
+        post_ids:z.array(pageId).min(1).max(25).refine(ids=>new Set(ids).size===ids.length),expected_revision:z.string().regex(/^[a-f0-9]{64}$/).optional()},
+      query:a=>({...strip(a,['mode']),post_ids:a.post_ids.join(',')}),
+    });
   }
 }

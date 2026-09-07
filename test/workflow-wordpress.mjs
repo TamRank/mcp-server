@@ -197,6 +197,22 @@ try {
   }
   assert.equal((await diagnosticClient.callTool({name:'get_scan_status',arguments:{type:'index',poll:true}})).isError,true);
   console.log(`PASSIVE SCAN STATUS E2E OK: no job is not completion, no live polling; ${specialistSurface} specialist surface chars.`);
+  assert.equal(caps.specialist_reads.start_scan.available,true);
+  assert.deepEqual(caps.specialist_reads.start_scan.modes,['preview']);
+  assert.equal(caps.specialist_reads.start_scan.execution_enabled,false);
+  const previewArgs={mode:'preview',type:'pagespeed',post_ids:[205,1]};
+  const preview=await call(diagnosticClient,'start_scan',previewArgs);
+  assert.deepEqual(preview.targets.map(t=>t.post_id),[205,1]);
+  assert.equal(preview.targets[0].url,'http://fixture.invalid/?page_id=205');
+  assert.equal(preview.execution_enabled,false);assert.equal(preview.plan_persisted,false);assert.equal(preview.backend_requested,false);
+  assert.equal(preview.quota_context.device_tests_first_attempt,4);assert.equal(preview.quota_context.legacy_device_test_ceiling,12);
+  assert.equal(preview.quota_context.monetary_cost,null);assert.ok(preview.blockers.includes('pagespeed_key_missing'));
+  const repeated=await call(diagnosticQuery,'start_scan',{...previewArgs,expected_revision:preview.preview_revision});
+  assert.deepEqual(repeated.targets,preview.targets);
+  const allPreview=await call(diagnosticClient,'start_scan',{...previewArgs,post_ids:Array.from({length:25},(_,i)=>i+1)});
+  assert.equal(allPreview.target_count,25);assert.equal(allPreview.targets.length,25);
+  for(const extra of [{mode:'execute'},{type:'index'},{force:true}])assert.equal((await diagnosticClient.callTool({name:'start_scan',arguments:{...previewArgs,...extra}})).isError,true);
+  console.log(`SCAN PREVIEW E2E OK: exact 25 targets, both REST forms, no scan/approval/provider call; ${specialistSurface} specialist surface chars.`);
   const editor=await connect('core',config.editor_token); await assert.rejects(call(editor,'get_capabilities'),/workflow_operator_unavailable/);
   const expired=await connect('core',config.expired_token); await assert.rejects(call(expired,'get_capabilities'),/agent_token_expired/);
   console.log(`WORKFLOW WORDPRESS E2E OK: real MCP stdio + HTTP + native WP; 205 search results/targets, URL analytics with 205 keywords, 206-term union and 90 daily rows; 12/42 tools, ${surface} core surface chars; unsafe/unavailable calls refused.`);

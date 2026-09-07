@@ -85,6 +85,27 @@ for(const args of [{},{type:'unknown'},{type:'index',poll:true},{type:'pagespeed
 for(const name of ['start_scan']) {
   assert.equal((await specialist.get(name).h({})).isError,true);assert.equal(calls.length,0);
 }
+const scanPreview={mode:'preview',type:'pagespeed',post_ids:[205,1],expected_revision:'a'.repeat(64)};
+await specialist.get('start_scan').h(scanPreview);
+assert.deepEqual(calls.pop(),{path:'/scans/preview',query:{type:'pagespeed',post_ids:'205,1',expected_revision:scanPreview.expected_revision}});
+assert.equal(specialist.get('start_scan').c.annotations.readOnlyHint,true);
+assert.equal(specialist.get('start_scan').c.annotations.destructiveHint,false);
+for(const args of [{...scanPreview,mode:'execute'},{...scanPreview,type:'index'},{...scanPreview,force:true},
+  {...scanPreview,post_ids:[]},{...scanPreview,post_ids:[1,1]},{...scanPreview,post_ids:'1,2'},
+  {...scanPreview,post_ids:[0]},{...scanPreview,post_ids:[Number.MAX_SAFE_INTEGER+1]},
+  {...scanPreview,post_ids:Array.from({length:26},(_,i)=>i+1)},{...scanPreview,expected_revision:null}]) {
+  assert.equal((await specialist.get('start_scan').h(args)).isError,true);assert.equal(calls.length,0);
+}
+for(const caps of [{},{specialist_reads:{start_scan:{available:false,modes:['preview']}}},
+  {specialist_reads:{start_scan:{available:true,modes:'preview'}}},{specialist_reads:{start_scan:{available:true,modes:42}}},
+  {specialist_reads:{start_scan:{available:true}}},{specialist_reads:{start_scan:{available:true,modes:['execute']}}}]) {
+  assert.equal((await registry('specialist',caps).get('start_scan').h(scanPreview)).isError,true);assert.equal(calls.length,0);
+}
+await registry('specialist',{specialist_reads:{start_scan:{available:true,modes:['preview']}}}).get('start_scan').h(scanPreview);
+assert.equal(calls.pop().path,'/scans/preview');
+for(const name of ['start_index_scan','start_pagespeed_scan']) {
+  assert.equal((await legacy.get(name).h(scanPreview)).isError,true);assert.equal(calls.length,0);
+}
 for (const name of ['update_work_item','plan_changes','execute_change_set','rollback_change_set']) {
   assert.equal((await core.get(name).h({})).isError,true);
   assert.equal(calls.length,0);
