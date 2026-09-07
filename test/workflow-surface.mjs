@@ -1,0 +1,54 @@
+/** No WordPress mutations: inert registry + strict real HTTP transport fixtures. */
+import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import { registerWorkflowTools, WORKFLOW_INSTRUCTIONS } from '../src/workflow-tools.js';
+import { WorkflowClient } from '../src/workflow-rest.js';
+
+let calls = [];
+const fake = { get: async (path, query) => { calls.push({ path, query }); return { contract_version: 2, items: [], next_cursor: null }; } };
+function registry(profile) { const tools = new Map(); registerWorkflowTools({ registerTool: (n,c,h) => tools.set(n,{c,h}) },fake,{profile}); return tools; }
+const core = registry('core'), legacy = registry('legacy'), specialist = registry('specialist');
+assert.equal(core.size,12); assert.equal(legacy.size,42); assert.equal(specialist.size,19);
+assert.ok(WORKFLOW_INSTRUCTIONS.length<1500);
+for (const name of ['update_work_item','plan_changes','execute_change_set','rollback_change_set']) {
+  assert.equal((await core.get(name).h({})).isError,true);
+  assert.equal(calls.length,0);
+}
+for (const name of ['update_meta','update_meta_batch','manage_redirects','detect_schema','request_recrawl','rescore_page','rollback']) {
+  assert.equal((await legacy.get(name).h({execute:true})).isError,true); assert.equal(calls.length,0);
+}
+assert.equal((await core.get('get_page').h({post_id:1,secret:'not allowed'})).isError,true); assert.equal(calls.length,0);
+await core.get('get_work_queue').h({work_id:'automatic:grp_missing_title',section:'targets',limit:50,cursor:'opaque'});
+assert.deepEqual(calls.pop(),{path:'/work-queue/automatic:grp_missing_title',query:{section:'targets',limit:50,cursor:'opaque'}});
+await legacy.get('get_next_action').h({}); assert.equal(calls.pop().query.limit,1);
+await legacy.get('get_next_action').h({work_id:'manual_1'}); assert.deepEqual(calls.pop(),{path:'/work-queue/manual_1',query:{}});
+await legacy.get('get_priority_actions').h({refresh:true}); assert.equal(calls.length,0);
+
+let targetCalls=0;
+const server=createServer((req,res)=> {
+  targetCalls++;
+  if(req.url.includes('/redirect')) { res.writeHead(302,{Location:'/wp-json/tamrank/v2/leak'}); res.end(); return; }
+  if(req.url.includes('/oversize')) { res.writeHead(200); res.end('x'.repeat(524289)); return; }
+  if(req.url.includes('/html')) { res.writeHead(200); res.end('<html>Error</html>'); return; }
+  if(req.url.includes('/slow')) { res.writeHead(200); res.write('{'); return; }
+  if(req.url.includes('/old')) { res.writeHead(200); res.end(JSON.stringify({contract_version:1})); return; }
+  if(req.url.includes('/echo-error')) { res.writeHead(403); res.end(JSON.stringify({code:'fixture-not-a-real-token',message:'fixture-not-a-real-token'+'x'.repeat(1000)})); return; }
+  res.setHeader('Content-Type','application/json'); res.end(JSON.stringify({contract_version:2,path:req.url}));
+});
+await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+const base=`http://127.0.0.1:${server.address().port}`;
+try {
+  const client=new WorkflowClient({siteUrl:base+'/subdir',pat:'fixture-not-a-real-token'});
+  assert.equal((await client.get('/capabilities')).path,'/subdir/wp-json/tamrank/v2/capabilities');
+  const queryClient=new WorkflowClient({siteUrl:base+'/subdir',pat:'fixture',routeStyle:'query'});
+  assert.match((await queryClient.get('/pages',{limit:50,cursor:'a+b'})).path,/rest_route=%2Ftamrank%2Fv2%2Fpages&limit=50&cursor=a%2Bb/);
+  const count=targetCalls;
+  await assert.rejects(client.get('/redirect'),e=>e.code==='workflow_redirect_refused'); assert.equal(targetCalls,count+1);
+  await assert.rejects(client.get('/oversize'),e=>e.code==='workflow_response_limit');
+  await assert.rejects(client.get('/html'),e=>e.code==='invalid_response');
+  await assert.rejects(client.get('/old'),e=>e.code==='workflow_upgrade_required');
+  await assert.rejects(client.get('/echo-error'),e=>e.code==='workflow_request_failed'&&!e.message.includes('fixture-not-a-real-token')&&e.message.length<=500);
+  await assert.rejects(new WorkflowClient({siteUrl:base,pat:'fixture',timeoutMs:100}).get('/slow'),e=>e.code==='timeout');
+  for(const siteUrl of ['http://real-site.invalid','https://user:pass@site.invalid','https://site.invalid/?key=secret']) assert.throws(()=>new WorkflowClient({siteUrl,pat:'fixture'}));
+  console.log('WORKFLOW SURFACE OK: 12/19/42 profiles, unavailable writers, strict inputs, full-target mapping, bounded HTTP/timeout/redirect protection.');
+} finally { server.closeAllConnections(); await new Promise(resolve=>server.close(resolve)); }
