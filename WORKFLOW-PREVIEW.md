@@ -20,7 +20,8 @@ Do not enable this preview on customer sites yet.
 `legacy` (42 old names, opt-in for the planned 0.4.x minor only). Seven core reads
 are connected: site context, capabilities, queue, signals, search, page, diagnosis.
 `update_work_item` additionally supports explicit signal pickup, shared notes, research review/complete/reopen and manual complete/reopen
-only when server capabilities advertise the exact operation and `tasks:write`.
+with `tasks:write`; `importance.update` uses the independent `importance:write` grant.
+Both require the exact operation to be advertised in server capabilities.
 The remaining four core names and seven specialist names refuse requests;
 their presence is not a working website-write/scan/history implementation. Phase 4 is open.
 
@@ -44,7 +45,23 @@ the original receipt and do not repeat mutations over more recent progress.
 Work changes require explicit user instruction. Completion means a manual task or research is
 finished, not that a page was repaired or SEO recovered. The token owner is checked
 by WordPress on every request; browser login or client-supplied actor IDs cannot
-substitute. Website change-set execution remains disabled; page importance is pending.
+substitute. Website change-set execution remains disabled.
+
+For explicit page importance, first read `get_page(post_id, section=importance)`.
+Pass its effective `importance.value` as `expected_value` to `update_work_item`
+with `operation=importance.update`, the same integer `post_id`, a new request ID
+and user-requested `value=standard|important|money`. Never infer importance from
+analytics or content. No work ID/task revision or arbitrary URL belongs in this
+request. The independent scope does not grant task edits or website execution.
+Only currently editable, published, unprotected, managed pages are eligible.
+
+The existing editor and MCP share `_tamrank_business_value` storage; the source
+and receipt commit together and invalidate derived ranking for the next read.
+The guard checks the current effective value, not intervening history. Missing,
+empty and stored standard remain distinct in the disclosed before/after state;
+same-value requests do not clean up storage. Duplicate/unknown stored values refuse.
+Exact authorised replay never overwrites a newer value, including editor changes.
+Importance is a user's preference, not a measured conversion/SEO outcome.
 
 Existing `manual_…` tasks support `work.note`, `work.complete` and `work.reopen`
 only if `work_administration.manual.available` and its exact operation are
@@ -105,7 +122,9 @@ for 0.5.0; names retained in the canonical surface are not removed.
   completed-state preservation and rollback of revision/event/receipt failures.
 - Manual source locking, preserved unrelated tasks/homepage checkmarks, stale
   dashboard cache, malformed/oversized/missing storage and transactional failure.
-- Core tools/list: 7942 compact characters including manual/note/pickup/research schemas;
+- Explicit importance permission, all three values, stale-value refusal, per-page
+  edit rights, shared queue/priority source, cache+source+receipt rollback.
+- Core tools/list: 8239 compact characters including importance/manual/note/pickup/research schemas;
   instructions remain below 1500 characters.
 
 ## Reproduce safely
@@ -123,12 +142,13 @@ through stdin, starts a temporary loopback HTTP server and removes only its own
 tables. Never point it at a customer database. The current PRO harness runs 257
 read/authentication checks with the transport gate enabled. The additional
 `TAMRANK_WORKFLOW_RESEARCH_TEST=1` gate brings the combined total to 292 by testing
-35 internal research-write cases. Add `TAMRANK_WORK_HTTP_TEST=1` for **614 combined
-checks**, including 69 existing-work, 99 pickup, 75 note and 79 manual source/HTTP checks,
-and the real research lifecycle, signal-pickup, shared-note and manual-task MCP suites.
+35 internal research-write cases. Add `TAMRANK_WORK_HTTP_TEST=1` for **717 combined
+checks**, including 69 existing-work, 99 pickup, 75 note, 79 manual and 103 importance source/HTTP checks,
+and the real research lifecycle, signal-pickup, shared-note, manual-task and importance MCP suites.
 `TAMRANK_WORK_HTTP_ONLY=1` optionally narrows iteration to the work tests. Write
 fixtures whitelist only task storage, the journal and the two exact FREE task
-option names; posts/metadata/other settings remain forbidden.
+option names, plus the existing business-importance marker and two ranking-cache
+options. Posts/SEO metadata/other settings remain forbidden.
 Multisite, other webservers/plugins/themes and
 external object caches remain separate activation gates.
 
