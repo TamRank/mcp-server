@@ -153,6 +153,12 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         order:z.enum(['clicks_desc','impressions_desc','ctr_asc','position_asc','url_asc']).optional(),
         period:z.union([z.literal(7),z.literal(28),z.literal(90)]).optional(),...paging,
       }
+    }:name==='get_redirects'?{
+      description:'Stored TamRank redirects only. rules lists exact/regex and active/inactive rules; chains lists starting rules with literal links/cycles; trace + redirect_id paginates every linked rule. q is a case-sensitive source/target substring. Literal graph, NOT live behavior: no regex execution, collation/query/slash guessing, cross-origin equivalence or final-destination/fix claim. Follow next_cursor unchanged. Reading never scans or writes.',
+      specialist:true,path:()=>'/redirects',schema:{section:z.enum(['rules','chains','trace']).optional(),redirect_id:pageId.optional(),
+        q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),
+        state:z.enum(['all','active','inactive']).optional(),match_type:z.enum(['exact','regex']).optional(),...paging},
+      validate:a=>a.section==='trace'?a.redirect_id!==undefined && !['q','state','match_type'].some(k=>Object.hasOwn(a,k)):a.redirect_id===undefined,
     }:{ description: 'Specialist capability not yet connected in this preview; no implicit scan.', schema: {} });
   }
 }

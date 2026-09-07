@@ -22,8 +22,8 @@ are connected: site context, capabilities, queue, signals, search, page, diagnos
 `update_work_item` additionally supports explicit signal pickup, shared notes, research review/complete/reopen and manual complete/reopen
 with `tasks:write`; `importance.update` uses the independent `importance:write` grant.
 Both require the exact operation to be advertised in server capabilities.
-The optional `get_gsc_pages` specialist is connected as described below.
-The remaining four core names and six specialist names refuse requests;
+The optional `get_gsc_pages` and `get_redirects` specialists are connected as described below.
+The remaining four core names and five specialist names refuse requests;
 their presence is not a working website-write/scan/history implementation. Phase 4 is open.
 
 ## Stored PageSpeed diagnosis
@@ -131,6 +131,33 @@ preview refuses. The old `get_gsc_pages` in the legacy profile remains disabled:
 its live-fetch/period behavior is not silently replaced with stored-only reads.
 See PRO `docs/mcp-phase4b-gsc-pages.md` for bounds, scope and evidence checks.
 
+## Stored redirects and literal relationships
+
+In the specialist profile, `get_redirects` defaults to `section: "rules"`, with
+optional `q` (literal case-sensitive source/target substring, 200 UTF-8 bytes),
+`state: "all"|"active"|"inactive"` and `match_type: "exact"|"regex"`.
+`section: "chains"` lists starting rules with literal links/cycles, not unique
+incidents. Use `section: "trace", redirect_id` without those list filters to
+read every involved stored rule in order. All sections accept `limit` (1–50,
+default 20) and signed `cursor` with unchanged selectors. No offset or old
+ten-hop/200-result truncation. Changing rules/hits/site invalidates continuation.
+
+This is a **literal stored-rule graph**, not a live redirect simulation. Only
+active exact sources link by identical path/query; an absolute target must share
+the stored home scheme/host/port. No regex execution, collation/query carry,
+slash/canonical guessing or www/cross-origin equivalence. Inactive rules,
+non-redirect statuses, ambiguous or unsupported values stop with explicit reasons.
+Generated rules can yield to live content; other plugins/server rules are unknown.
+`runtime_verified` is always false. No literal successor or zero chains proves
+neither a healthy destination nor absence of runtime redirects. There is no
+`final_destination`, executable fix, website change or implicit network request.
+
+The source is the existing FREE redirect table, without invoking its manager or
+old chain scans. Missing columns refuse, never migrate. The server must advertise
+`specialist_reads.get_redirects.available`. Both old redirect names remain
+disabled in the legacy profile instead of silently changing old offset/flatten
+semantics. See PRO `docs/mcp-phase4b-redirects.md` for bounds and test evidence.
+
 ## Task administration
 
 The PRO server also needs `TAMRANK_WORKFLOW_WORK_ENABLED === true`, with its work
@@ -232,7 +259,9 @@ for 0.5.0; names retained in the canonical surface are not removed.
   edit rights, shared queue/priority source, cache+source+receipt rollback.
 - Complete GSC discovery over 205 eligible URLs, exact discovery-to-diagnosis,
   URL filters past 200, both REST forms and missing-period refusal without fetch.
-- Core tools/list: 8848 compact characters; specialist: 12237 characters;
+- Complete stored redirect list/trace (205 rules/hops), literal-only relationships,
+  exact query bytes, both REST forms and explicit refusal of writes.
+- Core tools/list: 8848 compact characters; specialist: 13005 characters;
   instructions remain below 1500 characters.
 
 ## Reproduce safely
@@ -247,12 +276,13 @@ For full integration use PRO repository `samkl8/tamrank-pro`, branch
 and `TAMRANK_MCP_WORKFLOW_PATH` to this checkout. That harness validates its clone
 database, creates a random fixture table namespace, passes temporary credentials
 through stdin, starts a temporary loopback HTTP server and removes only its own
-tables. Never point it at a customer database. The current PRO harness runs 758
+tables. Never point it at a customer database. The current PRO harness runs 848
 read/authentication/producer checks with the transport gate enabled (55 added
 for PageSpeed, 76 for stability, 66 for page comparisons, 84 for keyword periods,
-118 for URL analytics and 102 for GSC page discovery, using mocked provider responses). The additional
-`TAMRANK_WORKFLOW_RESEARCH_TEST=1` gate brings the combined total to 793 by testing
-35 internal research-write cases. Add `TAMRANK_WORK_HTTP_TEST=1` for **1218 combined
+118 for URL analytics, 102 for GSC page discovery and 90 for stored redirects,
+using mocked provider responses). The additional
+`TAMRANK_WORKFLOW_RESEARCH_TEST=1` gate brings the combined total to 883 by testing
+35 internal research-write cases. Add `TAMRANK_WORK_HTTP_TEST=1` for **1308 combined
 checks**, including 69 existing-work, 99 pickup, 75 note, 79 manual and 103 importance source/HTTP checks,
 and the real research lifecycle, signal-pickup, shared-note, manual-task and importance MCP suites.
 `TAMRANK_WORK_HTTP_ONLY=1` optionally narrows iteration to the work tests. Write
@@ -261,6 +291,10 @@ option names, plus the existing business-importance marker and two ranking-cache
 options. Posts/SEO metadata/other settings remain forbidden.
 Multisite, other webservers/plugins/themes and
 external object caches remain separate activation gates.
+
+For a native redirect-only iteration, `TAMRANK_REDIRECT_READ_ONLY=1` runs 36
+initial scope checks plus 90 redirect cases (126 total), without MCP transport.
+Use the full harness above to verify transport and the other workflows together.
 
 The dependency lock was updated within existing declared ranges. `npm audit fix
 --ignore-scripts` reported zero known vulnerabilities at the time of this check;

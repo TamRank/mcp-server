@@ -136,6 +136,22 @@ try {
     assert.equal((await specialist.callTool({name:'get_gsc_pages',arguments:args})).isError,true);
   assert.equal((await legacy.callTool({name:'get_gsc_pages',arguments:{period:28}})).isError,true);
   console.log(`GSC DISCOVERY E2E OK: 205 eligible stored URLs, exact discovery-to-diagnosis, both REST URL styles, missing-period refusal; ${specialistSurface} specialist surface chars.`);
+  assert.equal(caps.specialist_reads.get_redirects.available,true);
+  const redirects=[];let redirectPage=await call(specialist,'get_redirects',{limit:50});const redirectCursor=redirectPage.next_cursor;
+  redirects.push(...redirectPage.items);
+  while(redirectPage.next_cursor){redirectPage=await call(specialist,'get_redirects',{limit:50,cursor:redirectPage.next_cursor});redirects.push(...redirectPage.items);}
+  assert.equal(redirects.length,205);assert.equal(new Set(redirects.map(r=>r.id)).size,205);
+  const chains=await call(specialist,'get_redirects',{section:'chains',limit:50});assert.equal(chains.total,204);
+  const traceArgs={section:'trace',redirect_id:1,limit:50};let trace=await call(specialist,'get_redirects',traceArgs);const hops=[...trace.items];
+  while(trace.next_cursor){trace=await call(specialist,'get_redirects',{...traceArgs,cursor:trace.next_cursor});hops.push(...trace.items);}
+  assert.equal(hops.length,205);assert.equal(trace.analysis.stored_rule_count,205);assert.equal(trace.runtime_verified,false);
+  assert.equal(trace.analysis.stop_reason,'no_literal_successor');assert.equal(trace.final_destination,undefined);assert.equal(trace.fix,undefined);
+  assert.equal(hops.at(-1).rule.target_url,'/terminal?x=%2B&color=blue&color=green');
+  const queriedRedirect=await call(querySpecialist,'get_redirects',{q:'?x=%2B&color=blue&color=green'});
+  assert.equal(queriedRedirect.total,1);assert.equal(queriedRedirect.items[0].id,205);
+  for(const args of [{execute:true},{section:'trace'},{limit:50,cursor:redirectCursor,section:'chains'}])
+    assert.equal((await specialist.callTool({name:'get_redirects',arguments:args})).isError,true);
+  console.log(`REDIRECT READ E2E OK: 205 rules and 205 trace hops, literal-only graph, both REST forms; ${specialistSurface} specialist surface chars.`);
   const editor=await connect('core',config.editor_token); await assert.rejects(call(editor,'get_capabilities'),/workflow_operator_unavailable/);
   const expired=await connect('core',config.expired_token); await assert.rejects(call(expired,'get_capabilities'),/agent_token_expired/);
   console.log(`WORKFLOW WORDPRESS E2E OK: real MCP stdio + HTTP + native WP; 205 search results/targets, URL analytics with 205 keywords, 206-term union and 90 daily rows; 12/42 tools, ${surface} core surface chars; unsafe/unavailable calls refused.`);

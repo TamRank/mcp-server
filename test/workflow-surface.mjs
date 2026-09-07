@@ -24,7 +24,23 @@ for(const caps of [{},{specialist_reads:{get_gsc_pages:{available:false}}}]) {
 await registry('specialist',{specialist_reads:{get_gsc_pages:{available:true}}}).get('get_gsc_pages').h({});
 assert.deepEqual(calls.pop(),{path:'/gsc/pages',query:{}});
 assert.equal((await legacy.get('get_gsc_pages').h({period:28})).isError,true);assert.equal(calls.length,0);
-for(const name of ['get_site_diagnostics','get_redirects','get_images_missing_alt','get_topical_authority','start_scan','get_scan_status']) {
+await specialist.get('get_redirects').h({section:'rules',q:'?x=%2B&color=a&color=b',state:'inactive',match_type:'regex',limit:50});
+assert.deepEqual(calls.pop(),{path:'/redirects',query:{section:'rules',q:'?x=%2B&color=a&color=b',state:'inactive',match_type:'regex',limit:50}});
+await specialist.get('get_redirects').h({section:'trace',redirect_id:42,limit:50,cursor:'opaque'});
+assert.deepEqual(calls.pop(),{path:'/redirects',query:{section:'trace',redirect_id:42,limit:50,cursor:'opaque'}});
+assert.equal(specialist.get('get_redirects').c.annotations.readOnlyHint,true);
+for(const args of [{section:'trace'},{redirect_id:1},{section:'chains',redirect_id:1},{section:'trace',redirect_id:1,q:'x'},
+  {section:'trace',redirect_id:1,state:'active'},{section:'trace',redirect_id:1,match_type:'exact'},
+  {state:null},{match_type:'wildcard'},{q:'é'.repeat(101)},{q:'\u0000'},{offset:0},{execute:true},{refresh:true},{limit:51}]) {
+  assert.equal((await specialist.get('get_redirects').h(args)).isError,true);assert.equal(calls.length,0);
+}
+for(const caps of [{},{specialist_reads:{get_redirects:{available:false}}}]) {
+  assert.equal((await registry('specialist',caps).get('get_redirects').h({})).isError,true);assert.equal(calls.length,0);
+}
+await registry('specialist',{specialist_reads:{get_redirects:{available:true}}}).get('get_redirects').h({section:'chains'});
+assert.deepEqual(calls.pop(),{path:'/redirects',query:{section:'chains'}});
+for(const name of ['get_redirects','get_redirect_chains']) {assert.equal((await legacy.get(name).h({})).isError,true);assert.equal(calls.length,0);}
+for(const name of ['get_site_diagnostics','get_images_missing_alt','get_topical_authority','start_scan','get_scan_status']) {
   assert.equal((await specialist.get(name).h({})).isError,true);assert.equal(calls.length,0);
 }
 for (const name of ['update_work_item','plan_changes','execute_change_set','rollback_change_set']) {
