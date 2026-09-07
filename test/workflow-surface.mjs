@@ -40,7 +40,19 @@ for(const caps of [{},{specialist_reads:{get_redirects:{available:false}}}]) {
 await registry('specialist',{specialist_reads:{get_redirects:{available:true}}}).get('get_redirects').h({section:'chains'});
 assert.deepEqual(calls.pop(),{path:'/redirects',query:{section:'chains'}});
 for(const name of ['get_redirects','get_redirect_chains']) {assert.equal((await legacy.get(name).h({})).isError,true);assert.equal(calls.length,0);}
-for(const name of ['get_site_diagnostics','get_images_missing_alt','get_topical_authority','start_scan','get_scan_status']) {
+await specialist.get('get_images_missing_alt').h({q:'% + panel',limit:50,cursor:'opaque'});
+assert.deepEqual(calls.pop(),{path:'/images/missing-alt',query:{q:'% + panel',limit:50,cursor:'opaque'}});
+assert.equal(specialist.get('get_images_missing_alt').c.annotations.readOnlyHint,true);
+for(const args of [{include_images:true},{offset:0},{refresh:true},{execute:true},{q:'é'.repeat(101)},{q:'\0'},{limit:51},{cursor:null}]) {
+  assert.equal((await specialist.get('get_images_missing_alt').h(args)).isError,true);assert.equal(calls.length,0);
+}
+for(const caps of [{},{specialist_reads:{get_images_missing_alt:{available:false}}}]) {
+  assert.equal((await registry('specialist',caps).get('get_images_missing_alt').h({})).isError,true);assert.equal(calls.length,0);
+}
+await registry('specialist',{specialist_reads:{get_images_missing_alt:{available:true}}}).get('get_images_missing_alt').h({});
+assert.deepEqual(calls.pop(),{path:'/images/missing-alt',query:{}});
+for(const name of ['get_images_missing_alt','update_image_alt']) {assert.equal((await legacy.get(name).h({})).isError,true);assert.equal(calls.length,0);}
+for(const name of ['get_site_diagnostics','get_topical_authority','start_scan','get_scan_status']) {
   assert.equal((await specialist.get(name).h({})).isError,true);assert.equal(calls.length,0);
 }
 for (const name of ['update_work_item','plan_changes','execute_change_set','rollback_change_set']) {

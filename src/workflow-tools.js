@@ -159,6 +159,10 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),
         state:z.enum(['all','active','inactive']).optional(),match_type:z.enum(['exact','regex']).optional(),...paging},
       validate:a=>a.section==='trace'?a.redirect_id!==undefined && !['q','state','match_type'].some(k=>Object.hasOwn(a,k)):a.redirect_id===undefined,
+    }:name==='get_images_missing_alt'?{
+      description:'Stored image attachments with missing, empty or whitespace-only alt; review candidates, not proven errors (decorative images may need empty alt). Unattached media has unknown usage; attached media requires a public managed parent. Parent is not proof of use. q is a case-sensitive title substring; follow next_cursor unchanged. stored_url is an unverified GUID, not a fetched preview. No files, image fetch, HTML/builder inspection, automatic tasks or alt writes.',
+      specialist:true,path:()=>'/images/missing-alt',schema:{
+        q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),...paging},
     }:{ description: 'Specialist capability not yet connected in this preview; no implicit scan.', schema: {} });
   }
 }

@@ -22,8 +22,8 @@ are connected: site context, capabilities, queue, signals, search, page, diagnos
 `update_work_item` additionally supports explicit signal pickup, shared notes, research review/complete/reopen and manual complete/reopen
 with `tasks:write`; `importance.update` uses the independent `importance:write` grant.
 Both require the exact operation to be advertised in server capabilities.
-The optional `get_gsc_pages` and `get_redirects` specialists are connected as described below.
-The remaining four core names and five specialist names refuse requests;
+The optional `get_gsc_pages`, `get_redirects` and `get_images_missing_alt` specialists are connected as described below.
+The remaining four core names and four specialist names refuse requests;
 their presence is not a working website-write/scan/history implementation. Phase 4 is open.
 
 ## Stored PageSpeed diagnosis
@@ -158,6 +158,25 @@ old chain scans. Missing columns refuse, never migrate. The server must advertis
 disabled in the legacy profile instead of silently changing old offset/flatten
 semantics. See PRO `docs/mcp-phase4b-redirects.md` for bounds and test evidence.
 
+## Stored images missing alt
+
+In the specialist profile, `get_images_missing_alt` reads eligible image attachment
+metadata with missing, empty or whitespace-only alt. Query: optional literal
+case-sensitive title `q` (200 UTF-8 bytes), `limit` (1–50, default 20), signed
+`cursor`. Continue unchanged until null. Source/alt/visibility changes require a
+restart; no offset or preview-download arguments. Server capability must advertise
+`specialist_reads.get_images_missing_alt.available`.
+
+Unattached media is included with unknown usage; attached media requires a
+published, unprotected audit-managed parent. Parent is not proof of actual use.
+Empty alt can be correct for decoration; these are review candidates, not errors.
+No description/caption, parent content, arbitrary metadata or local file paths.
+The optional `stored_url` is an unverified stored GUID, not a reliable current
+delivery URL. No image bytes, files, HTML/builders, scans or alt writes are fetched
+or executed. Inspect image and context through a separately authorized viewing
+step before proposing alt. No claim that attachment metadata controls every use.
+The legacy image read/writer remain disabled. See PRO `docs/mcp-phase4b-images.md`.
+
 ## Task administration
 
 The PRO server also needs `TAMRANK_WORKFLOW_WORK_ENABLED === true`, with its work
@@ -261,7 +280,9 @@ for 0.5.0; names retained in the canonical surface are not removed.
   URL filters past 200, both REST forms and missing-period refusal without fetch.
 - Complete stored redirect list/trace (205 rules/hops), literal-only relationships,
   exact query bytes, both REST forms and explicit refusal of writes.
-- Core tools/list: 8848 compact characters; specialist: 13005 characters;
+- Complete missing-alt review inventory (205 images), stored-only/no preview
+  downloads, unknown usage and both REST forms. Native tests exclude hidden parents.
+- Core tools/list: 8848 compact characters; specialist: 13540 characters;
   instructions remain below 1500 characters.
 
 ## Reproduce safely
@@ -276,13 +297,13 @@ For full integration use PRO repository `samkl8/tamrank-pro`, branch
 and `TAMRANK_MCP_WORKFLOW_PATH` to this checkout. That harness validates its clone
 database, creates a random fixture table namespace, passes temporary credentials
 through stdin, starts a temporary loopback HTTP server and removes only its own
-tables. Never point it at a customer database. The current PRO harness runs 848
+tables. Never point it at a customer database. The current PRO harness runs 919
 read/authentication/producer checks with the transport gate enabled (55 added
 for PageSpeed, 76 for stability, 66 for page comparisons, 84 for keyword periods,
-118 for URL analytics, 102 for GSC page discovery and 90 for stored redirects,
+118 for URL analytics, 102 for GSC page discovery, 90 for stored redirects and 71 for image metadata/privacy,
 using mocked provider responses). The additional
-`TAMRANK_WORKFLOW_RESEARCH_TEST=1` gate brings the combined total to 883 by testing
-35 internal research-write cases. Add `TAMRANK_WORK_HTTP_TEST=1` for **1308 combined
+`TAMRANK_WORKFLOW_RESEARCH_TEST=1` gate brings the combined total to 954 by testing
+35 internal research-write cases. Add `TAMRANK_WORK_HTTP_TEST=1` for **1379 combined
 checks**, including 69 existing-work, 99 pickup, 75 note, 79 manual and 103 importance source/HTTP checks,
 and the real research lifecycle, signal-pickup, shared-note, manual-task and importance MCP suites.
 `TAMRANK_WORK_HTTP_ONLY=1` optionally narrows iteration to the work tests. Write
@@ -295,6 +316,12 @@ external object caches remain separate activation gates.
 For a native redirect-only iteration, `TAMRANK_REDIRECT_READ_ONLY=1` runs 36
 initial scope checks plus 90 redirect cases (126 total), without MCP transport.
 Use the full harness above to verify transport and the other workflows together.
+
+For native image-only iteration, `TAMRANK_IMAGE_READ_ONLY=1` runs 36 initial
+scope checks plus 71 image cases (107 total), without MCP transport. The full
+read MCP suite now also covers images; the total remains six MCP/HTTP/WP suites.
+Next bounded component: `get_site_diagnostics`; other specialists, explicit
+acquisition and installation/privacy/activation gates remain open.
 
 The dependency lock was updated within existing declared ranges. `npm audit fix
 --ignore-scripts` reported zero known vulnerabilities at the time of this check;

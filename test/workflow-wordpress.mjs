@@ -152,6 +152,19 @@ try {
   for(const args of [{execute:true},{section:'trace'},{limit:50,cursor:redirectCursor,section:'chains'}])
     assert.equal((await specialist.callTool({name:'get_redirects',arguments:args})).isError,true);
   console.log(`REDIRECT READ E2E OK: 205 rules and 205 trace hops, literal-only graph, both REST forms; ${specialistSurface} specialist surface chars.`);
+  assert.equal(caps.specialist_reads.get_images_missing_alt.available,true);
+  assert.equal(caps.specialist_reads.get_images_missing_alt.fetch_enabled,false);
+  let imagePage=await call(specialist,'get_images_missing_alt',{limit:50});const imageCursor=imagePage.next_cursor;const images=[...imagePage.items];
+  while(imagePage.next_cursor){imagePage=await call(specialist,'get_images_missing_alt',{limit:50,cursor:imagePage.next_cursor});images.push(...imagePage.items);}
+  assert.equal(images.length,205);assert.equal(new Set(images.map(i=>i.id)).size,205);
+  assert.equal(images[0].id,10205);assert.equal(images.at(-1).id,10001);
+  assert.equal(new Set(images.map(i=>i.alt.state)).size,3);assert.equal(images.every(i=>i.usage_verified===false),true);
+  assert.equal(imagePage.coverage.website_image_inventory_complete,null);
+  assert.equal(JSON.stringify(images).includes('PRIVATE_DESCRIPTION'),false);
+  const queriedImages=await call(querySpecialist,'get_images_missing_alt',{q:'% + panel'});assert.equal(queriedImages.total,205);
+  for(const args of [{include_images:true},{offset:0},{limit:50,cursor:imageCursor,q:'other'}])
+    assert.equal((await specialist.callTool({name:'get_images_missing_alt',arguments:args})).isError,true);
+  console.log(`IMAGE READ E2E OK: 205 stored review candidates, no image fetch or usage claim, both REST forms; ${specialistSurface} specialist surface chars.`);
   const editor=await connect('core',config.editor_token); await assert.rejects(call(editor,'get_capabilities'),/workflow_operator_unavailable/);
   const expired=await connect('core',config.expired_token); await assert.rejects(call(expired,'get_capabilities'),/agent_token_expired/);
   console.log(`WORKFLOW WORDPRESS E2E OK: real MCP stdio + HTTP + native WP; 205 search results/targets, URL analytics with 205 keywords, 206-term union and 90 daily rows; 12/42 tools, ${surface} core surface chars; unsafe/unavailable calls refused.`);
