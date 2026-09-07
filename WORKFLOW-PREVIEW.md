@@ -48,8 +48,8 @@ Daily positions are rounded to one decimal; their mean is not GSC's weighted
 period position. The actual returned-data window and missing-day counts are
 explicit. Local property selection before/after the original fetch is recorded;
 this is not an independent VPS account attestation. Old/unbound caches stay
-unavailable. See PRO `docs/mcp-phase4b-stability.md`. Canonical keyword-period
-comparisons and arbitrary GSC-URL diagnosis remain pending.
+unavailable. See PRO `docs/mcp-phase4b-stability.md`. Separate period reports now
+use the keyword section below; arbitrary GSC-URL diagnosis remains pending.
 
 ## Stored page-period comparison
 
@@ -61,6 +61,24 @@ Counts use absolute/relative changes, CTR uses percentage points and a positive
 position delta means worse. Missing evidence is unknown, not zero or a repair
 verdict. Old unbound snapshots remain unavailable. Query-period reports remain
 open. See PRO `docs/mcp-phase4b-comparison.md` for provenance and test boundaries.
+
+## Stored keyword periods
+
+`diagnose_page({post_id, section: "keywords", limit: 50})` lists `available_windows`
+and the latest-end-date report. Pass `window: "YYYY-MM-DD/YYYY-MM-DD"` to choose
+one; optionally restrict to an exact `query`. For comparisons explicitly provide
+both `window` (newer) and `compare_to` (older); only adjacent equal-length 7/28/90-day
+periods qualify. Follow cursors with unchanged selectors. All returned terms,
+including those present on just one side, remain reachable. Missing is null,
+not zero or a new/lost ranking. CTR deltas are percentage points; positive
+position delta is worse. No automatic repair or causal claim.
+
+The existing explicit fetch producers now retain up to four windows per URL,
+six hours each, 5,000 queries/1 MiB per window and 4 MiB per bucket. No additional
+Google request: a missing pair still needs separate authorized acquisition,
+whose new MCP scan/inspection entry point remains pending. Reads never fill,
+expire or migrate this cache. See PRO `docs/mcp-phase4b-keywords.md` for local
+property provenance, best-effort cache concurrency, storage and coverage limits.
 
 ## Task administration
 
@@ -161,7 +179,7 @@ for 0.5.0; names retained in the canonical surface are not removed.
   dashboard cache, malformed/oversized/missing storage and transactional failure.
 - Explicit importance permission, all three values, stale-value refusal, per-page
   edit rights, shared queue/priority source, cache+source+receipt rollback.
-- Core tools/list: 8596 compact characters including work administration and stored diagnoses;
+- Core tools/list: 8733 compact characters including work administration and stored diagnoses;
   instructions remain below 1500 characters.
 
 ## Reproduce safely
@@ -176,11 +194,11 @@ For full integration use PRO repository `samkl8/tamrank-pro`, branch
 and `TAMRANK_MCP_WORKFLOW_PATH` to this checkout. That harness validates its clone
 database, creates a random fixture table namespace, passes temporary credentials
 through stdin, starts a temporary loopback HTTP server and removes only its own
-tables. Never point it at a customer database. The current PRO harness runs 454
+tables. Never point it at a customer database. The current PRO harness runs 538
 read/authentication/producer checks with the transport gate enabled (55 added
-for PageSpeed, 76 for stability and 66 for page comparisons, using mocked provider responses). The additional
-`TAMRANK_WORKFLOW_RESEARCH_TEST=1` gate brings the combined total to 489 by testing
-35 internal research-write cases. Add `TAMRANK_WORK_HTTP_TEST=1` for **914 combined
+for PageSpeed, 76 for stability, 66 for page comparisons and 84 for keyword periods, using mocked provider responses). The additional
+`TAMRANK_WORKFLOW_RESEARCH_TEST=1` gate brings the combined total to 573 by testing
+35 internal research-write cases. Add `TAMRANK_WORK_HTTP_TEST=1` for **998 combined
 checks**, including 69 existing-work, 99 pickup, 75 note, 79 manual and 103 importance source/HTTP checks,
 and the real research lifecycle, signal-pickup, shared-note, manual-task and importance MCP suites.
 `TAMRANK_WORK_HTTP_ONLY=1` optionally narrows iteration to the work tests. Write

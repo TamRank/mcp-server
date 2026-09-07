@@ -25,6 +25,14 @@ await core.get('diagnose_page').h({post_id:1,section:'stability',query:'akoestie
 assert.deepEqual(calls.pop(),{path:'/pages/1/diagnosis',query:{section:'stability',query:'akoestiek',limit:50,cursor:'opaque'}});
 await core.get('diagnose_page').h({post_id:1,section:'comparison'});
 assert.deepEqual(calls.pop(),{path:'/pages/1/diagnosis',query:{section:'comparison'}});
+const keywordArgs={post_id:1,section:'keywords',window:'2026-08-10/2026-09-06',compare_to:'2026-07-13/2026-08-09',limit:50};
+await core.get('diagnose_page').h(keywordArgs);
+assert.deepEqual(calls.pop(),{path:'/pages/1/diagnosis',query:{section:'keywords',window:keywordArgs.window,compare_to:keywordArgs.compare_to,limit:50}});
+for(const args of [{...keywordArgs,window:undefined},{...keywordArgs,compare_to:keywordArgs.window},
+  {...keywordArgs,window:'2026-02-30/2026-03-06'},{...keywordArgs,compare_to:'2026-08-03/2026-08-09'},
+  {...keywordArgs,refresh:true},{post_id:1,section:'stability',window:keywordArgs.window}]) {
+  assert.equal((await core.get('diagnose_page').h(args)).isError,true); assert.equal(calls.length,0);
+}
 for(const args of [{post_id:1,section:'comparison',period:7},{post_id:1,section:'comparison',limit:1},{post_id:1,section:'comparison',query:'x'}]) {
   assert.equal((await core.get('diagnose_page').h(args)).isError,true); assert.equal(calls.length,0);
 }

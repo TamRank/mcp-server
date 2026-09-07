@@ -17,6 +17,17 @@ const upgrade = name => failure('workflow_upgrade_required', `${name} is not a c
 const researchOperations=['investigate.404','investigate.near_win','investigate.content_decay','investigate.ranking_decline',
   'investigate.ctr_decline','investigate.demand_decline','investigate.traffic_decline'];
 const pickupFields=['signal_id','snapshot_hash','target_keys','research_operation','title','note','priority','deadline'];
+function validKeywordWindow(value) {
+  if(!/^\d{4}-\d{2}-\d{2}\/\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const dates=value.split('/'), times=dates.map(d=>Date.parse(d+'T00:00:00Z'));
+  return times.every((t,i)=>Number.isFinite(t) && new Date(t).toISOString().slice(0,10)===dates[i])
+    && [7,28,90].includes((times[1]-times[0])/86400000+1);
+}
+function adjacentKeywordWindows(current,previous) {
+  if(!validKeywordWindow(current) || !validKeywordWindow(previous))return false;
+  const a=current.split('/').map(d=>Date.parse(d+'T00:00:00Z')), b=previous.split('/').map(d=>Date.parse(d+'T00:00:00Z'));
+  return a[1]-a[0]===b[1]-b[0] && b[1]+86400000===a[0];
+}
 function validWork(a) {
   if(a.operation==='importance.update') return ['post_id','expected_value','value'].every(k=>a[k]!==undefined)
     && Object.keys(a).every(k=>['client_request_id','operation','post_id','expected_value','value'].includes(k));
@@ -42,8 +53,9 @@ export function workflowDefinitions() {
       path: a => '/signals' + (a.signal_id ? '/' + a.signal_id : ''), omit: ['signal_id'] },
     search_pages: { description: 'Published managed pages; complete filtered pagination, never lowest-score selection.', schema: { q: z.string().max(200).optional(), type: z.string().regex(/^[a-z0-9_-]{1,32}$/).optional(), missing: z.enum(['meta_title','meta_description']).optional(), ...paging }, path: () => '/pages' },
     get_page: { description: 'Page overview, metadata, explicit business importance or raw content chunks. No rendering or body edits.', schema: { post_id: pageId, section: z.enum(['overview','metadata','content','importance']).optional(), limit: z.number().int().min(1).max(4).optional(), cursor }, path: a => `/pages/${a.post_id}`, omit: ['post_id'] },
-    diagnose_page: { description: 'Stored facts, PageSpeed, query stability and exact-page 28-vs-28-day comparisons. Only stability accepts paginated summaries or exact query daily rows. Missing evidence is unknown; differences do not prove a cause. Never starts scans.', schema: { post_id: pageId, section: z.enum(['overview','metadata','gsc','index','pagespeed','stability','comparison']).optional(), query: z.string().min(1).max(512).refine(v=>Buffer.byteLength(v,'utf8')<=512 && !/[\x00-\x1f\x7f]/.test(v)).optional(), ...paging }, path: a => `/pages/${a.post_id}/diagnosis`, omit: ['post_id'],
-      validate: a => a.section==='stability' || !['query','limit','cursor'].some(k=>Object.hasOwn(a,k)) },
+    diagnose_page: { description: 'Stored facts, PageSpeed, stability, page comparisons and keyword periods. Stability/keywords accept query and paging. Keywords lists available_windows; select window and compare_to for adjacent equal-length periods. Missing terms are unknown, never zero/new/lost rankings. No fetch or automatic repair.', schema: { post_id: pageId, section: z.enum(['overview','metadata','gsc','index','pagespeed','stability','comparison','keywords']).optional(), query: z.string().min(1).max(512).refine(v=>Buffer.byteLength(v,'utf8')<=512 && !/[\x00-\x1f\x7f]/.test(v)).optional(), window: z.string().refine(validKeywordWindow).optional(), compare_to: z.string().refine(validKeywordWindow).optional(), ...paging }, path: a => `/pages/${a.post_id}/diagnosis`, omit: ['post_id'],
+      validate: a => a.section==='keywords' ? (!a.compare_to || (!!a.window && adjacentKeywordWindows(a.window,a.compare_to)))
+        : !['window','compare_to'].some(k=>Object.hasOwn(a,k)) && (a.section==='stability' || !['query','limit','cursor'].some(k=>Object.hasOwn(a,k))) },
     update_work_item: { description: 'Explicit work administration. Tasks need tasks:write; importance.update needs importance:write + post_id/expected_value/value from get_page importance. Task updates need work_id + administration expected_revision; note replaces/empty clears. Pickup needs exact signal snapshot/targets. Never infer importance or claim SEO repair.',
       write: true, path: () => '/work-items', schema: {
         client_request_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/),

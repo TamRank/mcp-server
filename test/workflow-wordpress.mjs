@@ -39,6 +39,18 @@ try {
   assert.equal(targets.length,205); assert.equal(new Set(targets.map(t=>t.key)).size,205);
   await call(client,'get_signals',{signal_id:1,section:'targets'});
   await call(client,'diagnose_page',{post_id:1,section:'index'});
+  let queryPeriods=await call(client,'diagnose_page',{post_id:1,section:'keywords',limit:50});
+  const periodWindows=queryPeriods.available_windows.map(w=>w.window), queryRows=[...queryPeriods.items];
+  while(queryPeriods.next_cursor){queryPeriods=await call(client,'diagnose_page',{post_id:1,section:'keywords',limit:50,cursor:queryPeriods.next_cursor});queryRows.push(...queryPeriods.items);}
+  assert.equal(queryRows.length,205); assert.equal(new Set(queryRows.map(r=>r.query)).size,205);
+  const queryComparisonArgs={post_id:1,section:'keywords',window:periodWindows[0],compare_to:periodWindows[1],limit:50};
+  let queryComparison=await call(client,'diagnose_page',queryComparisonArgs); const queryUnion=[...queryComparison.items];
+  while(queryComparison.next_cursor){queryComparison=await call(client,'diagnose_page',{...queryComparisonArgs,cursor:queryComparison.next_cursor});queryUnion.push(...queryComparison.items);}
+  assert.equal(queryUnion.length,206); assert.equal(new Set(queryUnion.map(r=>r.query)).size,206);
+  assert.equal(queryUnion.find(r=>r.query==='zoekwoord 001').delta.clicks,-11);
+  assert.equal(queryUnion.find(r=>r.query==='alleen eerder').current,null);
+  assert.equal(queryUnion.find(r=>r.query==='alleen nu').previous,null);
+  assert.equal((await client.callTool({name:'diagnose_page',arguments:{...queryComparisonArgs,refresh:true}})).isError,true);
   const comparison=await call(client,'diagnose_page',{post_id:1,section:'comparison'});
   assert.equal(comparison.diagnosis_status,'stored_comparison_only');
   assert.equal(comparison.facts.comparison.delta.clicks,-110);
