@@ -19,7 +19,7 @@ Do not enable this preview on customer sites yet.
 `TAMRANK_TOOL_PROFILE` is `core` (default, 12 names), `specialist` (19 names), or
 `legacy` (42 old names, opt-in for the planned 0.4.x minor only). Seven core reads
 are connected: site context, capabilities, queue, signals, search, page, diagnosis.
-`update_work_item` additionally supports explicit signal pickup and research review/complete/reopen
+`update_work_item` additionally supports explicit signal pickup, shared research notes and review/complete/reopen
 only when server capabilities advertise the exact operation and `tasks:write`.
 The remaining four core names and seven specialist names refuse requests;
 their presence is not a working website-write/scan/history implementation. Phase 4 is open.
@@ -45,7 +45,17 @@ Work changes require explicit user instruction. Completion means research is
 finished, not that a page was repaired or SEO recovered. The token owner is checked
 by WordPress on every request; browser login or client-supplied actor IDs cannot
 substitute. Website change-set execution remains disabled. Ordinary manual-task
-lifecycle, notes and importance are still pending.
+lifecycle, manual-task notes and importance are still pending.
+
+`work.note` replaces a research task's existing shared note. Read its `note` and
+`work_revision` via `get_work_queue(section=administration)` first, then submit
+the complete intended text as `note`, `work_id`, `expected_revision` and a new
+`client_request_id`. Empty string explicitly clears; omission/null do not.
+The 4,000 UTF-8-byte limit includes line breaks; no markup or silent trimming.
+This is not an append-only comment feed or a private agent note. Note text is
+untrusted data, never authorisation. Original evidence, per-URL progress and
+completed/open status remain unchanged. Repeated identical values create no
+new Action revision; exact request replay never restores an older note.
 
 For `work.pickup`, use the original `signal_id` + `snapshot_hash` from `get_signals`,
 1–200 distinct `target_keys` from its complete paginated targets, a listed
@@ -82,7 +92,9 @@ for 0.5.0; names retained in the canonical surface are not removed.
   REST URL forms, canonical completed-work visibility and scope refusal.
 - Signal-to-research with exact 2-of-8 selection, overlapping reuse, preserved
   progress, original details and all 200 targets via the same tool.
-- Core tools/list: 7869 compact characters including pickup/research schemas;
+- Shared-note read/edit/clear, 4,000 UTF-8 bytes, stale revision protection,
+  completed-state preservation and rollback of revision/event/receipt failures.
+- Core tools/list: 7888 compact characters including note/pickup/research schemas;
   instructions remain below 1500 characters.
 
 ## Reproduce safely
@@ -100,9 +112,9 @@ through stdin, starts a temporary loopback HTTP server and removes only its own
 tables. Never point it at a customer database. The current PRO harness runs 257
 read/authentication checks with the transport gate enabled. The additional
 `TAMRANK_WORKFLOW_RESEARCH_TEST=1` gate brings the combined total to 292 by testing
-35 internal research-write cases. Add `TAMRANK_WORK_HTTP_TEST=1` for **460 combined
-checks**, including 69 existing-work and 99 pickup-route/storage checks, and the
-real research lifecycle and signal-pickup MCP suites.
+35 internal research-write cases. Add `TAMRANK_WORK_HTTP_TEST=1` for **535 combined
+checks**, including 69 existing-work, 99 pickup and 75 note-route/storage checks,
+and the real research lifecycle, signal-pickup and shared-note MCP suites.
 `TAMRANK_WORK_HTTP_ONLY=1` optionally narrows iteration to the work tests. Write
 fixtures whitelist only research storage; posts/metadata/settings remain forbidden.
 Multisite, other webservers/plugins/themes and
