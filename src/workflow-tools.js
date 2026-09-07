@@ -24,7 +24,7 @@ function validWork(a) {
   if(pickupFields.filter(k=>k!=='note').some(k=>Object.hasOwn(a,k)) || a.work_id===undefined || a.expected_revision===undefined) return false;
   if(a.operation==='work.note') return a.note!==undefined && a.target_key===undefined && a.reviewed===undefined;
   if(Object.hasOwn(a,'note')) return false;
-  return a.operation==='work.review_target' ? a.target_key!==undefined && a.reviewed!==undefined : a.target_key===undefined && a.reviewed===undefined;
+  return a.operation==='work.review_target' ? /^pickup_/.test(a.work_id) && a.target_key!==undefined && a.reviewed!==undefined : a.target_key===undefined && a.reviewed===undefined;
 }
 
 export function workflowDefinitions() {
@@ -40,10 +40,10 @@ export function workflowDefinitions() {
     search_pages: { description: 'Published managed pages; complete filtered pagination, never lowest-score selection.', schema: { q: z.string().max(200).optional(), type: z.string().regex(/^[a-z0-9_-]{1,32}$/).optional(), missing: z.enum(['meta_title','meta_description']).optional(), ...paging }, path: () => '/pages' },
     get_page: { description: 'Page overview, explicit metadata or raw content chunks. No rendering or body edits.', schema: { post_id: pageId, section: z.enum(['overview','metadata','content']).optional(), limit: z.number().int().min(1).max(4).optional(), cursor }, path: a => `/pages/${a.post_id}`, omit: ['post_id'] },
     diagnose_page: { description: 'Targeted stored facts and uncertainty. Unsupported sections never trigger scans.', schema: { post_id: pageId, section: z.enum(['overview','metadata','gsc','index']).optional() }, path: a => `/pages/${a.post_id}/diagnosis`, omit: ['post_id'] },
-    update_work_item: { description: 'Research only, tasks:write. Pickup needs exact signal snapshot/target keys, operation and title. Other updates need work_id + administration expected_revision. work.note replaces the shared note; empty string clears it. Never SEO repair; exact same-ID retries.',
+    update_work_item: { description: 'Task administration, tasks:write. Pickup needs exact signal snapshot/targets. Research/manual updates need work_id + administration expected_revision. work.note replaces the shared note; empty string clears it. Manual tasks require advertised support; never SEO repair.',
       write: true, path: () => '/work-items', schema: {
         client_request_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/),
-        operation: z.enum(['work.review_target','work.complete','work.reopen','work.pickup','work.note']), work_id: z.string().regex(/^pickup_[a-f0-9]{32}$/).optional(),
+        operation: z.enum(['work.review_target','work.complete','work.reopen','work.pickup','work.note']), work_id: z.string().regex(/^(?:pickup_[a-f0-9]{32}|manual_[A-Za-z0-9][A-Za-z0-9_.:-]{0,151})$/).optional(),
         expected_revision: z.string().regex(/^[a-f0-9]{64}$/).optional(), target_key: z.string().regex(/^relation:[1-9][0-9]{0,17}$/).optional(), reviewed: z.boolean().optional(),
         signal_id: pageId.optional(), snapshot_hash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
         target_keys: z.array(z.string().regex(/^[a-f0-9]{64}$/)).min(1).max(200).optional(), research_operation: z.enum(researchOperations).optional(),
@@ -73,6 +73,10 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       if (capabilities?.reads?.[canonical]?.available === false) return failure('workflow_operation_unavailable', `${canonical} is unavailable on this site.`);
       if (def.write && (capabilities?.work_administration?.available !== true || !capabilities.work_administration.operations?.includes(parsed.data.operation))) {
         return failure('workflow_operation_unavailable','Research administration is not enabled or this token lacks tasks:write. No mutation was sent.');
+      }
+      if (def.write && parsed.data.work_id?.startsWith('manual_') && (capabilities?.work_administration?.manual?.available!==true
+        || !capabilities.work_administration.manual.operations?.includes(parsed.data.operation))) {
+        return failure('workflow_operation_unavailable','Manual task administration is not available on this site. No mutation was sent.');
       }
       try {
         const args = def.query ? def.query(parsed.data) : parsed.data;

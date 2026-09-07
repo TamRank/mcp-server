@@ -61,6 +61,26 @@ for(const bad of [{...note,note:undefined},{...note,note:null},{...note,note:7},
   {...note,work_id:'manual_pending'},{...note,note:'🎯'.repeat(1001)},{...note,operation:'work.complete'}]) {
   assert.equal((await noteEnabled.get('update_work_item').h(bad)).isError,true); assert.equal(calls.length,0);
 }
+const manualOps=['work.note','work.complete','work.reopen'];
+const manualEnabled=registry('core',{work_administration:{available:true,operations:manualOps,
+  manual:{available:true,operations:manualOps}}});
+for(const operation of manualOps) {
+  const input={client_request_id:'fixture-manual-0001',operation,work_id:'manual_existing.1',expected_revision:work.expected_revision,
+    ...(operation==='work.note'?{note:''}:{})};
+  await manualEnabled.get('update_work_item').h(input); assert.deepEqual(calls.pop(),{path:'/work-items',body:input});
+  assert.equal(manualEnabled.get('update_work_item').c.inputSchema.safeParse(input).success,true);
+  for(const manual of [undefined,{available:false,operations:manualOps},{available:true,operations:[] }]) {
+    const gated=registry('core',{work_administration:{available:true,operations:manualOps,manual}});
+    assert.equal((await gated.get('update_work_item').h(input)).isError,true); assert.equal(calls.length,0);
+  }
+}
+for(const bad of [{...work,work_id:'manual_existing.1'},
+  {...note,work_id:'manual_'},{...note,work_id:'manual_existing/1'},
+  {...note,work_id:'manual_existing',operation:'work.create'},{...note,work_id:'manual_existing',title:'No rename'}]) {
+  assert.equal((await manualEnabled.get('update_work_item').h(bad)).isError,true); assert.equal(calls.length,0);
+}
+await core.get('get_work_queue').h({work_id:'manual_existing',section:'administration'});
+assert.deepEqual(calls.pop(),{path:'/work-items/manual_existing',query:{}});
 const server=createServer((req,res)=> {
   targetCalls++;
   if(req.url.includes('/redirect')) { res.writeHead(302,{Location:'/wp-json/tamrank/v2/leak'}); res.end(); return; }
@@ -86,5 +106,5 @@ try {
   await assert.rejects(client.get('/echo-error'),e=>e.code==='workflow_request_failed'&&!e.message.includes('fixture-not-a-real-token')&&e.message.length<=500);
   await assert.rejects(new WorkflowClient({siteUrl:base,pat:'fixture',timeoutMs:100}).get('/slow'),e=>e.code==='timeout');
   for(const siteUrl of ['http://real-site.invalid','https://user:pass@site.invalid','https://site.invalid/?key=secret']) assert.throws(()=>new WorkflowClient({siteUrl,pat:'fixture'}));
-  console.log('WORKFLOW SURFACE OK: 12/19/42 profiles, gated research writes, unavailable website writers, strict inputs, full-target mapping, bounded HTTP/timeout/redirect protection.');
+  console.log('WORKFLOW SURFACE OK: 12/19/42 profiles, gated research/manual administration, unavailable website writers, strict inputs, full-target mapping, bounded HTTP/timeout/redirect protection.');
 } finally { server.closeAllConnections(); await new Promise(resolve=>server.close(resolve)); }
