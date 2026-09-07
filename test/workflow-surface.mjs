@@ -81,6 +81,19 @@ for(const bad of [{...work,work_id:'manual_existing.1'},
 }
 await core.get('get_work_queue').h({work_id:'manual_existing',section:'administration'});
 assert.deepEqual(calls.pop(),{path:'/work-items/manual_existing',query:{}});
+const importance={client_request_id:'fixture-importance-0001',operation:'importance.update',post_id:205,expected_value:'standard',value:'money'};
+const importanceEnabled=registry('core',{work_administration:{available:true,operations:['importance.update'],importance:{available:true}}});
+await importanceEnabled.get('update_work_item').h(importance);assert.deepEqual(calls.pop(),{path:'/work-items',body:importance});
+for(const bad of [{...importance,work_id:'manual_1'},{...importance,expected_revision:'a'.repeat(64)},
+  {...importance,post_id:'205'},{...importance,value:'high'},{...importance,expected_value:undefined},{...importance,actor_id:1},
+  {...importance,operation:'work.note',note:'Unrelated'},{...note,post_id:205}]) {
+  assert.equal((await importanceEnabled.get('update_work_item').h(bad)).isError,true);assert.equal(calls.length,0);
+}
+for(const gate of [core,manualEnabled,registry('core',{work_administration:{available:true,operations:['importance.update']}})]) {
+  assert.equal((await gate.get('update_work_item').h(importance)).isError,true);assert.equal(calls.length,0);
+}
+await core.get('get_page').h({post_id:205,section:'importance'});
+assert.deepEqual(calls.pop(),{path:'/pages/205',query:{section:'importance'}});
 const server=createServer((req,res)=> {
   targetCalls++;
   if(req.url.includes('/redirect')) { res.writeHead(302,{Location:'/wp-json/tamrank/v2/leak'}); res.end(); return; }
