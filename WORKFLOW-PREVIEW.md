@@ -19,7 +19,7 @@ Do not enable this preview on customer sites yet.
 `TAMRANK_TOOL_PROFILE` is `core` (default, 12 names), `specialist` (19 names), or
 `legacy` (42 old names, opt-in for the planned 0.4.x minor only). Seven core reads
 are connected: site context, capabilities, queue, signals, search, page, diagnosis.
-`update_work_item` additionally supports explicit research review/complete/reopen
+`update_work_item` additionally supports explicit signal pickup and research review/complete/reopen
 only when server capabilities advertise the exact operation and `tasks:write`.
 The remaining four core names and seven specialist names refuse requests;
 their presence is not a working website-write/scan/history implementation. Phase 4 is open.
@@ -45,7 +45,23 @@ Work changes require explicit user instruction. Completion means research is
 finished, not that a page was repaired or SEO recovered. The token owner is checked
 by WordPress on every request; browser login or client-supplied actor IDs cannot
 substitute. Website change-set execution remains disabled. Ordinary manual-task
-lifecycle, pickup, notes and importance are still pending.
+lifecycle, notes and importance are still pending.
+
+For `work.pickup`, use the original `signal_id` + `snapshot_hash` from `get_signals`,
+1–200 distinct `target_keys` from its complete paginated targets, a listed
+`research_operation` and a nonempty `title`. Do not supply `work_id` or
+`expected_revision` to pickup. Optional fields are plain-text `note`,
+`priority=laag|middel|hoog` and an empty/valid YYYY-MM-DD `deadline`. Title/note limits
+are 240/4,000 UTF-8 bytes, not SEO targets. Empty selections never mean all URLs.
+
+The existing source groups new selected URLs and reuses eligible research; original
+evidence and progress stay intact. New details apply only to newly created work,
+not existing titles/notes. Results report **target** counts, affected `work_ids`
+and current remaining targets. A repeated source selection under a new request ID
+is reuse, not another new task. Stale evidence, corrupted source history and
+snoozed/dismissed/monitoring work are not silently bypassed. Pickup shares the
+same work quota and exact-request replay rule. It does not repair a 404, edit
+content, or automatically turn observations into tasks.
 
 In the legacy profile, context/capabilities/signals and priority/next-action reads
 use canonical V2 semantics and complete target pagination. Incompatible old inputs
@@ -64,7 +80,9 @@ for 0.5.0; names retained in the canonical surface are not removed.
   without duplicates; expired-token, editor, compatibility and unknown-input refusals.
 - Real MCP research writes, same-ID replay, stale/changed request refusal, both
   REST URL forms, canonical completed-work visibility and scope refusal.
-- Core tools/list: 6932 compact characters including research-write schemas;
+- Signal-to-research with exact 2-of-8 selection, overlapping reuse, preserved
+  progress, original details and all 200 targets via the same tool.
+- Core tools/list: 7869 compact characters including pickup/research schemas;
   instructions remain below 1500 characters.
 
 ## Reproduce safely
@@ -82,8 +100,9 @@ through stdin, starts a temporary loopback HTTP server and removes only its own
 tables. Never point it at a customer database. The current PRO harness runs 257
 read/authentication checks with the transport gate enabled. The additional
 `TAMRANK_WORKFLOW_RESEARCH_TEST=1` gate brings the combined total to 292 by testing
-35 internal research-write cases. Add `TAMRANK_WORK_HTTP_TEST=1` for **361 combined
-checks**, including 69 actual work-route checks and the real research MCP suite.
+35 internal research-write cases. Add `TAMRANK_WORK_HTTP_TEST=1` for **460 combined
+checks**, including 69 existing-work and 99 pickup-route/storage checks, and the
+real research lifecycle and signal-pickup MCP suites.
 `TAMRANK_WORK_HTTP_ONLY=1` optionally narrows iteration to the work tests. Write
 fixtures whitelist only research storage; posts/metadata/settings remain forbidden.
 Multisite, other webservers/plugins/themes and
