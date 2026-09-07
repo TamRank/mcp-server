@@ -15,7 +15,7 @@ let capabilities = null, preflight = { ok: true };
 try {
   capabilities = await client.get('/capabilities');
   if (capabilities.full_v2_compatible !== true && process.env.TAMRANK_WORKFLOW_PREVIEW !== '1') {
-    preflight = { ok: false, code: 'workflow_upgrade_required', message: 'This site has not completed V2 compatibility. Development reads require explicit TAMRANK_WORKFLOW_PREVIEW=1; no legacy writer fallback.' };
+    preflight = { ok: false, code: 'workflow_upgrade_required', message: 'This site has not completed V2 compatibility. Development workflows require explicit TAMRANK_WORKFLOW_PREVIEW=1; no legacy writer fallback.' };
   }
 } catch (err) { preflight = { ok: false, code: err.code || 'workflow_unavailable', message: 'Workflow connection check failed. Check the site, token, PRO licence and workflow readiness, then restart.' }; }
 const profile = process.env.TAMRANK_TOOL_PROFILE || 'core';

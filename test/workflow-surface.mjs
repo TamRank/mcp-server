@@ -5,8 +5,9 @@ import { registerWorkflowTools, WORKFLOW_INSTRUCTIONS } from '../src/workflow-to
 import { WorkflowClient } from '../src/workflow-rest.js';
 
 let calls = [];
-const fake = { get: async (path, query) => { calls.push({ path, query }); return { contract_version: 2, items: [], next_cursor: null }; } };
-function registry(profile) { const tools = new Map(); registerWorkflowTools({ registerTool: (n,c,h) => tools.set(n,{c,h}) },fake,{profile}); return tools; }
+const fake = { get: async (path, query) => { calls.push({ path, query }); return { contract_version: 2, items: [], next_cursor: null }; },
+  post: async (path,body) => { calls.push({path,body}); return {contract_version:2,website_changed:false}; } };
+function registry(profile,capabilities=null) { const tools = new Map(); registerWorkflowTools({ registerTool: (n,c,h) => tools.set(n,{c,h}) },fake,{profile,capabilities}); return tools; }
 const core = registry('core'), legacy = registry('legacy'), specialist = registry('specialist');
 assert.equal(core.size,12); assert.equal(legacy.size,42); assert.equal(specialist.size,19);
 assert.ok(WORKFLOW_INSTRUCTIONS.length<1500);
@@ -23,6 +24,20 @@ assert.deepEqual(calls.pop(),{path:'/work-queue/automatic:grp_missing_title',que
 await legacy.get('get_next_action').h({}); assert.equal(calls.pop().query.limit,1);
 await legacy.get('get_next_action').h({work_id:'manual_1'}); assert.deepEqual(calls.pop(),{path:'/work-queue/manual_1',query:{}});
 await legacy.get('get_priority_actions').h({refresh:true}); assert.equal(calls.length,0);
+await core.get('get_work_queue').h({work_id:'pickup_'+'a'.repeat(32),section:'administration'});
+assert.deepEqual(calls.pop(),{path:'/work-items/pickup_'+'a'.repeat(32),query:{}});
+await legacy.get('get_next_action').h({work_id:'pickup_'+'a'.repeat(32),section:'administration'});
+assert.deepEqual(calls.pop(),{path:'/work-items/pickup_'+'a'.repeat(32),query:{}});
+await core.get('get_work_queue').h({section:'administration'}); assert.equal(calls.length,0);
+const work={client_request_id:'fixture-request-1',operation:'work.review_target',work_id:'pickup_'+'a'.repeat(32),expected_revision:'a'.repeat(64),target_key:'relation:1',reviewed:true};
+assert.equal((await core.get('update_work_item').h(work)).isError,true); assert.equal(calls.length,0);
+const enabled=registry('core',{work_administration:{available:true,operations:['work.review_target','work.complete','work.reopen']}});
+await enabled.get('update_work_item').h(work); assert.deepEqual(calls.pop(),{path:'/work-items',body:work});
+assert.equal(enabled.get('update_work_item').c.annotations.readOnlyHint,false);
+assert.equal(enabled.get('update_work_item').c.annotations.destructiveHint,true);
+for(const bad of [{...work,reviewed:'true'},{...work,actor_id:1},{...work,operation:'work.complete'},{...work,target_key:undefined}]) {
+  assert.equal((await enabled.get('update_work_item').h(bad)).isError,true); assert.equal(calls.length,0);
+}
 
 let targetCalls=0;
 const server=createServer((req,res)=> {
@@ -50,5 +65,5 @@ try {
   await assert.rejects(client.get('/echo-error'),e=>e.code==='workflow_request_failed'&&!e.message.includes('fixture-not-a-real-token')&&e.message.length<=500);
   await assert.rejects(new WorkflowClient({siteUrl:base,pat:'fixture',timeoutMs:100}).get('/slow'),e=>e.code==='timeout');
   for(const siteUrl of ['http://real-site.invalid','https://user:pass@site.invalid','https://site.invalid/?key=secret']) assert.throws(()=>new WorkflowClient({siteUrl,pat:'fixture'}));
-  console.log('WORKFLOW SURFACE OK: 12/19/42 profiles, unavailable writers, strict inputs, full-target mapping, bounded HTTP/timeout/redirect protection.');
+  console.log('WORKFLOW SURFACE OK: 12/19/42 profiles, gated research writes, unavailable website writers, strict inputs, full-target mapping, bounded HTTP/timeout/redirect protection.');
 } finally { server.closeAllConnections(); await new Promise(resolve=>server.close(resolve)); }
