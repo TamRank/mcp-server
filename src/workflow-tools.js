@@ -21,7 +21,9 @@ function validWork(a) {
   if(a.operation==='work.pickup') return ['signal_id','snapshot_hash','target_keys','research_operation','title'].every(k=>a[k]!==undefined)
     && Object.keys(a).every(k=>['client_request_id','operation',...pickupFields].includes(k))
     && new Set(a.target_keys).size===a.target_keys.length;
-  if(pickupFields.some(k=>Object.hasOwn(a,k)) || a.work_id===undefined || a.expected_revision===undefined) return false;
+  if(pickupFields.filter(k=>k!=='note').some(k=>Object.hasOwn(a,k)) || a.work_id===undefined || a.expected_revision===undefined) return false;
+  if(a.operation==='work.note') return a.note!==undefined && a.target_key===undefined && a.reviewed===undefined;
+  if(Object.hasOwn(a,'note')) return false;
   return a.operation==='work.review_target' ? a.target_key!==undefined && a.reviewed!==undefined : a.target_key===undefined && a.reviewed===undefined;
 }
 
@@ -29,7 +31,7 @@ export function workflowDefinitions() {
   return {
     get_site_context: { description: 'Stored brand/site facts; optional schema identity, no schema generation.', schema: { section: z.enum(['overview','schema_identity']).optional() }, path: () => '/site/context' },
     get_capabilities: { description: 'Actual available sections, permissions, limits and pending features.', schema: {}, path: () => '/capabilities' },
-    get_work_queue: { description: 'Shared dashboard order. section=targets paginates every URL; administration reads the current research work_revision for an explicit update.', schema: { work_id: workId.optional(), section: z.enum(['overview','targets','administration']).optional(), status: z.enum(['open','completed','all']).optional(), kind: z.enum(['automatic','manual','research']).optional(), ...paging },
+    get_work_queue: { description: 'Shared dashboard order. section=targets paginates every URL; administration reads the shared note and current work_revision for an explicit update.', schema: { work_id: workId.optional(), section: z.enum(['overview','targets','administration']).optional(), status: z.enum(['open','completed','all']).optional(), kind: z.enum(['automatic','manual','research']).optional(), ...paging },
       path: a => a.section==='administration' ? '/work-items/'+a.work_id : '/work-queue' + (a.work_id ? '/' + a.work_id : ''),
       query: a => a.section==='administration' ? strip(a,['section']) : a, omit: ['work_id'],
       validate: a => a.section!=='administration' || (Boolean(a.work_id) && Object.keys(a).every(k=>['work_id','section'].includes(k))) },
@@ -38,10 +40,10 @@ export function workflowDefinitions() {
     search_pages: { description: 'Published managed pages; complete filtered pagination, never lowest-score selection.', schema: { q: z.string().max(200).optional(), type: z.string().regex(/^[a-z0-9_-]{1,32}$/).optional(), missing: z.enum(['meta_title','meta_description']).optional(), ...paging }, path: () => '/pages' },
     get_page: { description: 'Page overview, explicit metadata or raw content chunks. No rendering or body edits.', schema: { post_id: pageId, section: z.enum(['overview','metadata','content']).optional(), limit: z.number().int().min(1).max(4).optional(), cursor }, path: a => `/pages/${a.post_id}`, omit: ['post_id'] },
     diagnose_page: { description: 'Targeted stored facts and uncertainty. Unsupported sections never trigger scans.', schema: { post_id: pageId, section: z.enum(['overview','metadata','gsc','index']).optional() }, path: a => `/pages/${a.post_id}/diagnosis`, omit: ['post_id'] },
-    update_work_item: { description: 'Research only, tasks:write. Pickup: signal_id, snapshot_hash, exact target_keys, research_operation, title; details apply only to new work. Review/complete/reopen: work_id + administration expected_revision. Never SEO repair; same-ID retries must be identical.',
+    update_work_item: { description: 'Research only, tasks:write. Pickup needs exact signal snapshot/target keys, operation and title. Other updates need work_id + administration expected_revision. work.note replaces the shared note; empty string clears it. Never SEO repair; exact same-ID retries.',
       write: true, path: () => '/work-items', schema: {
         client_request_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/),
-        operation: z.enum(['work.review_target','work.complete','work.reopen','work.pickup']), work_id: z.string().regex(/^pickup_[a-f0-9]{32}$/).optional(),
+        operation: z.enum(['work.review_target','work.complete','work.reopen','work.pickup','work.note']), work_id: z.string().regex(/^pickup_[a-f0-9]{32}$/).optional(),
         expected_revision: z.string().regex(/^[a-f0-9]{64}$/).optional(), target_key: z.string().regex(/^relation:[1-9][0-9]{0,17}$/).optional(), reviewed: z.boolean().optional(),
         signal_id: pageId.optional(), snapshot_hash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
         target_keys: z.array(z.string().regex(/^[a-f0-9]{64}$/)).min(1).max(200).optional(), research_operation: z.enum(researchOperations).optional(),

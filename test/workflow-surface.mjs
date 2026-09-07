@@ -51,6 +51,16 @@ for(const bad of [{...pickup,title:undefined},{...pickup,target_keys:[]},{...pic
 }
 
 let targetCalls=0;
+const note={client_request_id:'fixture-note-0001',operation:'work.note',work_id:work.work_id,expected_revision:work.expected_revision,note:'Shared note'};
+assert.equal((await enabled.get('update_work_item').h(note)).isError,true); assert.equal(calls.length,0);
+const noteEnabled=registry('core',{work_administration:{available:true,operations:['work.note']}});
+await noteEnabled.get('update_work_item').h(note); assert.deepEqual(calls.pop(),{path:'/work-items',body:note});
+await noteEnabled.get('update_work_item').h({...note,note:''}); assert.equal(calls.pop().body.note,'');
+for(const bad of [{...note,note:undefined},{...note,note:null},{...note,note:7},{...note,target_key:work.target_key},
+  {...note,reviewed:true},{...note,title:'No rename'},{...note,signal_id:1},{...note,expected_revision:undefined},
+  {...note,work_id:'manual_pending'},{...note,note:'🎯'.repeat(1001)},{...note,operation:'work.complete'}]) {
+  assert.equal((await noteEnabled.get('update_work_item').h(bad)).isError,true); assert.equal(calls.length,0);
+}
 const server=createServer((req,res)=> {
   targetCalls++;
   if(req.url.includes('/redirect')) { res.writeHead(302,{Location:'/wp-json/tamrank/v2/leak'}); res.end(); return; }
