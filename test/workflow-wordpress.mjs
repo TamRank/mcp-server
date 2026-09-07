@@ -113,6 +113,29 @@ try {
   assert.equal((await legacy.callTool({name:'update_meta',arguments:{post_id:1,meta_title:'MUST NOT WRITE',execute:true}})).isError,true);
   const query=await connect('core',config.token,'1','query'); assert.equal((await call(query,'search_pages',{limit:1})).total,205);
   const noPreview=await connect('core',config.token,''); await assert.rejects(call(noPreview,'get_capabilities'),/workflow_upgrade_required/);
+  const specialist=await connect('specialist');const specialistListing=await specialist.listTools();
+  assert.equal(specialistListing.tools.length,19);
+  const specialistSurface=JSON.stringify(specialistListing).length;assert.ok(specialistSurface<16000);
+  assert.equal(caps.specialist_reads.get_gsc_pages.available,true);
+  const discovered=[];let discovery=await call(specialist,'get_gsc_pages',{limit:50});const discoveryCursor=discovery.next_cursor;
+  discovered.push(...discovery.items);
+  while(discovery.next_cursor){discovery=await call(specialist,'get_gsc_pages',{limit:50,cursor:discovery.next_cursor});discovered.push(...discovery.items);}
+  assert.equal(discovered.length,205);assert.equal(new Set(discovered.map(r=>r.url)).size,205);
+  assert.deepEqual(discovery.data_quality.omitted_rows,{outside_property:1,unsupported_url:1});
+  assert.equal(discovery.data_quality.provider_inventory_complete,null);
+  assert.equal(JSON.stringify(discovered).includes('PRIVATE_'),false);
+  const archiveResult=await call(specialist,'get_gsc_pages',{q:'?q=%2B&color=blue&color=green'});
+  assert.equal(archiveResult.total,1);assert.equal(archiveResult.items[0].url,archiveUrl);
+  const discoveredDiagnosis=await call(specialist,'diagnose_page',{url:archiveResult.items[0].url,section:'gsc'});
+  assert.deepEqual(discoveredDiagnosis.facts.gsc,archiveResult.items[0]);
+  const lowRanked=await call(specialist,'get_gsc_pages',{q:'00001',limit:1});assert.equal(lowRanked.total,1);assert.equal(lowRanked.items[0].clicks,1);
+  const absentPeriod=await call(specialist,'get_gsc_pages',{period:7});assert.equal(absentPeriod.total,null);assert.equal(absentPeriod.data_quality.reason,'period_not_in_snapshot');
+  const querySpecialist=await connect('specialist',config.token,'1','query');
+  const queryList=await call(querySpecialist,'get_gsc_pages',{order:'url_asc',period:28,limit:1});assert.equal(queryList.total,205);
+  for(const args of [{refresh:true},{order:'score'},{period:30},{q:'category',limit:50,cursor:discoveryCursor}])
+    assert.equal((await specialist.callTool({name:'get_gsc_pages',arguments:args})).isError,true);
+  assert.equal((await legacy.callTool({name:'get_gsc_pages',arguments:{period:28}})).isError,true);
+  console.log(`GSC DISCOVERY E2E OK: 205 eligible stored URLs, exact discovery-to-diagnosis, both REST URL styles, missing-period refusal; ${specialistSurface} specialist surface chars.`);
   const editor=await connect('core',config.editor_token); await assert.rejects(call(editor,'get_capabilities'),/workflow_operator_unavailable/);
   const expired=await connect('core',config.expired_token); await assert.rejects(call(expired,'get_capabilities'),/agent_token_expired/);
   console.log(`WORKFLOW WORDPRESS E2E OK: real MCP stdio + HTTP + native WP; 205 search results/targets, URL analytics with 205 keywords, 206-term union and 90 daily rows; 12/42 tools, ${surface} core surface chars; unsafe/unavailable calls refused.`);

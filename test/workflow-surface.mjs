@@ -11,6 +11,22 @@ function registry(profile,capabilities=null) { const tools = new Map(); register
 const core = registry('core'), legacy = registry('legacy'), specialist = registry('specialist');
 assert.equal(core.size,12); assert.equal(legacy.size,42); assert.equal(specialist.size,19);
 assert.ok(WORKFLOW_INSTRUCTIONS.length<1500);
+assert.equal(core.has('get_gsc_pages'),false);
+await specialist.get('get_gsc_pages').h({q:'/category/?x=%2B',order:'impressions_desc',period:28,limit:50,cursor:'opaque'});
+assert.deepEqual(calls.pop(),{path:'/gsc/pages',query:{q:'/category/?x=%2B',order:'impressions_desc',period:28,limit:50,cursor:'opaque'}});
+assert.equal(specialist.get('get_gsc_pages').c.annotations.readOnlyHint,true);
+for(const args of [{refresh:true},{period:30},{period:'28'},{order:'score'},{limit:51},{q:'é'.repeat(101)},{q:'bad\u0000input'},{url:'https://fixture.invalid/'}]) {
+  assert.equal((await specialist.get('get_gsc_pages').h(args)).isError,true);assert.equal(calls.length,0);
+}
+for(const caps of [{},{specialist_reads:{get_gsc_pages:{available:false}}}]) {
+  assert.equal((await registry('specialist',caps).get('get_gsc_pages').h({})).isError,true);assert.equal(calls.length,0);
+}
+await registry('specialist',{specialist_reads:{get_gsc_pages:{available:true}}}).get('get_gsc_pages').h({});
+assert.deepEqual(calls.pop(),{path:'/gsc/pages',query:{}});
+assert.equal((await legacy.get('get_gsc_pages').h({period:28})).isError,true);assert.equal(calls.length,0);
+for(const name of ['get_site_diagnostics','get_redirects','get_images_missing_alt','get_topical_authority','start_scan','get_scan_status']) {
+  assert.equal((await specialist.get(name).h({})).isError,true);assert.equal(calls.length,0);
+}
 for (const name of ['update_work_item','plan_changes','execute_change_set','rollback_change_set']) {
   assert.equal((await core.get(name).h({})).isError,true);
   assert.equal(calls.length,0);

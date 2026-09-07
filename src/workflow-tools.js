@@ -106,6 +106,8 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       if (canonical==='diagnose_page' && parsed.data.url!==undefined && capabilities
         && capabilities.reads?.diagnose_page?.url_target?.available!==true)
         return failure('workflow_operation_unavailable','URL analytics are not available in this site preview. No request was sent.');
+      if (def.specialist && capabilities && capabilities.specialist_reads?.[canonical]?.available!==true)
+        return failure('workflow_operation_unavailable','This specialist read is unavailable on this site. No request was sent.');
       if (def.write && (capabilities?.work_administration?.available !== true || !capabilities.work_administration.operations?.includes(parsed.data.operation))) {
         return failure('workflow_operation_unavailable','Work administration is unavailable or this token lacks the operation-specific permission. No mutation was sent.');
       }
@@ -144,6 +146,13 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   }
   for (const [name, def] of Object.entries(defs)) register(name, def);
   if (profile === 'specialist') for (const name of ['get_site_diagnostics','get_gsc_pages','get_redirects','get_images_missing_alt','get_topical_authority','start_scan','get_scan_status']) {
-    register(name, { description: 'Specialist capability not yet connected in this preview; no implicit scan.', schema: {} });
+    register(name, name==='get_gsc_pages'?{
+      description:'All eligible URLs in the current stored Search Console snapshot, with clicks/impressions/CTR/position and date/coverage context. Literal case-sensitive URL q; order defaults clicks_desc. Period only requires a matching stored window, never fetches. Follow every next_cursor unchanged; missing evidence has total:null. Use exact returned url with diagnose_page. No WordPress content, SEO score, automatic task or scan.',
+      specialist:true, path:()=>'/gsc/pages', schema:{
+        q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),
+        order:z.enum(['clicks_desc','impressions_desc','ctr_asc','position_asc','url_asc']).optional(),
+        period:z.union([z.literal(7),z.literal(28),z.literal(90)]).optional(),...paging,
+      }
+    }:{ description: 'Specialist capability not yet connected in this preview; no implicit scan.', schema: {} });
   }
 }

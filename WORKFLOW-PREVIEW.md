@@ -22,7 +22,8 @@ are connected: site context, capabilities, queue, signals, search, page, diagnos
 `update_work_item` additionally supports explicit signal pickup, shared notes, research review/complete/reopen and manual complete/reopen
 with `tasks:write`; `importance.update` uses the independent `importance:write` grant.
 Both require the exact operation to be advertised in server capabilities.
-The remaining four core names and seven specialist names refuse requests;
+The optional `get_gsc_pages` specialist is connected as described below.
+The remaining four core names and six specialist names refuse requests;
 their presence is not a working website-write/scan/history implementation. Phase 4 is open.
 
 ## Stored PageSpeed diagnosis
@@ -99,8 +100,36 @@ advertise `reads.diagnose_page.url_target.available`; an older preview refuses.
 
 See PRO `docs/mcp-phase4b-url-diagnosis.md` for conservative domain/URL-prefix
 matching and the distinction between historical property analytics and protected
-WordPress content. The specialist GSC URL list and explicit acquisition remain
-pending. This does not enable the old live-fetch keyword alias or activate a site.
+WordPress content. Stored GSC URL discovery is connected below; explicit
+acquisition remains pending. This does not enable the old live-fetch keyword
+alias or activate a site.
+
+## Stored GSC page discovery
+
+In the specialist profile, `get_gsc_pages({limit: 50})` paginates all eligible URLs
+in the current stored full-site GSC pages snapshot. Pass an exact returned `url`
+to `diagnose_page` to investigate further, including URLs without a managed
+WordPress post. The diagnosis rechecks current evidence; it may have changed.
+
+Optional `q` is a literal case-sensitive URL substring (200 UTF-8 bytes maximum),
+applied before pagination. `order` accepts `clicks_desc` (default),
+`impressions_desc`, `ctr_asc`, `position_asc` or `url_asc`; URL bytes break ties
+and unknown metrics sort last. This ordering is not an SEO priority formula.
+Optional `period: 7|28|90` requires the currently stored window to match, never
+fetches or substitutes dates. Follow `next_cursor` with unchanged selectors and
+page size. Changed evidence requires restarting, not combining partial lists.
+
+Missing, stale or invalid evidence has `total: null`; a verified no-match has
+zero. Responses report actual dates, receipt age, eligible/source counts and
+omission counts for outside-property/unsupported URLs without exposing those
+URLs. Complete eligible **stored** coverage is not complete Google/site coverage.
+The six-hour snapshot age is checked independently of transient expiry and is
+shared with exact diagnosis. No new storage, post/content lookup or scan.
+
+The plugin must advertise `specialist_reads.get_gsc_pages.available`; an older
+preview refuses. The old `get_gsc_pages` in the legacy profile remains disabled:
+its live-fetch/period behavior is not silently replaced with stored-only reads.
+See PRO `docs/mcp-phase4b-gsc-pages.md` for bounds, scope and evidence checks.
 
 ## Task administration
 
@@ -201,7 +230,9 @@ for 0.5.0; names retained in the canonical surface are not removed.
   dashboard cache, malformed/oversized/missing storage and transactional failure.
 - Explicit importance permission, all three values, stale-value refusal, per-page
   edit rights, shared queue/priority source, cache+source+receipt rollback.
-- Core tools/list: 8848 compact characters including work administration and stored diagnoses;
+- Complete GSC discovery over 205 eligible URLs, exact discovery-to-diagnosis,
+  URL filters past 200, both REST forms and missing-period refusal without fetch.
+- Core tools/list: 8848 compact characters; specialist: 12237 characters;
   instructions remain below 1500 characters.
 
 ## Reproduce safely
@@ -216,11 +247,12 @@ For full integration use PRO repository `samkl8/tamrank-pro`, branch
 and `TAMRANK_MCP_WORKFLOW_PATH` to this checkout. That harness validates its clone
 database, creates a random fixture table namespace, passes temporary credentials
 through stdin, starts a temporary loopback HTTP server and removes only its own
-tables. Never point it at a customer database. The current PRO harness runs 656
+tables. Never point it at a customer database. The current PRO harness runs 758
 read/authentication/producer checks with the transport gate enabled (55 added
-for PageSpeed, 76 for stability, 66 for page comparisons, 84 for keyword periods and 118 for URL analytics, using mocked provider responses). The additional
-`TAMRANK_WORKFLOW_RESEARCH_TEST=1` gate brings the combined total to 691 by testing
-35 internal research-write cases. Add `TAMRANK_WORK_HTTP_TEST=1` for **1116 combined
+for PageSpeed, 76 for stability, 66 for page comparisons, 84 for keyword periods,
+118 for URL analytics and 102 for GSC page discovery, using mocked provider responses). The additional
+`TAMRANK_WORKFLOW_RESEARCH_TEST=1` gate brings the combined total to 793 by testing
+35 internal research-write cases. Add `TAMRANK_WORK_HTTP_TEST=1` for **1218 combined
 checks**, including 69 existing-work, 99 pickup, 75 note, 79 manual and 103 importance source/HTTP checks,
 and the real research lifecycle, signal-pickup, shared-note, manual-task and importance MCP suites.
 `TAMRANK_WORK_HTTP_ONLY=1` optionally narrows iteration to the work tests. Write
