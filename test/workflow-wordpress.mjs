@@ -45,6 +45,18 @@ try {
   assert.equal(psi.facts.pagespeed.desktop.available,false);
   assert.ok(psi.facts.pagespeed.mobile.age_seconds>=3600);
   assert.equal(psi.product_writes_performed,false);
+  let stability=await call(client,'diagnose_page',{post_id:1,section:'stability',limit:50});
+  const firstStabilityCursor=stability.next_cursor;
+  const keywords=[...stability.items];
+  while(stability.next_cursor) { stability=await call(client,'diagnose_page',{post_id:1,section:'stability',limit:50,cursor:stability.next_cursor}); keywords.push(...stability.items); }
+  assert.equal(keywords.length,205); assert.equal(new Set(keywords.map(k=>k.query)).size,205);
+  assert.equal(keywords[0].stability,'stable'); assert.equal(keywords[0].position_daily_mean,4.3);
+  const dailyArgs={post_id:1,section:'stability',query:'zoekwoord 001',limit:50};
+  let daily=await call(client,'diagnose_page',dailyArgs); const dates=[...daily.items];
+  while(daily.next_cursor) { daily=await call(client,'diagnose_page',{...dailyArgs,cursor:daily.next_cursor}); dates.push(...daily.items); }
+  assert.equal(dates.length,90); assert.equal(new Set(dates.map(d=>d.date)).size,90);
+  assert.equal((await client.callTool({name:'diagnose_page',arguments:{...dailyArgs,cursor:firstStabilityCursor}})).isError,true);
+  assert.equal((await client.callTool({name:'diagnose_page',arguments:{post_id:1,section:'stability',refresh:true}})).isError,true);
   assert.equal((await client.callTool({name:'diagnose_page',arguments:{post_id:1,section:'pagespeed',refresh:true}})).isError,true);
   assert.equal((await client.callTool({name:'get_page',arguments:{post_id:1,unknown:'must reject'}})).isError,true);
   assert.equal((await client.callTool({name:'execute_change_set',arguments:{}})).isError,true);

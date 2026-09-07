@@ -21,6 +21,12 @@ for (const name of ['update_meta','update_meta_batch','manage_redirects','detect
 assert.equal((await core.get('get_page').h({post_id:1,secret:'not allowed'})).isError,true); assert.equal(calls.length,0);
 await core.get('diagnose_page').h({post_id:1,section:'pagespeed'});
 assert.deepEqual(calls.pop(),{path:'/pages/1/diagnosis',query:{section:'pagespeed'}});
+await core.get('diagnose_page').h({post_id:1,section:'stability',query:'akoestiek',limit:50,cursor:'opaque'});
+assert.deepEqual(calls.pop(),{path:'/pages/1/diagnosis',query:{section:'stability',query:'akoestiek',limit:50,cursor:'opaque'}});
+for(const args of [{post_id:1,section:'gsc',query:'x'},{post_id:1,section:'stability',query:'é'.repeat(257)},
+  {post_id:1,section:'stability',query:'x\u0000y'},{post_id:1,section:'stability',refresh:true}]) {
+  assert.equal((await core.get('diagnose_page').h(args)).isError,true); assert.equal(calls.length,0);
+}
 assert.equal((await core.get('diagnose_page').h({post_id:1,section:'pagespeed',refresh:true})).isError,true);
 assert.equal(calls.length,0);
 await core.get('get_work_queue').h({work_id:'automatic:grp_missing_title',section:'targets',limit:50,cursor:'opaque'});
