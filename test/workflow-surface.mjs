@@ -19,6 +19,10 @@ for (const name of ['update_meta','update_meta_batch','manage_redirects','detect
   assert.equal((await legacy.get(name).h({execute:true})).isError,true); assert.equal(calls.length,0);
 }
 assert.equal((await core.get('get_page').h({post_id:1,secret:'not allowed'})).isError,true); assert.equal(calls.length,0);
+await core.get('diagnose_page').h({post_id:1,section:'pagespeed'});
+assert.deepEqual(calls.pop(),{path:'/pages/1/diagnosis',query:{section:'pagespeed'}});
+assert.equal((await core.get('diagnose_page').h({post_id:1,section:'pagespeed',refresh:true})).isError,true);
+assert.equal(calls.length,0);
 await core.get('get_work_queue').h({work_id:'automatic:grp_missing_title',section:'targets',limit:50,cursor:'opaque'});
 assert.deepEqual(calls.pop(),{path:'/work-queue/automatic:grp_missing_title',query:{section:'targets',limit:50,cursor:'opaque'}});
 await legacy.get('get_next_action').h({}); assert.equal(calls.pop().query.limit,1);

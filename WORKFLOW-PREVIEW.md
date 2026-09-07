@@ -25,6 +25,17 @@ Both require the exact operation to be advertised in server capabilities.
 The remaining four core names and seven specialist names refuse requests;
 their presence is not a working website-write/scan/history implementation. Phase 4 is open.
 
+## Stored PageSpeed diagnosis
+
+`diagnose_page({post_id, section: "pagespeed"})` reads verified stored lab
+evidence for mobile and desktop separately. It retains the exact requested and
+measured URLs, device and original timestamps; missing devices/metrics are not
+zero. These are Lighthouse lab facts, not real-user Core Web Vitals, an SEO
+score or an automatic repair verdict. No extra tool or implicit scan/refresh.
+Historical unsigned data is unavailable until a separately authorized normal
+test has produced evidence; reading never fills or migrates the cache. See PRO
+`docs/mcp-phase4b-pagespeed.md` for integrity, age and compatibility boundaries.
+
 ## Task administration
 
 The PRO server also needs `TAMRANK_WORKFLOW_WORK_ENABLED === true`, with its work
@@ -139,10 +150,11 @@ For full integration use PRO repository `samkl8/tamrank-pro`, branch
 and `TAMRANK_MCP_WORKFLOW_PATH` to this checkout. That harness validates its clone
 database, creates a random fixture table namespace, passes temporary credentials
 through stdin, starts a temporary loopback HTTP server and removes only its own
-tables. Never point it at a customer database. The current PRO harness runs 257
-read/authentication checks with the transport gate enabled. The additional
-`TAMRANK_WORKFLOW_RESEARCH_TEST=1` gate brings the combined total to 292 by testing
-35 internal research-write cases. Add `TAMRANK_WORK_HTTP_TEST=1` for **717 combined
+tables. Never point it at a customer database. The current PRO harness runs 312
+read/authentication/producer checks with the transport gate enabled (55 added
+for PageSpeed, using mocked Google responses). The additional
+`TAMRANK_WORKFLOW_RESEARCH_TEST=1` gate brings the combined total to 347 by testing
+35 internal research-write cases. Add `TAMRANK_WORK_HTTP_TEST=1` for **772 combined
 checks**, including 69 existing-work, 99 pickup, 75 note, 79 manual and 103 importance source/HTTP checks,
 and the real research lifecycle, signal-pickup, shared-note, manual-task and importance MCP suites.
 `TAMRANK_WORK_HTTP_ONLY=1` optionally narrows iteration to the work tests. Write

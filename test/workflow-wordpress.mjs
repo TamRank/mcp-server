@@ -39,6 +39,13 @@ try {
   assert.equal(targets.length,205); assert.equal(new Set(targets.map(t=>t.key)).size,205);
   await call(client,'get_signals',{signal_id:1,section:'targets'});
   await call(client,'diagnose_page',{post_id:1,section:'index'});
+  const psi=await call(client,'diagnose_page',{post_id:1,section:'pagespeed'});
+  assert.equal(psi.facts.pagespeed.mobile.performance_score,83);
+  assert.equal(psi.facts.pagespeed.mobile.lab_metrics.lcp_ms,2350.5);
+  assert.equal(psi.facts.pagespeed.desktop.available,false);
+  assert.ok(psi.facts.pagespeed.mobile.age_seconds>=3600);
+  assert.equal(psi.product_writes_performed,false);
+  assert.equal((await client.callTool({name:'diagnose_page',arguments:{post_id:1,section:'pagespeed',refresh:true}})).isError,true);
   assert.equal((await client.callTool({name:'get_page',arguments:{post_id:1,unknown:'must reject'}})).isError,true);
   assert.equal((await client.callTool({name:'execute_change_set',arguments:{}})).isError,true);
   const legacy=await connect('legacy'); assert.equal((await legacy.listTools()).tools.length,42);
