@@ -52,8 +52,11 @@ For full integration use PRO repository `samkl8/tamrank-pro`, branch
 and `TAMRANK_MCP_WORKFLOW_PATH` to this checkout. That harness validates its clone
 database, creates a random fixture table namespace, passes temporary credentials
 through stdin, starts a temporary loopback HTTP server and removes only its own
-tables. Never point it at a customer database. It runs 221 whole-request checks
-with the transport gate enabled. Multisite, other webservers/plugins/themes and
+tables. Never point it at a customer database. The current PRO harness runs 257
+read/authentication checks with the transport gate enabled. The additional
+`TAMRANK_WORKFLOW_RESEARCH_TEST=1` gate brings the combined total to 292 by testing
+35 internal research-write cases; it does not expose an HTTP/MCP writer.
+Multisite, other webservers/plugins/themes and
 external object caches remain separate activation gates.
 
 The dependency lock was updated within existing declared ranges. `npm audit fix
