@@ -51,6 +51,17 @@ this is not an independent VPS account attestation. Old/unbound caches stay
 unavailable. See PRO `docs/mcp-phase4b-stability.md`. Canonical keyword-period
 comparisons and arbitrary GSC-URL diagnosis remain pending.
 
+## Stored page-period comparison
+
+`diagnose_page({post_id, section: "comparison"})` compares the two stored 28-day
+signal windows (three-day lag, same site-local calendar). No period/date selector,
+new snapshot history or implicit fetch. Only exact single-row URL matches qualify;
+folded variants/duplicates refuse. Both verified sides are required for a delta.
+Counts use absolute/relative changes, CTR uses percentage points and a positive
+position delta means worse. Missing evidence is unknown, not zero or a repair
+verdict. Old unbound snapshots remain unavailable. Query-period reports remain
+open. See PRO `docs/mcp-phase4b-comparison.md` for provenance and test boundaries.
+
 ## Task administration
 
 The PRO server also needs `TAMRANK_WORKFLOW_WORK_ENABLED === true`, with its work
@@ -150,7 +161,7 @@ for 0.5.0; names retained in the canonical surface are not removed.
   dashboard cache, malformed/oversized/missing storage and transactional failure.
 - Explicit importance permission, all three values, stale-value refusal, per-page
   edit rights, shared queue/priority source, cache+source+receipt rollback.
-- Core tools/list: 8239 compact characters including importance/manual/note/pickup/research schemas;
+- Core tools/list: 8596 compact characters including work administration and stored diagnoses;
   instructions remain below 1500 characters.
 
 ## Reproduce safely
@@ -165,11 +176,11 @@ For full integration use PRO repository `samkl8/tamrank-pro`, branch
 and `TAMRANK_MCP_WORKFLOW_PATH` to this checkout. That harness validates its clone
 database, creates a random fixture table namespace, passes temporary credentials
 through stdin, starts a temporary loopback HTTP server and removes only its own
-tables. Never point it at a customer database. The current PRO harness runs 388
+tables. Never point it at a customer database. The current PRO harness runs 454
 read/authentication/producer checks with the transport gate enabled (55 added
-for PageSpeed and 76 for stability, using mocked provider responses). The additional
-`TAMRANK_WORKFLOW_RESEARCH_TEST=1` gate brings the combined total to 423 by testing
-35 internal research-write cases. Add `TAMRANK_WORK_HTTP_TEST=1` for **848 combined
+for PageSpeed, 76 for stability and 66 for page comparisons, using mocked provider responses). The additional
+`TAMRANK_WORKFLOW_RESEARCH_TEST=1` gate brings the combined total to 489 by testing
+35 internal research-write cases. Add `TAMRANK_WORK_HTTP_TEST=1` for **914 combined
 checks**, including 69 existing-work, 99 pickup, 75 note, 79 manual and 103 importance source/HTTP checks,
 and the real research lifecycle, signal-pickup, shared-note, manual-task and importance MCP suites.
 `TAMRANK_WORK_HTTP_ONLY=1` optionally narrows iteration to the work tests. Write

@@ -23,6 +23,11 @@ await core.get('diagnose_page').h({post_id:1,section:'pagespeed'});
 assert.deepEqual(calls.pop(),{path:'/pages/1/diagnosis',query:{section:'pagespeed'}});
 await core.get('diagnose_page').h({post_id:1,section:'stability',query:'akoestiek',limit:50,cursor:'opaque'});
 assert.deepEqual(calls.pop(),{path:'/pages/1/diagnosis',query:{section:'stability',query:'akoestiek',limit:50,cursor:'opaque'}});
+await core.get('diagnose_page').h({post_id:1,section:'comparison'});
+assert.deepEqual(calls.pop(),{path:'/pages/1/diagnosis',query:{section:'comparison'}});
+for(const args of [{post_id:1,section:'comparison',period:7},{post_id:1,section:'comparison',limit:1},{post_id:1,section:'comparison',query:'x'}]) {
+  assert.equal((await core.get('diagnose_page').h(args)).isError,true); assert.equal(calls.length,0);
+}
 for(const args of [{post_id:1,section:'gsc',query:'x'},{post_id:1,section:'stability',query:'é'.repeat(257)},
   {post_id:1,section:'stability',query:'x\u0000y'},{post_id:1,section:'stability',refresh:true}]) {
   assert.equal((await core.get('diagnose_page').h(args)).isError,true); assert.equal(calls.length,0);

@@ -39,6 +39,12 @@ try {
   assert.equal(targets.length,205); assert.equal(new Set(targets.map(t=>t.key)).size,205);
   await call(client,'get_signals',{signal_id:1,section:'targets'});
   await call(client,'diagnose_page',{post_id:1,section:'index'});
+  const comparison=await call(client,'diagnose_page',{post_id:1,section:'comparison'});
+  assert.equal(comparison.diagnosis_status,'stored_comparison_only');
+  assert.equal(comparison.facts.comparison.delta.clicks,-110);
+  assert.ok(Math.abs(comparison.facts.comparison.delta.ctr_percentage_points+2.2)<1e-12);
+  assert.equal(comparison.data_quality.url_match,'exact_single_source_row');
+  assert.equal((await client.callTool({name:'diagnose_page',arguments:{post_id:1,section:'comparison',refresh:true}})).isError,true);
   const psi=await call(client,'diagnose_page',{post_id:1,section:'pagespeed'});
   assert.equal(psi.facts.pagespeed.mobile.performance_score,83);
   assert.equal(psi.facts.pagespeed.mobile.lab_metrics.lcp_ms,2350.5);
