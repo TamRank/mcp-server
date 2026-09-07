@@ -38,6 +38,17 @@ assert.equal(enabled.get('update_work_item').c.annotations.destructiveHint,true)
 for(const bad of [{...work,reviewed:'true'},{...work,actor_id:1},{...work,operation:'work.complete'},{...work,target_key:undefined}]) {
   assert.equal((await enabled.get('update_work_item').h(bad)).isError,true); assert.equal(calls.length,0);
 }
+const pickup={client_request_id:'fixture-pickup-1',operation:'work.pickup',signal_id:1,snapshot_hash:'b'.repeat(64),
+  target_keys:['c'.repeat(64),'d'.repeat(64)],research_operation:'investigate.near_win',title:'Investigate chosen pages',priority:'middel'};
+assert.equal((await enabled.get('update_work_item').h(pickup)).isError,true); assert.equal(calls.length,0);
+const pickupEnabled=registry('core',{work_administration:{available:true,operations:['work.pickup']}});
+await pickupEnabled.get('update_work_item').h(pickup); assert.deepEqual(calls.pop(),{path:'/work-items',body:pickup});
+for(const bad of [{...pickup,title:undefined},{...pickup,target_keys:[]},{...pickup,target_keys:[...pickup.target_keys,pickup.target_keys[0]]},
+  {...pickup,work_id:work.work_id},{...pickup,expected_revision:work.expected_revision},{...pickup,reviewed:true},
+  {...pickup,signal_id:'1'},{...pickup,research_operation:'technical.resolve_404'},{...pickup,priority:'urgent'},
+  {...pickup,title:'🎯'.repeat(61)},{...pickup,note:'🎯'.repeat(1001)},{...pickup,target_keys:Array(201).fill('e'.repeat(64))}]) {
+  assert.equal((await pickupEnabled.get('update_work_item').h(bad)).isError,true); assert.equal(calls.length,0);
+}
 
 let targetCalls=0;
 const server=createServer((req,res)=> {

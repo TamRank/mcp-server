@@ -27,7 +27,7 @@ try {
   const caps=await call(client,'get_capabilities');
   assert.equal(caps.full_v2_compatible,false); assert.equal(caps.execution_enabled,false);
   assert.equal(caps.work_administration.available,true);
-  assert.deepEqual(caps.work_administration.operations,['work.review_target','work.complete','work.reopen']);
+  assert.deepEqual(caps.work_administration.operations,['work.review_target','work.complete','work.reopen','work.pickup']);
   const before=await state(client);
   assert.equal(before.reviewed_count,0); assert.equal(before.target_count,2);
   const targets=await call(client,'get_work_queue',{work_id:config.work_id,section:'targets'});
