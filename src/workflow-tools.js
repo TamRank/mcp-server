@@ -146,7 +146,13 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   }
   for (const [name, def] of Object.entries(defs)) register(name, def);
   if (profile === 'specialist') for (const name of ['get_site_diagnostics','get_gsc_pages','get_redirects','get_images_missing_alt','get_topical_authority','start_scan','get_scan_status']) {
-    register(name, name==='get_gsc_pages'?{
+    register(name, name==='get_site_diagnostics'?{
+      description:'Stored site coverage: overview lists sections; metadata/index/schema paginate public managed pages; 404_urls groups every retained log URL, 404_events lists events (optional exact url). q is a case-sensitive title/URL substring. Follow cursors unchanged. No score, scan, schema output/validity or current 404 resolution claim. No IP/user-agent/full referrer. Summary covers the eligible source before query; missing evidence is unknown.',
+      specialist:true,path:()=>'/site/diagnostics',schema:{section:z.enum(['overview','metadata','index','schema','404_urls','404_events']).optional(),
+        q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),
+        url:z.string().min(1).max(4096).refine(v=>Buffer.byteLength(v,'utf8')<=4096).optional(),...paging},
+      validate:a=>(a.section || 'overview')==='overview'?Object.keys(a).every(k=>k==='section'):!Object.hasOwn(a,'url') || (a.section==='404_events' && !Object.hasOwn(a,'q')),
+    }:name==='get_gsc_pages'?{
       description:'All eligible URLs in the current stored Search Console snapshot, with clicks/impressions/CTR/position and date/coverage context. Literal case-sensitive URL q; order defaults clicks_desc. Period only requires a matching stored window, never fetches. Follow every next_cursor unchanged; missing evidence has total:null. Use exact returned url with diagnose_page. No WordPress content, SEO score, automatic task or scan.',
       specialist:true, path:()=>'/gsc/pages', schema:{
         q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),
@@ -163,6 +169,13 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       description:'Stored image attachments with missing, empty or whitespace-only alt; review candidates, not proven errors (decorative images may need empty alt). Unattached media has unknown usage; attached media requires a public managed parent. Parent is not proof of use. q is a case-sensitive title substring; follow next_cursor unchanged. stored_url is an unverified GUID, not a fetched preview. No files, image fetch, HTML/builder inspection, automatic tasks or alt writes.',
       specialist:true,path:()=>'/images/missing-alt',schema:{
         q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),...paging},
+    }:name==='get_topical_authority'?{
+      description:'Latest stored completed topical map: overview, clusters, gaps or recommendations; pages/topics require the returned one-based cluster number. Page every section with unchanged cursor/limit. Missing data is unknown. All referenced pages must remain public/managed, otherwise map advice is withheld. Historical suggestions, not proven demand, priority or tasks. No paid analysis, job poll, content/internal-link write.',
+      specialist:true,path:()=>'/site/topical-authority',schema:{section:z.enum(['overview','clusters','pages','topics','gaps','recommendations']).optional(),cluster:z.number().int().min(1).max(10000).optional(),...paging},
+      validate:a=>(a.section || 'overview')==='overview'?Object.keys(a).every(k=>k==='section'):['pages','topics'].includes(a.section)?a.cluster!==undefined:a.cluster===undefined,
+    }:name==='get_scan_status'?{
+      description:'Passive stored index/PageSpeed job state only. Optional expected_ref binds the returned opaque scan_ref. No backend poll, queue nudge, credit spend or result sync. No recorded job does not mean completed; index progress is unknown. Live polling and starting scans remain unavailable.',
+      specialist:true,path:()=>'/scans/status',schema:{type:z.enum(['index','pagespeed']),expected_ref:z.string().regex(/^stored:[a-f0-9]{32}$/).optional()},
     }:{ description: 'Specialist capability not yet connected in this preview; no implicit scan.', schema: {} });
   }
 }

@@ -165,6 +165,38 @@ try {
   for(const args of [{include_images:true},{offset:0},{limit:50,cursor:imageCursor,q:'other'}])
     assert.equal((await specialist.callTool({name:'get_images_missing_alt',arguments:args})).isError,true);
   console.log(`IMAGE READ E2E OK: 205 stored review candidates, no image fetch or usage claim, both REST forms; ${specialistSurface} specialist surface chars.`);
+  assert.equal(caps.specialist_reads.get_site_diagnostics.available,true);
+  // Separate ordinary read-only fixture token keeps two large research flows within the unchanged per-PAT quota.
+  const diagnosticClient=await connect('specialist',config.diagnostics_token);
+  const diagnosticQuery=await connect('specialist',config.diagnostics_token,'1','query');
+  const overview=await call(diagnosticClient,'get_site_diagnostics',{});assert.equal(overview.sections.length,6);
+  for(const section of ['metadata','index','schema','404_urls','404_events']){
+    let dp=await call(diagnosticClient,'get_site_diagnostics',{section,limit:50});const di=[...dp.items];
+    while(dp.next_cursor){dp=await call(diagnosticClient,'get_site_diagnostics',{section,limit:50,cursor:dp.next_cursor});di.push(...dp.items);}
+    assert.equal(di.length,section==='404_events'?206:205);assert.equal(dp.runtime_verified,false);
+  }
+  const events=await call(diagnosticQuery,'get_site_diagnostics',{section:'404_events',url:'/diagnostic/1?q=%2B&color=a&color=b'});assert.equal(events.total,2);
+  assert.equal((await specialist.callTool({name:'get_site_diagnostics',arguments:{section:'schema',execute:true}})).isError,true);
+  console.log(`SITE DIAGNOSTICS E2E OK: every page and retained event, stored-only sections, both REST forms; ${specialistSurface} specialist surface chars.`);
+  assert.equal(caps.specialist_reads.get_topical_authority.available,true);
+  const topicalOverview=await call(diagnosticClient,'get_topical_authority',{});assert.equal(topicalOverview.counts.clusters,205);assert.equal(topicalOverview.counts.recommendations,205);
+  for(const section of ['clusters','pages','topics','gaps','recommendations']){
+    const args={section,limit:50};if(['pages','topics'].includes(section))args.cluster=1;
+    let tp=await call(diagnosticClient,'get_topical_authority',args);const ti=[...tp.items];
+    while(tp.next_cursor){tp=await call(diagnosticClient,'get_topical_authority',{...args,cursor:tp.next_cursor});ti.push(...tp.items);}
+    assert.equal(ti.length,205);assert.equal(tp.analysis_started,false);assert.equal(tp.product_writes_performed,false);
+    assert.equal(JSON.stringify(ti).includes('STALE_SNAPSHOT_TITLE'),false);
+  }
+  const topicPage=await call(diagnosticQuery,'get_topical_authority',{section:'pages',cluster:1});assert.equal(topicPage.items[0].title,'Fixture 1');
+  assert.equal((await specialist.callTool({name:'get_topical_authority',arguments:{refresh:true}})).isError,true);
+  console.log(`TOPICAL READ E2E OK: all 205 clusters/pages/topics/gaps/recommendations, no analysis or writer; ${specialistSurface} specialist surface chars.`);
+  assert.equal(caps.specialist_reads.get_scan_status.mode,'stored_only');
+  for(const type of ['index','pagespeed']){
+    const state=await call(diagnosticClient,'get_scan_status',{type});assert.equal(state.state,'no_job_recorded');assert.equal(state.done,null);
+    assert.equal(state.backend_polled,false);assert.equal(state.queue_nudged,false);
+  }
+  assert.equal((await diagnosticClient.callTool({name:'get_scan_status',arguments:{type:'index',poll:true}})).isError,true);
+  console.log(`PASSIVE SCAN STATUS E2E OK: no job is not completion, no live polling; ${specialistSurface} specialist surface chars.`);
   const editor=await connect('core',config.editor_token); await assert.rejects(call(editor,'get_capabilities'),/workflow_operator_unavailable/);
   const expired=await connect('core',config.expired_token); await assert.rejects(call(expired,'get_capabilities'),/agent_token_expired/);
   console.log(`WORKFLOW WORDPRESS E2E OK: real MCP stdio + HTTP + native WP; 205 search results/targets, URL analytics with 205 keywords, 206-term union and 90 daily rows; 12/42 tools, ${surface} core surface chars; unsafe/unavailable calls refused.`);

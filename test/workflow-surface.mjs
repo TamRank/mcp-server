@@ -52,7 +52,37 @@ for(const caps of [{},{specialist_reads:{get_images_missing_alt:{available:false
 await registry('specialist',{specialist_reads:{get_images_missing_alt:{available:true}}}).get('get_images_missing_alt').h({});
 assert.deepEqual(calls.pop(),{path:'/images/missing-alt',query:{}});
 for(const name of ['get_images_missing_alt','update_image_alt']) {assert.equal((await legacy.get(name).h({})).isError,true);assert.equal(calls.length,0);}
-for(const name of ['get_site_diagnostics','get_topical_authority','start_scan','get_scan_status']) {
+await specialist.get('get_site_diagnostics').h({section:'404_events',url:'/path?q=%2B',limit:50,cursor:'opaque'});
+assert.deepEqual(calls.pop(),{path:'/site/diagnostics',query:{section:'404_events',url:'/path?q=%2B',limit:50,cursor:'opaque'}});
+for(const args of [{limit:50},{section:'schema',refresh:true},{section:'metadata',offset:0},{section:'index',url:'/x'},{section:'404_events',url:'/x',q:'x'},{section:'schema',limit:51}]){
+  assert.equal((await specialist.get('get_site_diagnostics').h(args)).isError,true);assert.equal(calls.length,0);
+}
+for(const caps of [{},{specialist_reads:{get_site_diagnostics:{available:false}}}]){
+  assert.equal((await registry('specialist',caps).get('get_site_diagnostics').h({})).isError,true);assert.equal(calls.length,0);
+}
+for(const name of ['get_site_health','get_schema_overview','get_site_index','get_404s']){assert.equal((await legacy.get(name).h({})).isError,true);assert.equal(calls.length,0);}
+await specialist.get('get_topical_authority').h({section:'pages',cluster:1,limit:50,cursor:'opaque'});
+assert.deepEqual(calls.pop(),{path:'/site/topical-authority',query:{section:'pages',cluster:1,limit:50,cursor:'opaque'}});
+for(const args of [{limit:50},{section:'pages'},{section:'gaps',cluster:1},{section:'topics',cluster:0},{refresh:true}]){
+  assert.equal((await specialist.get('get_topical_authority').h(args)).isError,true);assert.equal(calls.length,0);
+}
+for(const caps of [{},{specialist_reads:{get_topical_authority:{available:false}}}]){
+  assert.equal((await registry('specialist',caps).get('get_topical_authority').h({})).isError,true);assert.equal(calls.length,0);
+}
+assert.equal((await legacy.get('get_topical_authority').h({})).isError,true);assert.equal(calls.length,0);
+await specialist.get('get_scan_status').h({type:'index',expected_ref:'stored:'+'a'.repeat(32)});
+assert.deepEqual(calls.pop(),{path:'/scans/status',query:{type:'index',expected_ref:'stored:'+'a'.repeat(32)}});
+assert.equal(specialist.get('get_scan_status').c.annotations.readOnlyHint,true);
+for(const caps of [{},{specialist_reads:{get_scan_status:{available:false}}}]) {
+  assert.equal((await registry('specialist',caps).get('get_scan_status').h({type:'index'})).isError,true);assert.equal(calls.length,0);
+}
+for(const name of ['get_index_scan_status','get_pagespeed_scan_status']) {
+  assert.equal((await legacy.get(name).h({})).isError,true);assert.equal(calls.length,0);
+}
+for(const args of [{},{type:'unknown'},{type:'index',poll:true},{type:'pagespeed',refresh:true},{type:'index',expected_ref:'raw'}]){
+  assert.equal((await specialist.get('get_scan_status').h(args)).isError,true);assert.equal(calls.length,0);
+}
+for(const name of ['start_scan']) {
   assert.equal((await specialist.get(name).h({})).isError,true);assert.equal(calls.length,0);
 }
 for (const name of ['update_work_item','plan_changes','execute_change_set','rollback_change_set']) {
