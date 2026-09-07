@@ -22,8 +22,10 @@ are connected: site context, capabilities, queue, signals, search, page, diagnos
 `update_work_item` additionally supports explicit signal pickup, shared notes, research review/complete/reopen and manual complete/reopen
 with `tasks:write`; `importance.update` uses the independent `importance:write` grant.
 Both require the exact operation to be advertised in server capabilities.
-The optional `get_gsc_pages`, `get_redirects` and `get_images_missing_alt` specialists are connected as described below.
-The remaining four core names and four specialist names refuse requests;
+Six optional specialists are connected: `get_gsc_pages`, `get_redirects`,
+`get_images_missing_alt`, `get_site_diagnostics`, `get_topical_authority` and
+passive `get_scan_status`, as described below.
+The remaining four core names and `start_scan` refuse requests;
 their presence is not a working website-write/scan/history implementation. Phase 4 is open.
 
 ## Stored PageSpeed diagnosis
@@ -177,6 +179,54 @@ or executed. Inspect image and context through a separately authorized viewing
 step before proposing alt. No claim that attachment metadata controls every use.
 The legacy image read/writer remain disabled. See PRO `docs/mcp-phase4b-images.md`.
 
+## Stored site diagnostics
+
+`get_site_diagnostics` defaults to a small `overview`. Choose `metadata`,
+`index`, `schema`, `404_urls` or `404_events` for full paginated retained data.
+`limit` is 1–50 (default 20); `q` is a literal case-sensitive substring of page
+title/log URL, max 200 UTF-8 bytes. Only `404_events` optionally accepts an exact
+`url`, without `q`. Follow the signed cursor with unchanged selectors.
+
+Pages must be published, unprotected and audit-managed. Metadata presence is
+not proof of emitted tags. Historical index facts share the page-diagnosis
+parser; schema fields describe selections, not rendered/valid JSON-LD. 404s
+include retained noise and already-redirected URLs, not inferred incidents.
+No IP/user-agent/full referrer, scan, detection or automatic repair. Source
+summary covers eligible storage before filtering; `total` covers the selection.
+See PRO `docs/mcp-phase4b-site-diagnostics.md` for strict bounds and ambiguity rules.
+
+## Stored topical map
+
+`get_topical_authority` reads the latest stored completed map. Choose `clusters`,
+`gaps`, `recommendations`, or `pages`/`topics` with the returned one-based `cluster`
+number. Every stored item is paginated (1–50); no old top-25/50/60 truncation.
+Recommendations prefer the full stored section; fallback to the old summary's
+top three is explicit, never presented as a full recommendation set.
+
+If any referenced existing page is no longer published, unprotected and managed,
+the whole map is withheld, including derived suggestions. Current page titles
+replace snapshot page text/URLs. Advice is historical and untrusted, not verified
+demand or current coverage; no score ranking, new paid analysis, viewed marker,
+poll, body/internal-link write or task. Missing and empty sections differ.
+Distinct references must equal the stored input count; incomplete membership
+withholds the map. Legacy maps have no independent input manifest; complete
+generation-input provenance remains an activation/privacy gate. See PRO
+`docs/mcp-phase4b-topical.md` for privacy and storage/response limits.
+
+## Passive scan status
+
+`get_scan_status({type: "index"|"pagespeed"})` reads saved state only. Index
+completion stays unknown: old counters include checks from unrelated jobs.
+PageSpeed counts describe the saved queue, not a live worker heartbeat. No job
+recorded is not proof of completion. `done` remains unknown.
+
+Pass the returned opaque `scan_ref` as `expected_ref` to refuse replacement jobs.
+No backend IDs, target IDs/URLs or error strings are exposed. This read never
+polls, nudges a queue or spends credits. `poll`/`refresh`/`force` are refused;
+legacy status tools stay disabled. `start_scan` and explicit live refresh still
+need their own authorization, cost, target and uncertain-retry contract.
+See PRO `docs/mcp-phase4b-scan-status.md`.
+
 ## Task administration
 
 The PRO server also needs `TAMRANK_WORKFLOW_WORK_ENABLED === true`, with its work
@@ -282,10 +332,30 @@ for 0.5.0; names retained in the canonical surface are not removed.
   exact query bytes, both REST forms and explicit refusal of writes.
 - Complete missing-alt review inventory (205 images), stored-only/no preview
   downloads, unknown usage and both REST forms. Native tests exclude hidden parents.
-- Core tools/list: 8848 compact characters; specialist: 13540 characters;
+- Site-wide metadata/index/schema and retained 404 coverage, complete stored
+  topical lists (205 each), current-page privacy, passive scan state without polling.
+- Core tools/list: 8848 compact characters; specialist: 15159 characters;
   instructions remain below 1500 characters.
 
 ## Reproduce safely
+
+`npm run test:workflow-package` packs into a disposable directory, checks that
+the workflow entry/runtime/docs are present (and fixtures/hidden configuration
+absent), unpacks it, and installs dependencies with `npm ci --offline` using the
+repository lock copied only into that fixture. The package's normal bin/version
+are unchanged. The new preview documentation is included in the archive.
+
+If the exact dependency archives are not cached, use
+`npm run test:workflow-package -- --allow-network` to fetch only the locked
+versions from the official npm registry into a fresh temporary cache. Install
+scripts, user/global npm configuration, audits and funding requests are disabled;
+the package and cache are removed afterwards. No global install or publication.
+The clean-cache form passed on macOS/Node 22 with installed SDK dependencies,
+12/19/42 profiles, both REST forms, preview refusal and unavailable writers/scans
+against an inert loopback fixture. It does not replace native WordPress tests.
+An unconstrained registry install, other OS/Node versions, client onboarding,
+privacy/export/deletion and active deployment remain separate checks. The normal
+`npm test` still needs a configured legacy site; do not point it at a customer.
 
 `npm run test:workflow` runs inert handlers and an ephemeral loopback HTTP fixture.
 The original `npm test` needs a separately configured legacy site/PAT; it is not
@@ -297,13 +367,14 @@ For full integration use PRO repository `samkl8/tamrank-pro`, branch
 and `TAMRANK_MCP_WORKFLOW_PATH` to this checkout. That harness validates its clone
 database, creates a random fixture table namespace, passes temporary credentials
 through stdin, starts a temporary loopback HTTP server and removes only its own
-tables. Never point it at a customer database. The current PRO harness runs 919
+tables. Never point it at a customer database. The current PRO harness runs 1126
 read/authentication/producer checks with the transport gate enabled (55 added
 for PageSpeed, 76 for stability, 66 for page comparisons, 84 for keyword periods,
-118 for URL analytics, 102 for GSC page discovery, 90 for stored redirects and 71 for image metadata/privacy,
+118 for URL analytics, 102 for GSC page discovery, 90 for stored redirects,
+71 for image metadata/privacy, 87 for site diagnostics, 82 for topical maps and 38 for passive scan state,
 using mocked provider responses). The additional
-`TAMRANK_WORKFLOW_RESEARCH_TEST=1` gate brings the combined total to 954 by testing
-35 internal research-write cases. Add `TAMRANK_WORK_HTTP_TEST=1` for **1379 combined
+`TAMRANK_WORKFLOW_RESEARCH_TEST=1` gate brings the combined total to 1161 by testing
+35 internal research-write cases. Add `TAMRANK_WORK_HTTP_TEST=1` for **1586 combined
 checks**, including 69 existing-work, 99 pickup, 75 note, 79 manual and 103 importance source/HTTP checks,
 and the real research lifecycle, signal-pickup, shared-note, manual-task and importance MCP suites.
 `TAMRANK_WORK_HTTP_ONLY=1` optionally narrows iteration to the work tests. Write
