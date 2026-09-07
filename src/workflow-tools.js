@@ -28,6 +28,23 @@ function adjacentKeywordWindows(current,previous) {
   const a=current.split('/').map(d=>Date.parse(d+'T00:00:00Z')), b=previous.split('/').map(d=>Date.parse(d+'T00:00:00Z'));
   return a[1]-a[0]===b[1]-b[0] && b[1]+86400000===a[0];
 }
+function validDiagnosisUrl(value) {
+  if(Buffer.byteLength(value,'utf8')>2048 || /[\x00-\x20\x7f\\#]/.test(value)
+    || /%(?![a-f0-9]{2})|%(?:0[0-9a-f]|1[0-9a-f]|7f)/i.test(value)) return false;
+  const match=value.match(/^https?:\/\/([^/?#]+)([^?#]*)(?:\?[^#]*)?$/);
+  if(!match) return false;
+  const authority=match[1].match(/^([^:]+)(?::([0-9]+))?$/);
+  if(!authority || authority[1].length>253 || !authority[1].split('.').every(label=>/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label))
+    || (authority[2]!==undefined && (Number(authority[2])<1 || Number(authority[2])>65535))) return false;
+  const path=match[2];
+  return !/%(?:2f|5c|25)/i.test(path) && !/(?:^|\/)\.{1,2}(?:\/|$)/.test(path.replace(/%2e/ig,'.'));
+}
+function validDiagnosis(a) {
+  if((a.post_id!==undefined)===(a.url!==undefined)) return false;
+  if(a.url!==undefined && !['overview','gsc','stability','comparison','keywords'].includes(a.section || 'overview')) return false;
+  return a.section==='keywords' ? (!a.compare_to || (!!a.window && adjacentKeywordWindows(a.window,a.compare_to)))
+    : !['window','compare_to'].some(k=>Object.hasOwn(a,k)) && (a.section==='stability' || !['query','limit','cursor'].some(k=>Object.hasOwn(a,k)));
+}
 function validWork(a) {
   if(a.operation==='importance.update') return ['post_id','expected_value','value'].every(k=>a[k]!==undefined)
     && Object.keys(a).every(k=>['client_request_id','operation','post_id','expected_value','value'].includes(k));
@@ -53,9 +70,7 @@ export function workflowDefinitions() {
       path: a => '/signals' + (a.signal_id ? '/' + a.signal_id : ''), omit: ['signal_id'] },
     search_pages: { description: 'Published managed pages; complete filtered pagination, never lowest-score selection.', schema: { q: z.string().max(200).optional(), type: z.string().regex(/^[a-z0-9_-]{1,32}$/).optional(), missing: z.enum(['meta_title','meta_description']).optional(), ...paging }, path: () => '/pages' },
     get_page: { description: 'Page overview, metadata, explicit business importance or raw content chunks. No rendering or body edits.', schema: { post_id: pageId, section: z.enum(['overview','metadata','content','importance']).optional(), limit: z.number().int().min(1).max(4).optional(), cursor }, path: a => `/pages/${a.post_id}`, omit: ['post_id'] },
-    diagnose_page: { description: 'Stored facts, PageSpeed, stability, page comparisons and keyword periods. Stability/keywords accept query and paging. Keywords lists available_windows; select window and compare_to for adjacent equal-length periods. Missing terms are unknown, never zero/new/lost rankings. No fetch or automatic repair.', schema: { post_id: pageId, section: z.enum(['overview','metadata','gsc','index','pagespeed','stability','comparison','keywords']).optional(), query: z.string().min(1).max(512).refine(v=>Buffer.byteLength(v,'utf8')<=512 && !/[\x00-\x1f\x7f]/.test(v)).optional(), window: z.string().refine(validKeywordWindow).optional(), compare_to: z.string().refine(validKeywordWindow).optional(), ...paging }, path: a => `/pages/${a.post_id}/diagnosis`, omit: ['post_id'],
-      validate: a => a.section==='keywords' ? (!a.compare_to || (!!a.window && adjacentKeywordWindows(a.window,a.compare_to)))
-        : !['window','compare_to'].some(k=>Object.hasOwn(a,k)) && (a.section==='stability' || !['query','limit','cursor'].some(k=>Object.hasOwn(a,k))) },
+    diagnose_page: { description: 'Choose exactly one post_id or exact url. URL mode: stored GSC analytics within the selected property only; no WP lookup/content/writes. Post mode also offers metadata/index/PageSpeed. Stability/keywords accept query/paging. Keywords lists available_windows; window + compare_to selects adjacent equal-length periods. Missing is unknown, not zero/new/lost. No fetch or automatic repair.', schema: { post_id: pageId.optional(), url: z.string().min(1).max(2048).refine(validDiagnosisUrl).optional(), section: z.enum(['overview','metadata','gsc','index','pagespeed','stability','comparison','keywords']).optional(), query: z.string().min(1).max(512).refine(v=>Buffer.byteLength(v,'utf8')<=512 && !/[\x00-\x1f\x7f]/.test(v)).optional(), window: z.string().refine(validKeywordWindow).optional(), compare_to: z.string().refine(validKeywordWindow).optional(), ...paging }, path: a => a.url!==undefined?'/gsc/diagnosis':`/pages/${a.post_id}/diagnosis`, omit: ['post_id'], validate: validDiagnosis },
     update_work_item: { description: 'Explicit work administration. Tasks need tasks:write; importance.update needs importance:write + post_id/expected_value/value from get_page importance. Task updates need work_id + administration expected_revision; note replaces/empty clears. Pickup needs exact signal snapshot/targets. Never infer importance or claim SEO repair.',
       write: true, path: () => '/work-items', schema: {
         client_request_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/),
@@ -88,6 +103,9 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       if (!parsed.success || (def.validate && !def.validate(parsed.data))) return failure('invalid_request','Invalid or unknown tool arguments; nothing was sent.');
       if (!def.path) return failure('workflow_operation_unavailable',`${canonical} has no verified implementation in this preview. No request or mutation was sent.`);
       if (capabilities?.reads?.[canonical]?.available === false) return failure('workflow_operation_unavailable', `${canonical} is unavailable on this site.`);
+      if (canonical==='diagnose_page' && parsed.data.url!==undefined && capabilities
+        && capabilities.reads?.diagnose_page?.url_target?.available!==true)
+        return failure('workflow_operation_unavailable','URL analytics are not available in this site preview. No request was sent.');
       if (def.write && (capabilities?.work_administration?.available !== true || !capabilities.work_administration.operations?.includes(parsed.data.operation))) {
         return failure('workflow_operation_unavailable','Work administration is unavailable or this token lacks the operation-specific permission. No mutation was sent.');
       }

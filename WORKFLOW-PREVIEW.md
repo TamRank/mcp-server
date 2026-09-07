@@ -41,7 +41,7 @@ test has produced evidence; reading never fills or migrates the cache. See PRO
 `diagnose_page({post_id, section: "stability", limit: 50})` paginates stored query
 summaries. Add an exact `query` to paginate its daily rows. Follow `next_cursor`
 with identical query/limit; changed, expired or different-page evidence refuses
-continuation. No live fetch, arbitrary URL lookup or extra tool.
+continuation. No live fetch or extra tool; property-scoped URL mode is described below.
 
 The shared plugin formula considers position variation and missing-day coverage.
 Daily positions are rounded to one decimal; their mean is not GSC's weighted
@@ -49,7 +49,7 @@ period position. The actual returned-data window and missing-day counts are
 explicit. Local property selection before/after the original fetch is recorded;
 this is not an independent VPS account attestation. Old/unbound caches stay
 unavailable. See PRO `docs/mcp-phase4b-stability.md`. Separate period reports now
-use the keyword section below; arbitrary GSC-URL diagnosis remains pending.
+use the keyword section below; exact-URL analytics are also connected as described below.
 
 ## Stored page-period comparison
 
@@ -59,8 +59,8 @@ new snapshot history or implicit fetch. Only exact single-row URL matches qualif
 folded variants/duplicates refuse. Both verified sides are required for a delta.
 Counts use absolute/relative changes, CTR uses percentage points and a positive
 position delta means worse. Missing evidence is unknown, not zero or a repair
-verdict. Old unbound snapshots remain unavailable. Query-period reports remain
-open. See PRO `docs/mcp-phase4b-comparison.md` for provenance and test boundaries.
+verdict. Old unbound snapshots remain unavailable. Query-period reports use the
+keyword section below. See PRO `docs/mcp-phase4b-comparison.md` for provenance and test boundaries.
 
 ## Stored keyword periods
 
@@ -79,6 +79,28 @@ Google request: a missing pair still needs separate authorized acquisition,
 whose new MCP scan/inspection entry point remains pending. Reads never fill,
 expire or migrate this cache. See PRO `docs/mcp-phase4b-keywords.md` for local
 property provenance, best-effort cache concurrency, storage and coverage limits.
+
+## Exact-URL Search Console analytics
+
+`diagnose_page({url: "https://example.invalid/category/panels/", section: "gsc"})`
+accepts an exact URL instead of `post_id`, never both. The selected connected GSC
+property must contain that URL. No WordPress page needs to exist. Available URL
+sections: `overview`, `gsc`, `stability`, `comparison`, `keywords`, with the same
+complete lists, query/window selection and signed continuation as post mode.
+
+The ID is null and WordPress relationship is `not_resolved`, not a claim of
+ownership, public status or a writable page. URL mode reads analytics only:
+no WordPress lookup/title/content/metadata/index/PageSpeed/schema or website write.
+Unknown/out-of-property/ambiguous URLs are refused or explicitly lack evidence.
+URL bytes and repeated/encoded query parameters survive transport unchanged;
+no local-host substitution, canonical guessing, crawling or missing-period fetch.
+Property and stored provenance are rechecked on every page. Capabilities must
+advertise `reads.diagnose_page.url_target.available`; an older preview refuses.
+
+See PRO `docs/mcp-phase4b-url-diagnosis.md` for conservative domain/URL-prefix
+matching and the distinction between historical property analytics and protected
+WordPress content. The specialist GSC URL list and explicit acquisition remain
+pending. This does not enable the old live-fetch keyword alias or activate a site.
 
 ## Task administration
 
@@ -179,7 +201,7 @@ for 0.5.0; names retained in the canonical surface are not removed.
   dashboard cache, malformed/oversized/missing storage and transactional failure.
 - Explicit importance permission, all three values, stale-value refusal, per-page
   edit rights, shared queue/priority source, cache+source+receipt rollback.
-- Core tools/list: 8733 compact characters including work administration and stored diagnoses;
+- Core tools/list: 8848 compact characters including work administration and stored diagnoses;
   instructions remain below 1500 characters.
 
 ## Reproduce safely
@@ -194,11 +216,11 @@ For full integration use PRO repository `samkl8/tamrank-pro`, branch
 and `TAMRANK_MCP_WORKFLOW_PATH` to this checkout. That harness validates its clone
 database, creates a random fixture table namespace, passes temporary credentials
 through stdin, starts a temporary loopback HTTP server and removes only its own
-tables. Never point it at a customer database. The current PRO harness runs 538
+tables. Never point it at a customer database. The current PRO harness runs 656
 read/authentication/producer checks with the transport gate enabled (55 added
-for PageSpeed, 76 for stability, 66 for page comparisons and 84 for keyword periods, using mocked provider responses). The additional
-`TAMRANK_WORKFLOW_RESEARCH_TEST=1` gate brings the combined total to 573 by testing
-35 internal research-write cases. Add `TAMRANK_WORK_HTTP_TEST=1` for **998 combined
+for PageSpeed, 76 for stability, 66 for page comparisons, 84 for keyword periods and 118 for URL analytics, using mocked provider responses). The additional
+`TAMRANK_WORKFLOW_RESEARCH_TEST=1` gate brings the combined total to 691 by testing
+35 internal research-write cases. Add `TAMRANK_WORK_HTTP_TEST=1` for **1116 combined
 checks**, including 69 existing-work, 99 pickup, 75 note, 79 manual and 103 importance source/HTTP checks,
 and the real research lifecycle, signal-pickup, shared-note, manual-task and importance MCP suites.
 `TAMRANK_WORK_HTTP_ONLY=1` optionally narrows iteration to the work tests. Write

@@ -76,6 +76,31 @@ try {
   assert.equal((await client.callTool({name:'diagnose_page',arguments:{...dailyArgs,cursor:firstStabilityCursor}})).isError,true);
   assert.equal((await client.callTool({name:'diagnose_page',arguments:{post_id:1,section:'stability',refresh:true}})).isError,true);
   assert.equal((await client.callTool({name:'diagnose_page',arguments:{post_id:1,section:'pagespeed',refresh:true}})).isError,true);
+  const archiveUrl='https://fixture.invalid/category/panels/?q=%2B&color=blue&color=green';
+  assert.equal(caps.reads.diagnose_page.url_target.available,true);
+  const urlOverview=await call(client,'diagnose_page',{url:archiveUrl});
+  assert.equal(urlOverview.page.id,null);assert.equal(urlOverview.page.url,archiveUrl);
+  assert.equal(urlOverview.target_scope.wordpress_relationship,'not_resolved');assert.equal(urlOverview.target_scope.content_access,false);
+  const urlFacts=await call(client,'diagnose_page',{url:archiveUrl,section:'gsc'});
+  assert.equal(urlFacts.facts.gsc.clicks,13);assert.equal(urlFacts.facts.gsc.url,archiveUrl);
+  const urlComparison=await call(client,'diagnose_page',{url:archiveUrl,section:'comparison'});
+  assert.equal(urlComparison.facts.comparison.delta.clicks,-110);
+  let urlKeywords=await call(client,'diagnose_page',{url:archiveUrl,section:'keywords',limit:50});
+  const urlCursor=urlKeywords.next_cursor, urlWindows=urlKeywords.available_windows.map(w=>w.window), urlRows=[...urlKeywords.items];
+  while(urlKeywords.next_cursor){urlKeywords=await call(client,'diagnose_page',{url:archiveUrl,section:'keywords',limit:50,cursor:urlKeywords.next_cursor});urlRows.push(...urlKeywords.items);}
+  assert.equal(urlRows.length,205);assert.equal(new Set(urlRows.map(r=>r.query)).size,205);
+  const urlCompareArgs={url:archiveUrl,section:'keywords',window:urlWindows[0],compare_to:urlWindows[1],limit:50};
+  let urlKwComparison=await call(client,'diagnose_page',urlCompareArgs);const urlUnion=[...urlKwComparison.items];
+  while(urlKwComparison.next_cursor){urlKwComparison=await call(client,'diagnose_page',{...urlCompareArgs,cursor:urlKwComparison.next_cursor});urlUnion.push(...urlKwComparison.items);}
+  assert.equal(urlUnion.length,206);assert.equal(urlUnion.find(r=>r.query==='alleen eerder').current,null);
+  let urlDaily=await call(client,'diagnose_page',{url:archiveUrl,section:'stability',query:'zoekwoord 001',limit:50});
+  const urlDates=[...urlDaily.items];
+  while(urlDaily.next_cursor){urlDaily=await call(client,'diagnose_page',{url:archiveUrl,section:'stability',query:'zoekwoord 001',limit:50,cursor:urlDaily.next_cursor});urlDates.push(...urlDaily.items);}
+  assert.equal(urlDates.length,90);assert.equal(new Set(urlDates.map(r=>r.date)).size,90);
+  for(const args of [{url:archiveUrl,post_id:1},{url:archiveUrl,section:'metadata'},{url:archiveUrl,section:'index'},
+    {url:archiveUrl,section:'pagespeed'},{url:archiveUrl,refresh:true},{url:'https://fixture.invalid.evil.invalid/',section:'gsc'},
+    {post_id:1,section:'keywords',limit:50,cursor:urlCursor}])
+    assert.equal((await client.callTool({name:'diagnose_page',arguments:args})).isError,true);
   assert.equal((await client.callTool({name:'get_page',arguments:{post_id:1,unknown:'must reject'}})).isError,true);
   assert.equal((await client.callTool({name:'execute_change_set',arguments:{}})).isError,true);
   const legacy=await connect('legacy'); assert.equal((await legacy.listTools()).tools.length,42);
@@ -90,5 +115,5 @@ try {
   const noPreview=await connect('core',config.token,''); await assert.rejects(call(noPreview,'get_capabilities'),/workflow_upgrade_required/);
   const editor=await connect('core',config.editor_token); await assert.rejects(call(editor,'get_capabilities'),/workflow_operator_unavailable/);
   const expired=await connect('core',config.expired_token); await assert.rejects(call(expired,'get_capabilities'),/agent_token_expired/);
-  console.log(`WORKFLOW WORDPRESS E2E OK: real MCP stdio + HTTP + native WP; 205 search results and 205 identical canonical/legacy targets; 12/42 tools, ${surface} core surface chars; unsafe/unavailable calls refused.`);
+  console.log(`WORKFLOW WORDPRESS E2E OK: real MCP stdio + HTTP + native WP; 205 search results/targets, URL analytics with 205 keywords, 206-term union and 90 daily rows; 12/42 tools, ${surface} core surface chars; unsafe/unavailable calls refused.`);
 } finally { for(const client of clients) await client.close(); }

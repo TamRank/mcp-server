@@ -42,6 +42,22 @@ for(const args of [{post_id:1,section:'gsc',query:'x'},{post_id:1,section:'stabi
 }
 assert.equal((await core.get('diagnose_page').h({post_id:1,section:'pagespeed',refresh:true})).isError,true);
 assert.equal(calls.length,0);
+const exactUrl='https://fixture.invalid/category/panels/?q=%2B&color=blue&color=green';
+await core.get('diagnose_page').h({url:exactUrl,section:'keywords',limit:50});
+assert.deepEqual(calls.pop(),{path:'/gsc/diagnosis',query:{url:exactUrl,section:'keywords',limit:50}});
+await core.get('diagnose_page').h({url:exactUrl});
+assert.deepEqual(calls.pop(),{path:'/gsc/diagnosis',query:{url:exactUrl}});
+for(const args of [{},{url:exactUrl,post_id:1},{url:exactUrl,section:'metadata'},{url:exactUrl,section:'content'},
+  {url:exactUrl,section:'index'},{url:exactUrl,section:'pagespeed'},{url:exactUrl,refresh:true},
+  ...['/relative','ftp://fixture.invalid/','https://fixture.invalid/#part','https://user@fixture.invalid/',
+    'https://fixture.invalid/a/%2e%2E/b','https://fixture.invalid/%2fsecret','https://fixture.invalid/%ZZ',
+    'https://fixture.invalid:0/','https://fixture.invalid:65536/','https://fixture.invalid\\evil.invalid/',
+    'https://fixture.invalid/'+ 'é'.repeat(1020)].map(url=>({url}))]) {
+  assert.equal((await core.get('diagnose_page').h(args)).isError,true);assert.equal(calls.length,0);
+}
+for(const caps of [{reads:{diagnose_page:{available:true}}},{reads:{diagnose_page:{available:true,url_target:{available:false}}}}]) {
+  assert.equal((await registry('core',caps).get('diagnose_page').h({url:exactUrl})).isError,true);assert.equal(calls.length,0);
+}
 await core.get('get_work_queue').h({work_id:'automatic:grp_missing_title',section:'targets',limit:50,cursor:'opaque'});
 assert.deepEqual(calls.pop(),{path:'/work-queue/automatic:grp_missing_title',query:{section:'targets',limit:50,cursor:'opaque'}});
 await legacy.get('get_next_action').h({}); assert.equal(calls.pop().query.limit,1);
