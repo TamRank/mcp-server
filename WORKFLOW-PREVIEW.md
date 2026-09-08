@@ -76,7 +76,7 @@ exact replay, stale rights/cache denial, cross-site refusal and late revocation 
 atomic rollback. Request-budget coverage also includes token rotation, separate
 buckets/site ceilings, concurrent processes, failed or altered counter writes,
 connection loss, and actual opt-in uninstall. No provider dispatch or real site
-data is used. External cache/security-plugin compatibility, native receipt integration and live
+data is used. External cache/security-plugin compatibility, receipt-tool integration and live
 activation remain open. Setup and safe cleanup are documented in the PRO document
 linked above; this client test is launched by that harness with synthetic stdin only.
 
@@ -90,14 +90,16 @@ retries a measurement or grants settlement authority. Existing entry points do
 not create this store; no tool accepts the capture option or executes a scan.
 An internal recovery bridge now loads a retained reference, obtains the verified
 server review and explicitly returns the packet for exact settlement. It never
-guesses the signed started hash or repeats a measurement. Six HTTP/private-file/
-SQL chains are verified using a routing/auth/provider fixture; native recovery
-routes and tool mapping remain open. See `SCAN-RECEIPTS.md`.
+guesses the signed started hash or repeats a measurement. Besides the original
+six fixture chains, 12 private-file/internal-client chains now pass against native
+WordPress recovery REST routes in PRO's 686-check HTTP suite. Separate default-off
+recovery routes and bounded request limits are tested; MCP recovery-tool mapping
+and execution capture remain unconnected. See `SCAN-RECEIPTS.md`.
 
 The MCP repository document `SCAN-RECEIPTS.md` (branch `feat/mcp-workflows`) records
 the exact storage boundary, permissions, failure handling and activation gates.
 Test with `node --test test/workflow-scan-receipts.mjs`. This is not a customer
-setup instruction: native routes, recovery/maintenance, safe local provisioning
+setup instruction: explicit MCP recovery orchestration, safe local provisioning
 and cleanup still need integration before activation. The separately gated
 administrative closure is already tested; it does not replace same-user recovery.
 
