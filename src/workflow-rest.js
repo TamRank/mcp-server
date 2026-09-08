@@ -2,6 +2,12 @@
 import { ApiError } from './rest.js';
 import { isScanReceipt } from './scan-receipt-store.js';
 
+// Only bounded operational advice crosses the error boundary; never arbitrary server data.
+export function rateLimitAdvice(data) {
+  if (!data || !Number.isInteger(data.retry_after) || data.retry_after<1 || data.retry_after>3600) return undefined;
+  return {retry_after:data.retry_after,automatic_retry:false};
+}
+
 // Results can embed a settlement receipt in saved history as well as error data.
 // Preserve ordinary analytics, but never expose the private recovery packet.
 function scrubResponse(value, pat) {
@@ -98,7 +104,8 @@ export class WorkflowClient {
         const message = retained ? 'The result was not confirmed as stored. A private recovery receipt was retained locally. Reconcile before any new measurement.'
           : privatePacketPresent ? 'The site returned a private recovery receipt that was not retained. Reconcile the request outcome; do not repeat the measurement.'
           : typeof data.message === 'string' ? data.message.slice(0,500) : 'The site refused this workflow request.';
-        throw new ApiError(response.status, code, message, retained ? { receipt_reference: retained.receipt_reference, receipt_retained: true } : undefined);
+        const advice=response.status===429?rateLimitAdvice(data.data):undefined;
+        throw new ApiError(response.status, code, message, retained ? { receipt_reference: retained.receipt_reference, receipt_retained: true } : advice);
       }
       if (data.contract_version !== 2) throw new ApiError(409, 'workflow_upgrade_required', 'Workflow contract 2 is required. There is no fallback to legacy writers.');
       return scrubResponse(data, requestPat);

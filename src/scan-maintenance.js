@@ -1,5 +1,6 @@
 /** Administrative closure is separate from scan starts and all read tools. */
 import { z } from 'zod';
+import { rateLimitAdvice } from './workflow-rest.js';
 export const scanId=z.string().regex(/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/);
 export const maintenanceAcks=['outcome_remains_unknown','inflight_provider_request_may_continue',
   'release_only_this_reservation_without_retry','preserve_original_results_and_approval'];
@@ -21,6 +22,7 @@ export async function discoverWorkflows(client,{preview=false,profile='core'}={}
       preflight={ok:false,code:'workflow_upgrade_required',message:'This site has not completed V2 compatibility. Enable the explicit development preview; no legacy writer fallback.'};
   } catch(err) {
     preflight={ok:false,code:err.code || 'workflow_unavailable',message:'Workflow connection check failed. Check site, token and readiness, then restart.'};
+    if(err.status===429)preflight={...preflight,message:'Connection check rate-limited. Wait before restarting; no automatic retry.',...rateLimitAdvice(err.data)};
   }
   if(preview && profile==='specialist' && (preflight.ok || preflight.code==='pro_required')) {
     try {
@@ -30,7 +32,12 @@ export async function discoverWorkflows(client,{preview=false,profile='core'}={}
         capabilities=maintenanceOnly?maintenance:{...capabilities,scan_maintenance:maintenance.scan_maintenance};
         preflight={ok:true};
       }
-    } catch { /* Optional maintenance never masks failed primary authentication. */ }
+    } catch(err) {
+      // Report maintenance throttling instead of asking an unpaid administrator to buy access.
+      // A successful primary lane stays available; auth/network failures never gain access.
+      if(!preflight.ok && preflight.code==='pro_required' && err.status===429)
+        preflight={ok:false,code:'scan_maintenance_rate_limit',message:'Administrative maintenance is rate-limited. Wait before restarting; no automatic retry.',...rateLimitAdvice(err.data)};
+    }
   }
   return {capabilities,preflight,maintenanceOnly};
 }
