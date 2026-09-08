@@ -114,7 +114,7 @@ try {
   const query=await connect('core',config.token,'1','query'); assert.equal((await call(query,'search_pages',{limit:1})).total,205);
   const noPreview=await connect('core',config.token,''); await assert.rejects(call(noPreview,'get_capabilities'),/workflow_upgrade_required/);
   const specialist=await connect('specialist');const specialistListing=await specialist.listTools();
-  assert.equal(specialistListing.tools.length,19);
+  assert.equal(specialistListing.tools.length,20);
   const specialistSurface=JSON.stringify(specialistListing).length;assert.ok(specialistSurface<16000);
   assert.equal(caps.specialist_reads.get_gsc_pages.available,true);
   const discovered=[];let discovery=await call(specialist,'get_gsc_pages',{limit:50});const discoveryCursor=discovery.next_cursor;

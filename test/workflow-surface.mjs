@@ -9,7 +9,7 @@ const fake = { get: async (path, query) => { calls.push({ path, query }); return
   post: async (path,body) => { calls.push({path,body}); return {contract_version:2,website_changed:false}; } };
 function registry(profile,capabilities=null) { const tools = new Map(); registerWorkflowTools({ registerTool: (n,c,h) => tools.set(n,{c,h}) },fake,{profile,capabilities}); return tools; }
 const core = registry('core'), legacy = registry('legacy'), specialist = registry('specialist');
-assert.equal(core.size,12); assert.equal(legacy.size,42); assert.equal(specialist.size,19);
+assert.equal(core.size,12); assert.equal(legacy.size,42); assert.equal(specialist.size,20);
 assert.ok(WORKFLOW_INSTRUCTIONS.length<1500);
 assert.equal(core.has('get_gsc_pages'),false);
 await specialist.get('get_gsc_pages').h({q:'/category/?x=%2B',order:'impressions_desc',period:28,limit:50,cursor:'opaque'});
@@ -275,5 +275,5 @@ try {
   await assert.rejects(client.get('/echo-error'),e=>e.code==='workflow_request_failed'&&!e.message.includes('fixture-not-a-real-token')&&e.message.length<=500);
   await assert.rejects(new WorkflowClient({siteUrl:base,pat:'fixture',timeoutMs:100}).get('/slow'),e=>e.code==='timeout');
   for(const siteUrl of ['http://real-site.invalid','https://user:pass@site.invalid','https://site.invalid/?key=secret']) assert.throws(()=>new WorkflowClient({siteUrl,pat:'fixture'}));
-  console.log('WORKFLOW SURFACE OK: 12/19/42 profiles, gated research/manual administration, unavailable website writers, strict inputs, full-target mapping, bounded HTTP/timeout/redirect protection.');
+  console.log('WORKFLOW SURFACE OK: 12/20/42 profiles, gated research/manual administration, unavailable website writers, strict inputs, full-target mapping, bounded HTTP/timeout/redirect protection.');
 } finally { server.closeAllConnections(); await new Promise(resolve=>server.close(resolve)); }

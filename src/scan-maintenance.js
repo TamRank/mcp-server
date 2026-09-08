@@ -1,0 +1,36 @@
+/** Administrative closure is separate from scan starts and all read tools. */
+import { z } from 'zod';
+export const scanId=z.string().regex(/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/);
+export const maintenanceAcks=['outcome_remains_unknown','inflight_provider_request_may_continue',
+  'release_only_this_reservation_without_retry','preserve_original_results_and_approval'];
+const hash=z.string().regex(/^[a-f0-9]{64}$/);
+const text=bytes=>z.string().min(1).max(bytes).refine(v=>v.trim().length>0 && Buffer.byteLength(v,'utf8')<=bytes && !/[\x00-\x1f\x7f<>]/.test(v));
+export const closeScanSchema={execution_id:scanId,client_request_id:z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/),
+  expected_runtime_hash:hash,confirmation:z.object({mode:z.literal('chat_attested'),review_hash:hash,confirmed:z.literal(true),
+    client:z.object({name:text(80),version:text(40).nullable()}).strict(),agent:z.object({name:text(80)}).strict(),
+    acknowledgements:z.array(z.string()).length(4).refine(v=>v.every((item,i)=>item===maintenanceAcks[i]))}).strict()};
+
+/** Only explicit development/specialist mode may discover this separate lane.
+ * A licence denial may enter maintenance-only mode; auth/network failures may not.
+ */
+export async function discoverWorkflows(client,{preview=false,profile='core'}={}) {
+  let capabilities=null,preflight={ok:true},maintenanceOnly=false;
+  try {
+    capabilities=await client.get('/capabilities');
+    if(capabilities.full_v2_compatible!==true && !preview)
+      preflight={ok:false,code:'workflow_upgrade_required',message:'This site has not completed V2 compatibility. Enable the explicit development preview; no legacy writer fallback.'};
+  } catch(err) {
+    preflight={ok:false,code:err.code || 'workflow_unavailable',message:'Workflow connection check failed. Check site, token and readiness, then restart.'};
+  }
+  if(preview && profile==='specialist' && (preflight.ok || preflight.code==='pro_required')) {
+    try {
+      const maintenance=await client.get('/scans/maintenance/capabilities');
+      if(maintenance.scan_maintenance?.read_available===true) {
+        maintenanceOnly=!preflight.ok;
+        capabilities=maintenanceOnly?maintenance:{...capabilities,scan_maintenance:maintenance.scan_maintenance};
+        preflight={ok:true};
+      }
+    } catch { /* Optional maintenance never masks failed primary authentication. */ }
+  }
+  return {capabilities,preflight,maintenanceOnly};
+}

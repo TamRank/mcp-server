@@ -31,7 +31,7 @@ try {
   assert.equal(packed.name,pkg.name);assert.equal(packed.version,pkg.version);
   assert.equal(packed.filename,packed.filename.split('/').pop());
   const paths=packed.files.map(f=>f.path);
-  for(const p of ['index.js','index-workflow.js','src/workflow-tools.js','src/workflow-rest.js','WORKFLOW-PREVIEW.md','package.json'])assert.ok(paths.includes(p),`Missing packed ${p}`);
+  for(const p of ['index.js','index-workflow.js','src/workflow-tools.js','src/workflow-rest.js','src/scan-maintenance.js','WORKFLOW-PREVIEW.md','package.json'])assert.ok(paths.includes(p),`Missing packed ${p}`);
   assert.ok(paths.every(p=>!p.split('/').some(s=>s==='..' || s.startsWith('.')) && !/^(?:test|node_modules|docs)\//.test(p)), 'No test fixtures, credentials or hidden configuration in package');
   await run('tar',['-xzf',join(scratch,packed.filename),'-C',scratch],{timeout:10000});
   const installed=join(scratch,'package');
@@ -58,7 +58,7 @@ try {
     const url=new URL(req.url,'http://127.0.0.1');
     const route=url.searchParams.get('rest_route') || url.pathname.replace('/wp-json','');
     assert.ok(['/tamrank/v2/capabilities','/tamrank/v2/site/context','/tamrank/v2/site/diagnostics','/tamrank/v2/scans/status','/tamrank/v2/scans/preview',
-      '/tamrank/v2/scans/proposals','/tamrank/v2/scans/proposals/'+proposalId].includes(route),'No legacy REST fallback');
+      '/tamrank/v2/scans/proposals','/tamrank/v2/scans/proposals/'+proposalId,'/tamrank/v2/scans/maintenance/capabilities'].includes(route),'No legacy REST fallback');
     if(route==='/tamrank/v2/scans/proposals') {
       assert.equal(req.method,'POST');let body='';for await(const chunk of req)body+=chunk;
       assert.deepEqual(JSON.parse(body),{type:'pagespeed',post_ids:[205,1],expected_revision:'a'.repeat(64),client_request_id:'package-scan-draft-0001'});
@@ -80,7 +80,7 @@ try {
     const client=new Client({name:'tamrank-package-fixture',version:'1.0.0'});
     try {
       await client.connect(transport);
-      const listed=await client.listTools();assert.equal(listed.tools.length,{core:12,specialist:19,legacy:42}[profile]);
+      const listed=await client.listTools();assert.equal(listed.tools.length,{core:12,specialist:20,legacy:42}[profile]);
       assert.ok(!JSON.stringify(listed).includes(pat));assert.ok(!(client.getInstructions() || '').includes(pat));
       let n=requests.length;
       const blocked=await client.callTool({name:profile==='legacy'?'update_meta':'execute_change_set',arguments:{}});
@@ -105,7 +105,7 @@ try {
   for(const profile of ['core','specialist','legacy'])for(const style of ['pretty','query'])await session(profile,style);
   await session('core','pretty',false);
   assert.deepEqual(await Promise.all(['package.json','package-lock.json','index.js'].map(p=>readFile(join(root,p),'utf8'))),before,'Packaging must not modify source manifest, lock or shipped entry');
-  console.log(`WORKFLOW PACKAGE OK: extracted tarball with ${online?'clean-cache':'offline'} npm ci using repository lock; installed entry, 12/19/42 profiles, both REST forms, scan preview/private draft mapping; website writes and scan execution unavailable. Source and active installation untouched; unconstrained registry resolution untested.`);
+  console.log(`WORKFLOW PACKAGE OK: extracted tarball with ${online?'clean-cache':'offline'} npm ci using repository lock; installed entry, 12/20/42 profiles, both REST forms, scan preview/private draft mapping; website writes and scan execution unavailable. Source and active installation untouched; unconstrained registry resolution untested.`);
 } finally {
   if(server)await new Promise(resolve=>server.close(resolve));
   // Only the exact directory created by this test; never a supplied path or a parent.
