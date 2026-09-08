@@ -1,12 +1,13 @@
 # Phase 4B — private local recovery receipts
 
 Status, 8 September 2026: local receipt storage and an opt-in transport capture
-hook are implemented and tested. They are **not wired into an entry point or
-scan execution tool**. Default clients do not create files. Phase 4 remains open.
+hook and an internal receipt-review/recovery bridge are implemented and tested.
+They are **not wired into an entry point or scan execution tool**. Default clients
+do not create files. Native routes/auth and Phase 4 remain open.
 
 Source: MCP repository, branch `feat/mcp-workflows`,
-`src/scan-receipt-store.js`, `src/workflow-rest.js`,
-`test/workflow-scan-receipts.mjs`.
+`src/scan-receipt-store.js`, `src/workflow-rest.js`, `src/scan-receipt-recovery.js`,
+`test/workflow-scan-receipts.mjs`, `test/workflow-scan-receipt-recovery.mjs`.
 Server contract: PRO repository, same branch,
 `docs/mcp-phase4b-scan-settlement.md`.
 
@@ -23,7 +24,8 @@ the configured site URL (including the WordPress subdirectory), execution ID,
 measurement ID, original request ID and original expected runtime hash.
 The latter is the **pre-start attempt hash**, not the signed started-runtime hash
 required for server settlement. No implicit conversion or invented settlement
-input is made here.
+input is made here. The internal recovery bridge asks WordPress to authenticate
+the packet and supply the signed started hash; it never decodes it into authority.
 
 After a non-success JSON response with `data.result_receipt` and
 `receipt_contains_private_result: true`, retain the exact bounded packet before
@@ -91,10 +93,29 @@ enabled is withheld with an explicit not-retained message. External HTTP filters
 host tracing/debuggers or arbitrary caller logging of the internal loaded record
 are not controlled by this module.
 
-No redirect forwarding, HTTP retry, automatic dispatch, result settlement or
-claim release was added. Missing receipts, timeouts, bad JSON and uncertain
-transport stay uncertain. A known stored result must still be read back privately
-and settlement must use the server's existing exact-proof/current-authority checks.
+Capture adds no redirect forwarding, HTTP retry, automatic dispatch or settlement.
+Missing receipts, timeouts, bad JSON and uncertain transport stay uncertain.
+
+## Internal review and explicit recovery bridge
+
+`ScanReceiptRecovery` loads a reference privately for a fixed site/execution and
+requests an authenticated server review of the original attempt/packet pair.
+It returns only bounded known-result details, remaining-device count, the correct
+signed started hash and a local review hash; never the packet. Changed version,
+outcome or remainder requires a new review. Observation time alone does not.
+
+An explicit `settle()` call requires that exact review hash and `confirmed: true`.
+The latter is a client assertion, not independently verified human approval.
+It reloads and reviews again before sending the existing exact settlement input.
+Already-recorded or already-settled results return a read-only no-op. Unexpected
+responses remain uncertain, with no automatic retry, remeasurement or file deletion.
+The server still enforces same-user rights and exact history atomically.
+
+The library targets `/scans/recovery/{id}/receipt-review` and `/scans/recovery/{id}/settle`.
+These paths are **not registered natively yet**; current integration tests use a
+loopback adapter to real PHP/SQL methods. No MCP tool accepts a packet or calls the
+bridge. Full contract: PRO repository, branch `feat/mcp-workflows`,
+`docs/mcp-phase4b-scan-receipt-reconciliation.md`.
 
 ## Remaining decisions and integration
 
@@ -102,11 +123,11 @@ Timeouts without evidence cannot be settled as known results. Age alone is not
 proof of worker death or permission to free a claim. A subsequent product decision
 allows explicit current-admin abandonment with an unknown outcome and separate
 chat consent: PRO repository, branch `feat/mcp-workflows`,
-`docs/mcp-phase4b-scan-maintenance.md`. That internal disabled path does not change
-this receipt store's authority or connect a native maintenance tool.
+`docs/mcp-phase4b-scan-maintenance.md`. That separately gated path now has native
+REST/MCP verification and traffic limits; it does not grant this recovery authority.
 
-Before activation: connect native PAT/REST/MCP orchestration to the capture/load
-hook, provision the private directory safely, resolve maintenance and cleanup,
+Before activation: connect native PAT/REST/MCP orchestration to the capture/load/
+review/settlement bridge, provision the private directory safely, finish cleanup,
 verify full WordPress/provider behavior, and finish privacy/export/erasure and
 coordinated rollout. No public approve-now/start-later operation is introduced.
 
@@ -119,7 +140,14 @@ concurrent saves, injected write/directory-sync failures, passive no-write reads
 transport capture/redaction, immutable outgoing context and no HTTP retries.
 HTTP/auth/provider responses are synthetic; no real account or Google call.
 
-Existing 12/19/42 workflow profiles and legacy 42-tool surface remain unchanged.
+`node --test test/workflow-scan-receipt-recovery.mjs`: eight scenarios (nine TAP
+tests with the parent). PRO's receipt-review SQL harness launches
+`test/workflow-scan-receipt-chain.mjs`: six real HTTP/private-file/server-HMAC/SQL
+chains, with synthetic routing/auth/provider. Failed storage, lost ordinary commit
+acknowledgement and lost settlement acknowledgement all reconcile without another
+measurement. No real provider or full WordPress recovery bootstrap is claimed.
+
+Current 12/20/42 workflow profiles and legacy 42-tool surface remain unchanged.
 The extracted package also passed a clean-cache dependency installation with the
 repository lock and install scripts disabled, including both REST forms and all
 three installed profiles. No active/global installation or version change.

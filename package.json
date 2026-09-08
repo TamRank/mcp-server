@@ -14,6 +14,7 @@
     "assets/",
     "README.md",
     "WORKFLOW-PREVIEW.md",
+    "SCAN-RECEIPTS.md",
     "LICENSE"
   ],
   "scripts": {
