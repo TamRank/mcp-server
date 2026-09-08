@@ -88,7 +88,7 @@ for(const name of ['start_scan']) {
 const scanPreview={mode:'preview',type:'pagespeed',post_ids:[205,1],expected_revision:'a'.repeat(64)};
 await specialist.get('start_scan').h(scanPreview);
 assert.deepEqual(calls.pop(),{path:'/scans/preview',query:{type:'pagespeed',post_ids:'205,1',expected_revision:scanPreview.expected_revision}});
-assert.equal(specialist.get('start_scan').c.annotations.readOnlyHint,true);
+assert.equal(specialist.get('start_scan').c.annotations.readOnlyHint,false); // Mixed tool can persist an explicit draft.
 assert.equal(specialist.get('start_scan').c.annotations.destructiveHint,false);
 for(const args of [{...scanPreview,mode:'execute'},{...scanPreview,type:'index'},{...scanPreview,force:true},
   {...scanPreview,post_ids:[]},{...scanPreview,post_ids:[1,1]},{...scanPreview,post_ids:'1,2'},
@@ -103,6 +103,28 @@ for(const caps of [{},{specialist_reads:{start_scan:{available:false,modes:['pre
 }
 await registry('specialist',{specialist_reads:{start_scan:{available:true,modes:['preview']}}}).get('start_scan').h(scanPreview);
 assert.equal(calls.pop().path,'/scans/preview');
+const scanPlan={...scanPreview,mode:'plan',client_request_id:'scan-plan-fixture-0001'};
+const draftCaps={scan_proposals:{available:true,read_available:true,modes:['plan']}};
+const drafts=registry('specialist',draftCaps);
+await drafts.get('start_scan').h(scanPlan);
+const {mode:ignoredMode,...planBody}=scanPlan;
+assert.deepEqual(calls.pop(),{path:'/scans/proposals',body:planBody});
+for(const caps of [null,{}, {scan_proposals:{available:false,modes:['plan']}},
+  {scan_proposals:{available:true,modes:'plan'}},{scan_proposals:{available:true,modes:['execute']}}]) {
+  assert.equal((await registry('specialist',caps).get('start_scan').h(scanPlan)).isError,true);assert.equal(calls.length,0);
+}
+for(const args of [{...scanPlan,client_request_id:undefined},{...scanPlan,expected_revision:undefined},
+  {...scanPreview,client_request_id:scanPlan.client_request_id},{...scanPlan,confirmed:true},{...scanPlan,operator_id:1}]) {
+  assert.equal((await drafts.get('start_scan').h(args)).isError,true);assert.equal(calls.length,0);
+}
+const proposalId='aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+await drafts.get('get_scan_status').h({proposal_id:proposalId});
+assert.deepEqual(calls.pop(),{path:'/scans/proposals/'+proposalId,query:{}});
+for(const args of [{proposal_id:proposalId,type:'pagespeed'},{proposal_id:proposalId,expected_ref:'stored:'+'a'.repeat(32)},
+  {proposal_id:'../capabilities'},{proposal_id:proposalId,approve:true}]) {
+  assert.equal((await drafts.get('get_scan_status').h(args)).isError,true);assert.equal(calls.length,0);
+}
+assert.equal((await specialist.get('get_scan_status').h({proposal_id:proposalId})).isError,true);assert.equal(calls.length,0);
 for(const name of ['start_index_scan','start_pagespeed_scan']) {
   assert.equal((await legacy.get(name).h(scanPreview)).isError,true);assert.equal(calls.length,0);
 }

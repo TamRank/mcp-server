@@ -97,7 +97,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   const register = (name, def, canonical = name, deprecated = false) => {
     const schema = z.object(def.schema).strict();
     server.registerTool(name, { description: def.description, inputSchema: schema,
-      annotations: { readOnlyHint: Boolean(def.path) && !def.write, destructiveHint: Boolean(def.write) || !def.path, idempotentHint: Boolean(def.path), openWorldHint: false } }, async input => {
+      annotations: { readOnlyHint: Boolean(def.path) && !def.write && !def.scanPlan, destructiveHint: Boolean(def.write) || !def.path, idempotentHint: Boolean(def.path), openWorldHint: false } }, async input => {
       if (!preflight.ok) return failure(preflight.code || 'workflow_unavailable', preflight.message || 'Workflow startup refused; restart after correcting the configuration.');
       const parsed = schema.safeParse(input || {});
       if (!parsed.success || (def.validate && !def.validate(parsed.data))) return failure('invalid_request','Invalid or unknown tool arguments; nothing was sent.');
@@ -106,11 +106,18 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       if (canonical==='diagnose_page' && parsed.data.url!==undefined && capabilities
         && capabilities.reads?.diagnose_page?.url_target?.available!==true)
         return failure('workflow_operation_unavailable','URL analytics are not available in this site preview. No request was sent.');
-      if (def.specialist && capabilities && capabilities.specialist_reads?.[canonical]?.available!==true)
+      const scanPlan=def.scanPlan && parsed.data.mode==='plan';
+      const proposalRead=canonical==='get_scan_status' && parsed.data.proposal_id!==undefined;
+      if (def.specialist && !scanPlan && !proposalRead && capabilities && capabilities.specialist_reads?.[canonical]?.available!==true)
         return failure('workflow_operation_unavailable','This specialist read is unavailable on this site. No request was sent.');
-      if (canonical==='start_scan' && capabilities && (!Array.isArray(capabilities.specialist_reads?.start_scan?.modes)
+      if (canonical==='start_scan' && !scanPlan && capabilities && (!Array.isArray(capabilities.specialist_reads?.start_scan?.modes)
         || !capabilities.specialist_reads.start_scan.modes.includes('preview')))
         return failure('workflow_operation_unavailable','Scan preview is unavailable on this site. No request was sent.');
+      if (scanPlan && (capabilities?.scan_proposals?.available!==true || !Array.isArray(capabilities.scan_proposals.modes)
+        || !capabilities.scan_proposals.modes.includes('plan')))
+        return failure('workflow_operation_unavailable','Private scan planning requires explicit site support and scans:plan. Nothing was sent.');
+      if (proposalRead && capabilities?.scan_proposals?.read_available!==true)
+        return failure('workflow_operation_unavailable','Private scan proposals are unavailable for this token. Nothing was sent.');
       if (def.write && (capabilities?.work_administration?.available !== true || !capabilities.work_administration.operations?.includes(parsed.data.operation))) {
         return failure('workflow_operation_unavailable','Work administration is unavailable or this token lacks the operation-specific permission. No mutation was sent.');
       }
@@ -123,7 +130,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       try {
         const args = def.query ? def.query(parsed.data) : parsed.data;
         const path=def.path(parsed.data);
-        const data = def.write ? await client.post(path,args) : await client.get(path, strip(args, def.omit || []));
+        const data = def.write || scanPlan ? await client.post(path,args) : await client.get(path, strip(args, def.omit || []));
         return result(deprecated ? { deprecated: true, replacement: canonical, remove_in: '0.5.0', data } : data);
       } catch (err) { return failure(typeof err.code === 'string' ? err.code : 'workflow_request_failed', err.status ? `Site refused the request (${err.status}). ${err.message}` : err.message); }
     });
@@ -177,13 +184,18 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       specialist:true,path:()=>'/site/topical-authority',schema:{section:z.enum(['overview','clusters','pages','topics','gaps','recommendations']).optional(),cluster:z.number().int().min(1).max(10000).optional(),...paging},
       validate:a=>(a.section || 'overview')==='overview'?Object.keys(a).every(k=>k==='section'):['pages','topics'].includes(a.section)?a.cluster!==undefined:a.cluster===undefined,
     }:name==='get_scan_status'?{
-      description:'Passive stored index/PageSpeed job state only. Optional expected_ref binds the returned opaque scan_ref. No backend poll, queue nudge, credit spend or result sync. No recorded job does not mean completed; index progress is unknown. Live polling and starting scans remain unavailable.',
-      specialist:true,path:()=>'/scans/status',schema:{type:z.enum(['index','pagespeed']),expected_ref:z.string().regex(/^stored:[a-f0-9]{32}$/).optional()},
+      description:'Read a private historical draft with proposal_id only, or stored job state with type and optional expected_ref. Drafts require the issuing token and scans:plan. No poll, start or approval. Missing jobs are not completed; index progress is unknown.',
+      specialist:true,path:a=>a.proposal_id?'/scans/proposals/'+a.proposal_id:'/scans/status',omit:['proposal_id'],
+      schema:{type:z.enum(['index','pagespeed']).optional(),expected_ref:z.string().regex(/^stored:[a-f0-9]{32}$/).optional(),
+        proposal_id:z.string().regex(/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/).optional()},
+      validate:a=>a.proposal_id!==undefined?Object.keys(a).length===1:a.type!==undefined,
     }:{
-      description:'PageSpeed preview only: exact 1–25 published post IDs, URLs, queue/key readiness and unknown quota/cost. No stored plan, approval token, scan, refresh or provider call. Revision checks current context only. Execution/index scans remain unavailable.',
-      specialist:true,path:()=>'/scans/preview',schema:{mode:z.literal('preview'),type:z.literal('pagespeed'),
-        post_ids:z.array(pageId).min(1).max(25).refine(ids=>new Set(ids).size===ids.length),expected_revision:z.string().regex(/^[a-f0-9]{64}$/).optional()},
-      query:a=>({...strip(a,['mode']),post_ids:a.post_ids.join(',')}),
+      description:'PageSpeed: preview exact 1–25 post IDs without writes. plan stores a 24h private draft; needs preview expected_revision, client_request_id and scans:plan. Show all targets/budget/warnings. Retry uncertain storage with identical input/ID. No approval, provider call or execution.',
+      specialist:true,scanPlan:true,path:a=>a.mode==='plan'?'/scans/proposals':'/scans/preview',schema:{mode:z.enum(['preview','plan']),type:z.literal('pagespeed'),
+        post_ids:z.array(pageId).min(1).max(25).refine(ids=>new Set(ids).size===ids.length),expected_revision:z.string().regex(/^[a-f0-9]{64}$/).optional(),
+        client_request_id:z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/).optional()},
+      validate:a=>a.mode==='plan'?a.expected_revision!==undefined && a.client_request_id!==undefined:a.client_request_id===undefined,
+      query:a=>a.mode==='plan'?strip(a,['mode']):({...strip(a,['mode']),post_ids:a.post_ids.join(',')}),
     });
   }
 }

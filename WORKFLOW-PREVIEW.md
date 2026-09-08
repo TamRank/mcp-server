@@ -25,7 +25,7 @@ Both require the exact operation to be advertised in server capabilities.
 Six optional specialists are connected: `get_gsc_pages`, `get_redirects`,
 `get_images_missing_alt`, `get_site_diagnostics`, `get_topical_authority` and
 passive `get_scan_status`, as described below. `start_scan` additionally supports
-explicit PageSpeed preview only, never execution.
+explicit PageSpeed preview and separately authorised private drafts, never execution.
 The remaining four core names refuse requests; their presence is not a working
 website-write/history implementation. Actual scan execution and Phase 4 remain open.
 
@@ -246,9 +246,42 @@ There is no `execute` mode, index scan, force override, implicit refresh or remo
 request. `execution_enabled` and `plan_persisted` remain false. Never interpret
 this read as user approval, and never fall back to legacy start commands.
 
-Actual execution needs durable exact proposals, explicit chat approval, a shared
+Actual execution still needs explicit chat approval, a shared
 atomic reservation for every queue writer, enforced budgets and uncertain-outcome
 reconciliation. See PRO `docs/mcp-phase4b-scan-preview.md` for the next job steps.
+
+## Private scan proposals
+
+After reviewing the preview, `start_scan({mode:"plan", type:"pagespeed",
+post_ids:[205,1], expected_revision:preview.preview_revision,
+client_request_id:"my-unique-request-0001"})` persists an immutable 24-hour draft.
+It requires `scan_proposals.available === true`, an actual `modes` array containing
+`plan`, and a current administrator-owned PRO PAT with `site:read` plus explicit
+`scans:plan`. This scope is not implied by legacy wildcards or `index:write` and
+grants no approval/execution. The server must separately enable
+`TAMRANK_WORKFLOW_SCAN_PROPOSALS_ENABLED` and explicitly install storage/identity.
+No active configuration is changed by this development increment.
+
+MCP strips `mode` and POSTs only the four exact fields to `/scans/proposals`.
+Show every frozen target, warnings and budget: one attempt per device, no automatic
+retry, unknown provider quota/money. No provider call or job is started. Retry an
+uncertain storage response only with the identical request ID and payload; it
+returns the original proposal without refreshing targets or extending expiry.
+
+Read it with `get_scan_status({proposal_id:result.proposal_id})`; no `type` or
+`expected_ref` is allowed in that request. Requires `scan_proposals.read_available`
+and the original issuing token/current administrator/site. Rotated tokens need
+a new draft. This is historical private context, not fresh diagnosis or execution
+authority. A changed page/key does not rewrite the proposal; future execution must
+revalidate. No transcript, approval record, queue reservation or execute mode exists.
+Because `start_scan` has a storage mode, its tool-wide `readOnlyHint` is false;
+preview remains read-only. The specialist profile still has 19 tools, currently
+15,810/16,000 tools/list characters. Storage retention/privacy and activation remain open.
+
+Verification: new PRO fixture includes 107 native PAT/HTTP/bootstrap checks and
+46 explicit-scope checks, plus `test/workflow-scan-proposal-wordpress.mjs` through
+real MCP→HTTP→WordPress in both REST styles. Extracted-package/locked clean-cache
+installation tests also cover draft mapping; no publication or global installation.
 
 ## Task administration
 

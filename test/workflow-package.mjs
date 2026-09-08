@@ -50,13 +50,19 @@ try {
   const capabilities={contract_version:2,full_v2_compatible:false,execution_enabled:false,
     reads:{get_site_context:{available:true}},specialist_reads:Object.fromEntries(specialists.map(name=>[name,{available:true}]))};
   capabilities.specialist_reads.start_scan={available:true,modes:['preview'],execution_enabled:false};
-  server=createServer((req,res)=>{
+  capabilities.scan_proposals={available:true,read_available:true,modes:['plan'],execution_enabled:false};
+  const proposalId='aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  server=createServer(async(req,res)=>{
     requests.push({method:req.method,url:req.url});
-    assert.equal(req.method,'GET','No writer or implicit POST during package test');
     assert.equal(req.headers.authorization,'Bearer '+pat);
     const url=new URL(req.url,'http://127.0.0.1');
     const route=url.searchParams.get('rest_route') || url.pathname.replace('/wp-json','');
-    assert.ok(['/tamrank/v2/capabilities','/tamrank/v2/site/context','/tamrank/v2/site/diagnostics','/tamrank/v2/scans/status','/tamrank/v2/scans/preview'].includes(route),'No legacy REST fallback');
+    assert.ok(['/tamrank/v2/capabilities','/tamrank/v2/site/context','/tamrank/v2/site/diagnostics','/tamrank/v2/scans/status','/tamrank/v2/scans/preview',
+      '/tamrank/v2/scans/proposals','/tamrank/v2/scans/proposals/'+proposalId].includes(route),'No legacy REST fallback');
+    if(route==='/tamrank/v2/scans/proposals') {
+      assert.equal(req.method,'POST');let body='';for await(const chunk of req)body+=chunk;
+      assert.deepEqual(JSON.parse(body),{type:'pagespeed',post_ids:[205,1],expected_revision:'a'.repeat(64),client_request_id:'package-scan-draft-0001'});
+    } else assert.equal(req.method,'GET','Only explicit draft storage may POST');
     if(route.endsWith('/scans/preview')) {
       assert.equal(url.searchParams.get('type'),'pagespeed');assert.equal(url.searchParams.get('post_ids'),'205,1');
       assert.equal(url.searchParams.has('mode'),false);
@@ -87,6 +93,9 @@ try {
           assert.ok(!(await client.callTool({name:'get_site_diagnostics',arguments:{section:'metadata',limit:50}})).isError);
           assert.ok(!(await client.callTool({name:'get_scan_status',arguments:{type:'index'}})).isError);
           assert.ok(!(await client.callTool({name:'start_scan',arguments:{mode:'preview',type:'pagespeed',post_ids:[205,1]}})).isError);
+          assert.ok(!(await client.callTool({name:'start_scan',arguments:{mode:'plan',type:'pagespeed',post_ids:[205,1],
+            expected_revision:'a'.repeat(64),client_request_id:'package-scan-draft-0001'}})).isError);
+          assert.ok(!(await client.callTool({name:'get_scan_status',arguments:{proposal_id:proposalId}})).isError);
           n=requests.length;assert.equal((await client.callTool({name:'start_scan',arguments:{}})).isError,true);assert.equal(requests.length,n);
         }
       }
@@ -96,7 +105,7 @@ try {
   for(const profile of ['core','specialist','legacy'])for(const style of ['pretty','query'])await session(profile,style);
   await session('core','pretty',false);
   assert.deepEqual(await Promise.all(['package.json','package-lock.json','index.js'].map(p=>readFile(join(root,p),'utf8'))),before,'Packaging must not modify source manifest, lock or shipped entry');
-  console.log(`WORKFLOW PACKAGE OK: extracted tarball with ${online?'clean-cache':'offline'} npm ci using repository lock; installed dependencies/entry, 12/19/42 profiles, both REST forms, read-only scan preview, unavailable writes/scan execution; source and active installation untouched. Fresh unconstrained registry resolution remains untested.`);
+  console.log(`WORKFLOW PACKAGE OK: extracted tarball with ${online?'clean-cache':'offline'} npm ci using repository lock; installed entry, 12/19/42 profiles, both REST forms, scan preview/private draft mapping; website writes and scan execution unavailable. Source and active installation untouched; unconstrained registry resolution untested.`);
 } finally {
   if(server)await new Promise(resolve=>server.close(resolve));
   // Only the exact directory created by this test; never a supplied path or a parent.
