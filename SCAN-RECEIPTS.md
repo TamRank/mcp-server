@@ -3,7 +3,8 @@
 Status, 8 September 2026: local receipt storage and an opt-in transport capture
 hook and an internal receipt-review/recovery bridge are implemented and tested.
 They are **not wired into an entry point or scan execution tool**. Default clients
-do not create files. Native routes/auth and Phase 4 remain open.
+do not create files. Native server authority is separately tested in WordPress;
+public recovery routes, entry-point integration and Phase 4 remain open.
 
 Source: MCP repository, branch `feat/mcp-workflows`,
 `src/scan-receipt-store.js`, `src/workflow-rest.js`, `src/scan-receipt-recovery.js`,
@@ -126,7 +127,7 @@ chat consent: PRO repository, branch `feat/mcp-workflows`,
 `docs/mcp-phase4b-scan-maintenance.md`. That separately gated path now has native
 REST/MCP verification and traffic limits; it does not grant this recovery authority.
 
-Before activation: connect native PAT/REST/MCP orchestration to the capture/load/
+Before activation: connect the tested native PAT authority and gated REST/MCP orchestration to the capture/load/
 review/settlement bridge, provision the private directory safely, finish cleanup,
 verify full WordPress/provider behavior, and finish privacy/export/erasure and
 coordinated rollout. No public approve-now/start-later operation is introduced.
@@ -145,7 +146,14 @@ tests with the parent). PRO's receipt-review SQL harness launches
 `test/workflow-scan-receipt-chain.mjs`: six real HTTP/private-file/server-HMAC/SQL
 chains, with synthetic routing/auth/provider. Failed storage, lost ordinary commit
 acknowledgement and lost settlement acknowledgement all reconcile without another
-measurement. No real provider or full WordPress recovery bootstrap is claimed.
+measurement. Those HTTP fixture chains do not certify native WordPress routing.
+
+PRO's `docs/mcp-phase4b-scan-recovery-native-wordpress.mjs` additionally passes 305
+native WordPress PAT/admin/locally stored PRO checks with passive receipt review
+and atomic settlement, including same-user rotation, other-client/user refusal
+and late revocation rollback. No recovery HTTP route or MCP-tool mapping is added.
+Results are synthetic and no real provider is called. Server authority contract:
+PRO repository, branch `feat/mcp-workflows`, `docs/mcp-phase4b-scan-recovery.md`.
 
 Current 12/20/42 workflow profiles and legacy 42-tool surface remain unchanged.
 The extracted package also passed a clean-cache dependency installation with the
