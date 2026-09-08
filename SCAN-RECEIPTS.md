@@ -98,10 +98,12 @@ and settlement must use the server's existing exact-proof/current-authority chec
 
 ## Remaining decisions and integration
 
-Timeouts without evidence and loss of the original user's administrator/PRO access
-remain blocked under the current contract. Age alone is not proof of worker death
-or permission to free a claim. Cross-user administrative abandonment is a separate
-product/authority choice, not implemented or approved by this storage increment.
+Timeouts without evidence cannot be settled as known results. Age alone is not
+proof of worker death or permission to free a claim. A subsequent product decision
+allows explicit current-admin abandonment with an unknown outcome and separate
+chat consent: PRO repository, branch `feat/mcp-workflows`,
+`docs/mcp-phase4b-scan-maintenance.md`. That internal disabled path does not change
+this receipt store's authority or connect a native maintenance tool.
 
 Before activation: connect native PAT/REST/MCP orchestration to the capture/load
 hook, provision the private directory safely, resolve maintenance and cleanup,
