@@ -16,7 +16,7 @@ The plugin must expose contract 2. Incomplete compatibility is refused unless
 FREE/PRO branches require their server-side read flag; a client cannot enable it.
 Do not enable this preview on customer sites yet.
 
-`TAMRANK_TOOL_PROFILE` is `core` (default, 12 names), `specialist` (19 names), or
+`TAMRANK_TOOL_PROFILE` is `core` (default, 12 names), `specialist` (20 names), or
 `legacy` (42 old names, opt-in for the planned 0.4.x minor only). Seven core reads
 are connected: site context, capabilities, queue, signals, search, page, diagnosis.
 `update_work_item` additionally supports explicit signal pickup, shared notes, research review/complete/reopen and manual complete/reopen
@@ -28,6 +28,34 @@ passive `get_scan_status`, as described below. `start_scan` additionally support
 explicit PageSpeed preview and separately authorised private drafts, never execution.
 The remaining four core names refuse requests; their presence is not a working
 website-write/history implementation. Actual scan execution and Phase 4 remain open.
+
+## Explicit administrative scan closure (disabled until site opt-in)
+
+The twentieth specialist name, `close_scan`, is separate from read-only
+`get_scan_status({execution_id})` and from scan starts. Review every URL/device,
+both actors, hashes and warnings, obtain explicit chat consent, then send only
+that exact execution ID, request ID, expected runtime hash and confirmation.
+Confirmation contains `mode: "chat_attested"`, `review_hash`, `confirmed: true`,
+client name/version (version may be null), agent name and the four returned
+`required_acknowledgements` unchanged and in order. No standing consent or human
+identity claim. Closure preserves original history and labels the outcome unknown;
+an in-flight provider may continue. It never remeasures or writes website content.
+
+The separate `/scans/maintenance/capabilities` endpoint verifies current local
+administrator/PAT authority with explicit `site:read` + `scans:maintain`, even
+without PRO. The matching server gate remains off. In explicit development
+specialist mode only, a primary `pro_required` denial can enter maintenance-only
+mode: capabilities, exact execution review and closure; all other tools refuse.
+Authentication/network failures never use this exception. Core/legacy gain no
+maintenance writer; all actual operations recheck server rights.
+
+No automatic retries. An uncertain POST requires reading the same execution's
+history; replay only the identical input/ID. A different review/actor requires new
+consent. REST and MCP redact private receipt packets from historical output.
+See PRO repository, branch `feat/mcp-workflows`,
+`docs/mcp-phase4b-scan-maintenance.md` for the full contract and verification gates.
+Tests: `node --test test/workflow-scan-maintenance.mjs`, plus the existing surface
+and package checks. The full list remains within 16,000 characters (15,982 measured).
 
 ## Private recovery receipt support (internal only)
 
