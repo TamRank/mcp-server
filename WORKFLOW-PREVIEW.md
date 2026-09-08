@@ -29,6 +29,21 @@ explicit PageSpeed preview and separately authorised private drafts, never execu
 The remaining four core names refuse requests; their presence is not a working
 website-write/history implementation. Actual scan execution and Phase 4 remain open.
 
+## Private recovery receipt support (internal only)
+
+The V2 transport now redacts private scan-result receipt fields/packet strings and
+the request PAT from returned errors and saved-history responses. An internal,
+explicitly configured capture hook can retain an opaque response in a bounded
+private local store before reporting an uncertain result-storage error. It never
+retries a measurement or grants settlement authority. Existing entry points do
+not create this store; no tool accepts the capture option or executes a scan.
+
+The MCP repository document `SCAN-RECEIPTS.md` (branch `feat/mcp-workflows`) records
+the exact storage boundary, permissions, failure handling and activation gates.
+Test with `node --test test/workflow-scan-receipts.mjs`. This is not a customer
+setup instruction: native routes, recovery/maintenance, safe local provisioning
+and cleanup still need integration before activation.
+
 ## Stored PageSpeed diagnosis
 
 `diagnose_page({post_id, section: "pagespeed"})` reads verified stored lab
