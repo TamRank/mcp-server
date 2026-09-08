@@ -52,20 +52,31 @@ maintenance writer; all actual operations recheck server rights.
 No automatic retries. An uncertain POST requires reading the same execution's
 history; replay only the identical input/ID. A different review/actor requires new
 consent. REST and MCP redact private receipt packets from historical output.
+The maintenance REST ingress now separately counts admitted requests, with distinct
+read/close limits per operator and site. Pure authority/history readers still do
+not write; a complete HTTP GET records only operational allowance. A 429 exposes
+bounded wait guidance and `automatic_retry: false`, including when discovery is
+limited after a primary paid-access denial. No automatic wait or retry is added.
+Counter failure refuses the business action; a lost counter commit acknowledgement
+can still consume a unit. This is not evidence about an earlier uncertain closure.
 See PRO repository, branch `feat/mcp-workflows`,
-`docs/mcp-phase4b-scan-maintenance.md` for the full contract and verification gates.
-Tests: `node --test test/workflow-scan-maintenance.mjs`, plus the existing surface
+`docs/mcp-phase4b-scan-maintenance.md` and `docs/mcp-phase4b-maintenance-budget.md`
+for the full contract, fixed-window limits and verification gates.
+Tests: `node --test test/workflow-scan-maintenance.mjs test/workflow-maintenance-budget.mjs`, plus the existing surface
 and package checks. The full list remains within 16,000 characters (15,982 measured).
 
 Full-bootstrap verification (8 September 2026): PRO's
 `docs/mcp-phase4b-scan-maintenance-wordpress.mjs` now drives this repository's
 `test/workflow-scan-maintenance-wordpress.mjs` against newly installed disposable
 WordPress, not a mock HTTP server. Single-site and two-client subdirectory multisite
-pass with 178 native checks and both REST styles through actual stdio MCP. Includes
+pass with 308 native checks in the current suite (previously 178) and both REST
+styles through actual stdio MCP. Includes
 50-device review, unpaid maintenance-only access, explicit consent, unknown closure,
 exact replay, stale rights/cache denial, cross-site refusal and late revocation with
-atomic rollback. No provider dispatch or real site data is used. Traffic limits,
-external cache/security-plugin compatibility, native receipt integration and live
+atomic rollback. Request-budget coverage also includes token rotation, separate
+buckets/site ceilings, concurrent processes, failed or altered counter writes,
+connection loss, and actual opt-in uninstall. No provider dispatch or real site
+data is used. External cache/security-plugin compatibility, native receipt integration and live
 activation remain open. Setup and safe cleanup are documented in the PRO document
 linked above; this client test is launched by that harness with synthetic stdin only.
 
