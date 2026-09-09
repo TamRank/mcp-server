@@ -25,6 +25,20 @@ export async function runFieldProposalClient({origin,fixture:f}){
       assert.deepEqual(await call('plan_changes',request),draft);checks++;
       const id=draft.envelope.plan.change_set_id;
       assert.deepEqual(await call('get_changes',{change_set_id:id}),draft);checks++;
+      assert.ok(caps.field_proposals.origin_kinds.includes('action'));checks++;
+      assert.equal(caps.field_proposals.url_origin_mapping_available,false);checks++;
+      const targets=await call('get_work_queue',{work_id:'grp_missing_titles',section:'targets',limit:50});
+      const sourceTarget=targets.items.find(t=>t.post_id===f.posts.publish);
+      assert.ok(sourceTarget);assert.deepEqual(sourceTarget.action_origin,f.action_origin);checks+=2;
+      const linked={...request,client_request_id:`mcp-origin-${profile}-${style}`,origin:sourceTarget.action_origin,items:[request.items[0]]};
+      const actionDraft=await call('plan_changes',linked);
+      assert.equal(actionDraft.envelope.plan.origin_evidence.action_id,f.action_origin.action_id);checks++;
+      assert.equal(actionDraft.envelope.plan.origin_evidence.selected_targets.length,1);checks++;
+      assert.deepEqual(await call('get_changes',{change_set_id:actionDraft.envelope.plan.change_set_id}),actionDraft);checks++;
+      const stale={...linked,client_request_id:`mcp-stale-${profile}-${style}`,origin:{...f.action_origin,revision:f.action_origin.revision+1}};
+      assert.equal((await client.callTool({name:'plan_changes',arguments:stale})).isError,true);checks++;
+      const foreign={...linked,client_request_id:`mcp-foreign-${profile}-${style}`,items:[request.items[1]]};
+      assert.equal((await client.callTool({name:'plan_changes',arguments:foreign})).isError,true);checks++;
       assert.equal((await client.callTool({name:'execute_change_set',arguments:{}})).isError,true);checks++;
       assert.equal((await client.callTool({name:'plan_changes',arguments:{...request,execute:true}})).isError,true);checks++;
       if(profile==='core'&&style==='pretty'){

@@ -13,6 +13,13 @@ const core=registry();assert.equal(core.get('plan_changes').c.annotations.readOn
 assert.equal(core.get('plan_changes').c.annotations.destructiveHint,false);
 assert.equal(core.get('get_changes').c.annotations.readOnlyHint,true);
 assert.ok(!(await core.get('plan_changes').h(request)).isError);assert.deepEqual(calls.pop(),{path:'/changes/proposals',body:request});
+const actionRequest={...request,origin:{kind:'action',action_id:'12345678-1234-1234-1234-123456789abc',revision:2,snapshot_hash:'a'.repeat(64)}};
+assert.equal((await core.get('plan_changes').h(actionRequest)).isError,true);assert.equal(calls.length,0);
+const actionCore=registry({field_proposals:{...caps.field_proposals,origin_kinds:['user_request','action']}});
+assert.ok(!(await actionCore.get('plan_changes').h(actionRequest)).isError);assert.deepEqual(calls.pop(),{path:'/changes/proposals',body:actionRequest});
+for(const bad of [{...actionRequest.origin,revision:0},{...actionRequest.origin,summary:'injected'}, {...actionRequest.origin,snapshot_hash:'bad'}, {...actionRequest.origin,action_id:'grp_missing_titles'}]){
+  assert.equal((await actionCore.get('plan_changes').h({...actionRequest,origin:bad})).isError,true);assert.equal(calls.length,0);
+}
 const id='12345678-1234-1234-1234-123456789abc';await core.get('get_changes').h({change_set_id:id});assert.deepEqual(calls.pop(),{path:'/changes/'+id,query:{}});
 const variants=[{...request,execute:true},{...request,origin:{...request.origin,kind:'action'}},{...request,items:[]},
   {...request,items:Array(26).fill(request.items[0])},{...request,items:[request.items[0],request.items[0]]}];

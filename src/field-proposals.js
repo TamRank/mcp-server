@@ -12,7 +12,10 @@ const item=z.object({operation:z.enum(['meta.update','image_alt.update']),
   : v.target.attachment_id!==undefined&&v.target.post_id===undefined&&Object.keys(v.fields).length===1&&v.fields.alt_text!==undefined);
 export const fieldProposalSchema={
   client_request_id:z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/),
-  origin:z.object({kind:z.literal('user_request'),reference:text(160).refine(v=>v.trim().length>0),summary:text(1000).refine(v=>v.trim().length>0)}).strict(),
+  origin:z.union([
+    z.object({kind:z.literal('user_request'),reference:text(160).refine(v=>v.trim().length>0),summary:text(1000).refine(v=>v.trim().length>0)}).strict(),
+    z.object({kind:z.literal('action'),action_id:z.string().regex(/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/),revision:id,snapshot_hash:z.string().regex(/^[a-f0-9]{64}$/)}).strict(),
+  ]),
   items:z.array(item).min(1).max(25),
 };
 export const validFieldProposal=a=>Buffer.byteLength(JSON.stringify(a),'utf8')<=262144

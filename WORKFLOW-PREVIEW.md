@@ -36,11 +36,18 @@ Requires the PRO field-proposal flag, already installed private storage, native
 site-admin/PRO access and explicit advertised capabilities. No client option can
 enable server support. This does not activate the feature on existing sites.
 
-`plan_changes` accepts `client_request_id`, `origin` (`kind: user_request`, a request
-reference and summary), and 1–25 ordered items. `meta.update` uses a `post_id` and
+`plan_changes` accepts `client_request_id`, `origin`, and 1–25 ordered items.
+Origin is either `{kind: user_request, reference, summary}` or the exact
+`{kind: action, action_id, revision, snapshot_hash}` supplied as `action_origin`
+on a work-queue target. Discovery currently covers missing title/description/alt
+tasks with fixed post/attachment IDs. Use one Action per proposal, never infer
+IDs from URLs or pass the dashboard group ID as an Action UUID. The server checks
+full current evidence and membership again; discovery is not write permission.
+URL-only research mapping remains unavailable in capabilities.
+`meta.update` uses a `post_id` and
 `meta_title`/`meta_description`; `image_alt.update` uses an `attachment_id` and
 `alt_text`. Every field is `{mode: set, value: ...}` or `{mode: remove}`. Empty is
-not removal. No duplicate storage IDs, automatic Action origin, body/internal-link,
+not removal. No duplicate storage IDs, invented Action origin, body/internal-link,
 social, redirect or schema substitution. Read `get_capabilities.field_proposals`
 first; missing capabilities fail closed. Planning needs `site:read`, `changes:write`,
 `meta:write`; `get_changes({change_set_id})` needs `site:read`, `audit:read` and the
@@ -56,7 +63,7 @@ writer fallback. The server repeats current permissions and source checks.
 Frozen plans remain at most 256 KiB and valid for 24 hours. Exact draft POST/read
 routes alone allow a bounded 1-MiB HTTP response to accommodate WordPress Unicode
 escaping; all other responses retain 512 KiB. No truncated proposals or retries.
-Actual listings: 12 core / 20 specialist / 42 legacy, 9,188 / 15,987 characters for
+Actual listings: 12 core / 20 specialist / 42 legacy, 9,351 / 15,963 characters for
 core/specialist. Both remain under the existing 16,000-character tool budget.
 
 Tests: `npm run test:workflow`; `node test/workflow-package.mjs --allow-network`
@@ -64,6 +71,7 @@ uses only the official registry, fixed repository lock and a disposable cache wi
 scripts disabled. PRO `docs/mcp-phase4c-change-store-wordpress.mjs --field-mcp`
 calls `test/field-proposal-client.mjs` against owned WordPress/MySQL fixtures:
 both REST URL forms, both workflow profiles and two-client multisite, including
+shared-queue Action discovery, linked proposals, stale/foreign-origin refusal,
 all 25 targets with long Unicode values and unchanged website fields. Neither test
 publishes a package, sends customer credentials or activates customer features.
 

@@ -65,18 +65,18 @@ function validWork(a) {
 
 export function workflowDefinitions() {
   return {
-    get_site_context: { description: 'Stored brand/site/schema identity.', schema: { section: z.enum(['overview','schema_identity']).optional() }, path: () => '/site/context' },
-    get_capabilities: { description: 'Availability, permissions and limits.', schema: {}, path: () => '/capabilities' },
-    get_work_queue: { description: 'Dashboard order; all targets paginated. administration: note/work_revision.', schema: { work_id: workId.optional(), section: z.enum(['overview','targets','administration']).optional(), status: z.enum(['open','completed','all']).optional(), kind: z.enum(['automatic','manual','research']).optional(), ...paging },
+    get_site_context: { description: 'Brand/site/schema identity.', schema: { section: z.enum(['overview','schema_identity']).optional() }, path: () => '/site/context' },
+    get_capabilities: { description: 'Availability/scopes/limits.', schema: {}, path: () => '/capabilities' },
+    get_work_queue: { description: 'Dashboard order. targets: paginated/action_origin. administration: note/work_revision.', schema: { work_id: workId.optional(), section: z.enum(['overview','targets','administration']).optional(), status: z.enum(['open','completed','all']).optional(), kind: z.enum(['automatic','manual','research']).optional(), ...paging },
       path: a => a.section==='administration' ? '/work-items/'+a.work_id : '/work-queue' + (a.work_id ? '/' + a.work_id : ''),
       query: a => a.section==='administration' ? strip(a,['section']) : a, omit: ['work_id'],
       validate: a => a.section!=='administration' || (Boolean(a.work_id) && Object.keys(a).every(k=>['work_id','section'].includes(k))) },
-    get_signals: { description: 'Stored signals/windows/work relations; not tasks.', schema: { signal_id: pageId.optional(), section: z.enum(['overview','targets','relations']).optional(), type: z.string().max(64).optional(), subject_id: pageId.optional(), ...paging },
+    get_signals: { description: 'Signals/windows/work relations; not tasks.', schema: { signal_id: pageId.optional(), section: z.enum(['overview','targets','relations']).optional(), type: z.string().max(64).optional(), subject_id: pageId.optional(), ...paging },
       path: a => '/signals' + (a.signal_id ? '/' + a.signal_id : ''), omit: ['signal_id'] },
-    search_pages: { description: 'Published managed pages, paginated; no score ordering.', schema: { q: z.string().max(200).optional(), type: z.string().regex(/^[a-z0-9_-]{1,32}$/).optional(), missing: z.enum(['meta_title','meta_description']).optional(), ...paging }, path: () => '/pages' },
-    get_page: { description: 'Stored page/metadata/importance/raw content; no rendering.', schema: { post_id: pageId, section: z.enum(['overview','metadata','content','importance']).optional(), limit: z.number().int().min(1).max(4).optional(), cursor }, path: a => `/pages/${a.post_id}`, omit: ['post_id'] },
-    diagnose_page: { description: 'post_id or exact url. URL: selected-property GSC only. Keywords: available_windows, compare_to adjacent/equal; stability/keywords paginated. Stored data, missing is unknown; no fetch/repair.', schema: { post_id: pageId.optional(), url: z.string().min(1).max(2048).refine(validDiagnosisUrl).optional(), section: z.enum(['overview','metadata','gsc','index','pagespeed','stability','comparison','keywords']).optional(), query: z.string().min(1).max(512).refine(v=>Buffer.byteLength(v,'utf8')<=512 && !/[\x00-\x1f\x7f]/.test(v)).optional(), window: z.string().refine(validKeywordWindow).optional(), compare_to: z.string().refine(validKeywordWindow).optional(), ...paging }, path: a => a.url!==undefined?'/gsc/diagnosis':`/pages/${a.post_id}/diagnosis`, omit: ['post_id'], validate: validDiagnosis },
-    update_work_item: { description: 'tasks:write + work_id/admin revision. Note replaces, empty clears. Pickup binds snapshot/targets. importance.update: importance:write; get_page supplies expected_value. Explicit instruction only.',
+    search_pages: { description: 'Published managed pages; paginated, not score-ranked.', schema: { q: z.string().max(200).optional(), type: z.string().regex(/^[a-z0-9_-]{1,32}$/).optional(), missing: z.enum(['meta_title','meta_description']).optional(), ...paging }, path: () => '/pages' },
+    get_page: { description: 'Stored page fields/raw content, not rendered.', schema: { post_id: pageId, section: z.enum(['overview','metadata','content','importance']).optional(), limit: z.number().int().min(1).max(4).optional(), cursor }, path: a => `/pages/${a.post_id}`, omit: ['post_id'] },
+    diagnose_page: { description: 'ID or exact URL (selected-property GSC only). Keywords: available_windows, adjacent/equal compare_to. Paginate stability/keywords. No fetch; missing is unknown.', schema: { post_id: pageId.optional(), url: z.string().min(1).max(2048).refine(validDiagnosisUrl).optional(), section: z.enum(['overview','metadata','gsc','index','pagespeed','stability','comparison','keywords']).optional(), query: z.string().min(1).max(512).refine(v=>Buffer.byteLength(v,'utf8')<=512 && !/[\x00-\x1f\x7f]/.test(v)).optional(), window: z.string().refine(validKeywordWindow).optional(), compare_to: z.string().refine(validKeywordWindow).optional(), ...paging }, path: a => a.url!==undefined?'/gsc/diagnosis':`/pages/${a.post_id}/diagnosis`, omit: ['post_id'], validate: validDiagnosis },
+    update_work_item: { description: 'Explicit task edits: tasks:write/admin revision; note replaces/empty clears. Pickup: snapshot/targets. Importance: importance:write/get_page expected_value.',
       write: true, path: () => '/work-items', schema: {
         client_request_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/),
         operation: z.enum(['work.review_target','work.complete','work.reopen','work.pickup','work.note','importance.update']), work_id: z.string().regex(/^(?:pickup_[a-f0-9]{32}|manual_[A-Za-z0-9][A-Za-z0-9_.:-]{0,151})$/).optional(),
@@ -88,12 +88,12 @@ export function workflowDefinitions() {
         note: z.string().max(4000).refine(v=>Buffer.byteLength(v,'utf8')<=4000).describe('UTF-8 bytes.').optional(),
         priority: z.enum(['laag','middel','hoog']).optional(), deadline: z.union([z.literal(''),z.string().regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)]).optional(),
       }, validate: validWork },
-    plan_changes: { description: 'Private draft, not execution. meta.update: post_id + meta_title/meta_description; image_alt.update: attachment_id + alt_text. set requires value (empty differs from remove); remove omits value. Explicit request; identical replay only.',
+    plan_changes: { description: 'Draft only. Meta: post_id/meta fields; alt: attachment_id/alt_text. set needs value; remove omits it. Copy queue action_origin, never infer IDs from URLs. Exact replay.',
       schema:fieldProposalSchema,fieldPlan:true,path:()=>'/changes/proposals',validate:validFieldProposal },
-    execute_change_set: { description: 'Unavailable: approved website writes.', schema: {} },
-    get_changes: { description: 'Owner-private draft by ID; historical, not revalidated. No list/approval/execution.',
+    execute_change_set: { description: 'Unavailable.', schema: {} },
+    get_changes: { description: 'Owner-private draft ID; historical, not revalidated/executable. No list.',
       schema:{change_set_id:scanId},fieldRead:true,path:a=>'/changes/'+a.change_set_id,omit:['change_set_id'] },
-    rollback_change_set: { description: 'Unavailable: approved reversal.', schema: {} },
+    rollback_change_set: { description: 'Unavailable.', schema: {} },
   };
 }
 
@@ -194,40 +194,40 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   for (const [name, def] of Object.entries(defs)) register(name, def);
   if (profile === 'specialist') for (const name of ['get_site_diagnostics','get_gsc_pages','get_redirects','get_images_missing_alt','get_topical_authority','start_scan','get_scan_status']) {
     register(name, name==='get_site_diagnostics'?{
-      description:'Stored metadata/index/schema, grouped 404_urls or 404_events + exact url. q: case-sensitive title/URL; unfiltered summary. No validation/live status/visitor data.',
+      description:'Metadata/index/schema; 404_urls groups, 404_events + url. q: case-sensitive title/URL; summary unfiltered. No live validation/visitor data.',
       specialist:true,path:()=>'/site/diagnostics',schema:{section:z.enum(['overview','metadata','index','schema','404_urls','404_events']).optional(),
         q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),
         url:z.string().min(1).max(4096).refine(v=>Buffer.byteLength(v,'utf8')<=4096).optional(),...paging},
       validate:a=>(a.section || 'overview')==='overview'?Object.keys(a).every(k=>k==='section'):!Object.hasOwn(a,'url') || (a.section==='404_events' && !Object.hasOwn(a,'q')),
     }:name==='get_gsc_pages'?{
-      description:'Stored GSC. q: case-sensitive URL; default clicks_desc. Missing period: total:null. Diagnose exact url.',
+      description:'GSC; q: case-sensitive URL, order: clicks_desc. Missing period: total:null. Diagnose exact url.',
       specialist:true, path:()=>'/gsc/pages', schema:{
         q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),
         order:z.enum(['clicks_desc','impressions_desc','ctr_asc','position_asc','url_asc']).optional(),
         period:z.union([z.literal(7),z.literal(28),z.literal(90)]).optional(),...paging,
       }
     }:name==='get_redirects'?{
-      description:'Stored rules/chains or trace + redirect_id. q: case-sensitive source/target. Literal graph only, no regex evaluation, URL equivalence or live check.',
+      description:'Rules/chains; trace: redirect_id; q: case-sensitive source/target. No regex/URL equivalence/live check.',
       specialist:true,path:()=>'/redirects',schema:{section:z.enum(['rules','chains','trace']).optional(),redirect_id:pageId.optional(),
         q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),
         state:z.enum(['all','active','inactive']).optional(),match_type:z.enum(['exact','regex']).optional(),...paging},
       validate:a=>a.section==='trace'?a.redirect_id!==undefined && !['q','state','match_type'].some(k=>Object.hasOwn(a,k)):a.redirect_id===undefined,
     }:name==='get_images_missing_alt'?{
-      description:'Blank-alt candidates, not errors: decorative alt may be empty. Usage unknown, even with public parent. q: case-sensitive title substring. stored_url: unverified GUID. No image/body fetch or write.',
+      description:'Blank alt may be decorative. Usage unknown despite public parent. q: case-sensitive title. stored_url: unverified GUID. No image/body fetch/write.',
       specialist:true,path:()=>'/images/missing-alt',schema:{
         q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),...paging},
     }:name==='get_topical_authority'?{
-      description:'Stored topical map; pages/topics need one-based cluster. Historical advice, not proven demand/tasks. No analysis/content/link writes.',
+      description:'Topical map; pages/topics: one-based cluster. Historical advice, not demand/tasks. No analysis/content/link writes.',
       specialist:true,path:()=>'/site/topical-authority',schema:{section:z.enum(['overview','clusters','pages','topics','gaps','recommendations']).optional(),cluster:z.number().int().min(1).max(10000).optional(),...paging},
       validate:a=>(a.section || 'overview')==='overview'?Object.keys(a).every(k=>k==='section'):['pages','topics'].includes(a.section)?a.cluster!==undefined:a.cluster===undefined,
     }:name==='get_scan_status'?{
-      description:'execution_id: admin review (+receipt_reference: same-user recovery). proposal_id: private draft. Else stored type/expected_ref. Show ALL targets/warnings; no start/closure.',
+      description:'execution_id: review; receipt_reference: same-user recovery; proposal_id: draft; else type/expected_ref. Show ALL targets/warnings; no start/closure.',
       specialist:true,path:a=>a.execution_id?'/scans/maintenance/'+a.execution_id:a.proposal_id?'/scans/proposals/'+a.proposal_id:'/scans/status',omit:['proposal_id','execution_id'],
       schema:{type:z.enum(['index','pagespeed']).optional(),expected_ref:z.string().regex(/^stored:[a-f0-9]{32}$/).optional(),
         proposal_id:scanId.optional(),execution_id:scanId.optional(),receipt_reference:receiptReference.optional()},
       validate:a=>a.receipt_reference!==undefined?a.execution_id!==undefined && Object.keys(a).length===2:a.proposal_id!==undefined || a.execution_id!==undefined?Object.keys(a).length===1:a.type!==undefined,
     }:{
-      description:'PageSpeed preview; plan: private 24h draft, revision/request ID/scans:plan. Show ALL targets/budget/warnings. Identical replay; no approval/provider/start.',
+      description:'PageSpeed preview; plan: private 24h draft, revision/request ID/scans:plan. Show ALL targets/budget/warnings. Exact replay; no approval/provider/start.',
       specialist:true,scanPlan:true,path:a=>a.mode==='plan'?'/scans/proposals':'/scans/preview',schema:{mode:z.enum(['preview','plan']),type:z.literal('pagespeed'),
         post_ids:z.array(pageId).min(1).max(25).refine(ids=>new Set(ids).size===ids.length),expected_revision:z.string().regex(/^[a-f0-9]{64}$/).optional(),
         client_request_id:z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/).optional()},
@@ -236,7 +236,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
     });
   }
   if(profile==='specialist') register('close_scan',{
-    description:'get_scan_status then chat approval of ALL targets/warnings; copy acknowledgements. receipt_reference: retain result/stop remainder (same user/PRO); confirmation.review_hash = outer review_hash. Else close as unknown, provider may continue. No retry/website change. Uncertain: review again.',
+    description:'get_scan_status, chat approval of ALL targets/warnings, copy acknowledgements. receipt_reference: retain result/stop remainder (same user/PRO); confirmation.review_hash = outer review_hash. Else unknown; provider may continue. No retry/site change. Uncertain: review again.',
     specialist:true,maintenanceWrite:true,schema:{...closeScanSchema,receipt_reference:receiptReference.optional(),
       confirmation:closeScanSchema.confirmation.extend({acknowledgements:z.array(z.string()).length(4)})},
     validate:a=>a.confirmation.acknowledgements.every((v,i)=>v===(a.receipt_reference?recoveryAcks:maintenanceAcks)[i]),path:a=>'/scans/maintenance/'+a.execution_id,
