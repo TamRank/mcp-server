@@ -163,6 +163,14 @@ unpaid administrative access cannot become paid same-user recovery.
 4. Already-recorded/settled returns a read-only no-op. Lost responses require fresh
    review, never remeasurement. No automatic local receipt deletion.
 
+The server also returns exact canonical `proposal_json` bytes privately to this
+bridge. Before displaying a review, the client requires their SHA-256 to equal
+`proposal_hash` and their decoded complete contents to equal `proposal`. This
+keeps hash validation intact for PHP floats such as `0.0`, `1200.0` and `1.0e-6`.
+The duplicate JSON is then omitted from model output, not from validation.
+Missing/malformed proof, mismatched hashes or changed decoded fields fail closed.
+Use matching preview server/client builds; no fallback skips this proof.
+
 Without `receipt_reference`, `get_scan_status`/`close_scan` retain their separate
 administrative-unknown-closure behavior. Profiles remain 12/20/42; no new tool name
 and no read-triggered closure. No path, site override or raw packet is a tool input.
@@ -230,12 +238,13 @@ private-file/internal-client/server-HMAC/WordPress/SQL chains: three sites, two 
 forms, pending versus already-recorded results. Replacement-token review and exact
 explicit settlement preserve all 50 measurements without another provider call.
 These chains now use actual MCP stdio, all 50 devices and server attestation
-readback. Results are synthetic; no real provider is called.
+readback. The suite includes successful numeric results (zero and fractional
+metrics) as well as failed results. Results are synthetic; no real provider is called.
 Server route, authority, accounting and test-reproduction contract:
 PRO repository, branch `feat/mcp-workflows`, `docs/mcp-phase4b-scan-recovery.md`.
 
 Current 12/20/42 workflow profiles and legacy 42-tool surface remain unchanged.
-Local lifecycle/chat plus existing receipt/bridge tests total 43 TAP tests; six
+Local lifecycle/chat plus existing receipt/bridge tests total 44 TAP tests; six
 maintenance MCP tests stay green. PRO adds 18 pure chat tests and retains its
 308 native maintenance checks. Specialist tools/list: 15,974 characters (max 16,000).
 The extracted package also passed a clean-cache dependency installation with the

@@ -6,6 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {ScanReceiptStore} from '../src/scan-receipt-store.js';
 import {ScanReceiptRecovery} from '../src/scan-receipt-recovery.js';
+import {recoveryAcks} from '../src/scan-recovery-chat.js';
 
 const siteUrl='https://fixture.invalid/client-a',pat='tamrank_pat_private_fixture';
 const id='aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',other='bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee';
@@ -79,6 +80,30 @@ await test('Internal recovery bridge: explicit exact review, no private leakage 
         review={...fresh(),action,can_settle:false,cancel_remaining:0,current_runtime_hash:'e'.repeat(64)};
         const valid=await input(),before=calls.length,out=await driver.settle(valid);
         assert.equal(out.view,'result_settlement_not_needed');safe(out);assert.equal(calls.length,before+1);
+      }
+      review=fresh();
+    });
+    await t.test('Canonical proof preserves PHP numeric bytes without weakening hash or full-field equality',async()=>{
+      const full=()=>{
+        const r=fresh();r.received_outcome.result={performance_score:0,fcp_ms:0,lcp_ms:1200,tbt_ms:0,cls:0.000001};
+        r.proposal={policy:'pagespeed-settlement-chat-1',operation:'settle_and_stop',execution_id:id,
+          expected_runtime_hash:r.current_runtime_hash,actor:{installation_id:id,blog_id:1,operator_id:7,token_id:9},
+          receipt_hash:'a'.repeat(64),received_outcome:r.received_outcome,required_acknowledgements:recoveryAcks,
+          targets:[attempt.measurement_id,...['1','2','3'].map(x=>x.repeat(64))].map((measurement_id,i)=>({measurement_id,
+            url:'https://fixture.invalid/page-'+i,strategy:'mobile',stored_state:i?'not_started':'started',after_state:i?'cancelled':'succeeded'}))};
+        // Equivalent numbers deliberately retain PHP's JSON_PRESERVE_ZERO_FRACTION and exponent spelling.
+        r.proposal_json=JSON.stringify(r.proposal).replace('"fcp_ms":0,','"fcp_ms":0.0,').replace('"lcp_ms":1200,','"lcp_ms":1200.0,')
+          .replace('"cls":0.000001','"cls":1.0e-6');
+        r.proposal_hash=createHash('sha256').update(r.proposal_json).digest('hex');return r;
+      };
+      review=full();const prepared=await driver.reviewChat(ctx);safe(prepared);
+      assert.equal(prepared.review.proposal.received_outcome.result.cls,0.000001);
+      assert.equal(prepared.review.proposal_hash,review.proposal_hash);assert.equal('proposal_json' in prepared.review,false);
+      for(const mutate of [r=>{delete r.proposal_json;},r=>{delete r.proposal_hash;},r=>{delete r.proposal;},
+        r=>{r.proposal_json='{invalid';},r=>{r.proposal_hash='0'.repeat(64);},
+        r=>{r.proposal.targets[3].url='https://fixture.invalid/different';},
+        r=>{r.proposal_json=r.proposal_json.replace('page-3','other-page');r.proposal_hash=createHash('sha256').update(r.proposal_json).digest('hex');}]){
+        review=full();mutate(review);await assert.rejects(driver.reviewChat(ctx),{code:'scan_receipt_review_invalid'});
       }
       review=fresh();
     });

@@ -1,4 +1,4 @@
-/** Internal receipt reconciliation bridge. No entry point, tool, scan start or automatic retry. */
+/** Private receipt bridge for explicit opt-in recovery. No scan start or automatic retry. */
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
 import {WorkflowClient} from './workflow-rest.js';
@@ -34,7 +34,7 @@ const reviewSchema=z.object({contract_version:z.literal(2),view:z.literal('resul
   cancel_remaining:z.number().int().min(0).max(49),received_at:z.number().int().positive().safe(),
   observed_at:z.number().int().positive().safe(),received_outcome:outcome,
   execution_enabled:z.literal(false),provider_requested_this_call:z.literal(false),automatic_retry_allowed:z.literal(false),
-  proposal:proposalSchema.optional(),proposal_hash:hash.optional()}).strict();
+  proposal:proposalSchema.optional(),proposal_hash:hash.optional(),proposal_json:z.string().max(262144).optional()}).strict();
 const canonical=value=>JSON.stringify(sort(value));
 function sort(value){return Array.isArray(value)?value.map(sort):value&&typeof value==='object'
   ?Object.fromEntries(Object.keys(value).sort().map(key=>[key,sort(value[key])])):value;}
@@ -68,9 +68,14 @@ export class ScanReceiptRecovery {
       || review.attempt_input_hash!==digest(body.attempt_input) || review.can_settle!==canSettle
       || review.observed_at<review.received_at || (!canSettle && review.cancel_remaining!==0)
       || (canSettle && review.current_runtime_hash!==review.expected_runtime_hash))throw error('scan_receipt_review_invalid');
-    if(review.proposal || review.proposal_hash){
+    if(review.proposal || review.proposal_hash || review.proposal_json){
       const p=review.proposal;
-      if(!p || review.proposal_hash!==digest(p) || p.execution_id!==review.execution_id
+      // Preserve full hash validation across PHP's 0.0/exponent formatting and JavaScript JSON numbers.
+      // Check the exact server canonical bytes AND equality of every parsed proposal field.
+      let decoded;try{decoded=JSON.parse(review.proposal_json);}catch{throw error('scan_receipt_review_invalid');}
+      if(!p || Buffer.byteLength(review.proposal_json,'utf8')>262144
+        || createHash('sha256').update(review.proposal_json,'utf8').digest('hex')!==review.proposal_hash
+        || canonical(decoded)!==canonical(p) || p.execution_id!==review.execution_id
         || p.expected_runtime_hash!==review.current_runtime_hash || digest(p.received_outcome)!==digest(review.received_outcome)
         || p.operation!==(canSettle?'settle_and_stop':'none') || new Set(p.targets.map(t=>t.measurement_id)).size!==p.targets.length
         || p.targets.filter(t=>t.stored_state==='not_started' && t.after_state==='cancelled').length!==review.cancel_remaining
@@ -79,8 +84,10 @@ export class ScanReceiptRecovery {
         if(t.after_state!==expected)throw error('scan_receipt_review_invalid');}
     }
     // Poll time is not consent material. Exact stored version, outcome and remainder are.
-    const material={...review};delete material.observed_at;
-    return {receipt_reference:input.receipt_reference,review_hash:digest({receipt_reference:input.receipt_reference,review:material}),review};
+    // The duplicate canonical JSON is verified privately, not added to model context.
+    const display={...review};delete display.proposal_json;
+    const material={...display};delete material.observed_at;
+    return {receipt_reference:input.receipt_reference,review_hash:digest({receipt_reference:input.receipt_reference,review:material}),review:display};
   }
   /** One read-only POST: the private packet is never placed in a URL or returned to a model. */
   async review(input){const parsed=parse(context,input);return this.#review(parsed,await this.#load(parsed));}
