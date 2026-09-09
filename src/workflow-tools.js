@@ -2,6 +2,8 @@
 import { z } from 'zod';
 import { registerTools as registerLegacy } from './tools.js';
 import { closeScanSchema, scanId } from './scan-maintenance.js';
+import {receiptReference,recoveryAcks} from './scan-recovery-chat.js';
+import {maintenanceAcks} from './scan-maintenance.js';
 import { rateLimitAdvice } from './workflow-rest.js';
 
 export const WORKFLOW_INSTRUCTIONS = `TamRank serves one configured site. Start with get_capabilities. get_work_queue is existing work; get_signals is separate evidence, never automatic work. Use explicit sections and follow next_cursor with identical filters until null; a four-page dashboard preview is not the full target list. A changed-source error requires restarting that read, not silently joining different snapshots.
@@ -93,7 +95,7 @@ export function workflowDefinitions() {
   };
 }
 
-export function registerWorkflowTools(server, client, { profile = 'core', preflight = { ok: true }, capabilities = null, maintenanceOnly = false } = {}) {
+export function registerWorkflowTools(server, client, { profile = 'core', preflight = { ok: true }, capabilities = null, maintenanceOnly = false, recovery = null } = {}) {
   if (!['core','legacy','specialist'].includes(profile)) throw new Error('Unknown workflow tool profile.');
   const defs = workflowDefinitions();
   if(maintenanceOnly) defs.get_capabilities.path=()=>'/scans/maintenance/capabilities';
@@ -104,6 +106,16 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       if (!preflight.ok) return failure(preflight.code || 'workflow_unavailable', preflight.message || 'Workflow startup refused; restart after correcting the configuration.',rateLimitAdvice(preflight));
       const parsed = schema.safeParse(input || {});
       if (!parsed.success || (def.validate && !def.validate(parsed.data))) return failure('invalid_request','Invalid or unknown tool arguments; nothing was sent.');
+      if((canonical==='get_scan_status' || canonical==='close_scan') && parsed.data.receipt_reference!==undefined){
+        const write=canonical==='close_scan',grant=write?'settlement_available':'receipt_review_available';
+        if(maintenanceOnly || !recovery || capabilities?.scan_recovery?.chat_review_contract!==1 || capabilities.scan_recovery[grant]!==true)
+          return failure('workflow_operation_unavailable','Same-user receipt recovery requires private local storage, PRO and explicit recovery rights. Nothing was sent.');
+        try {
+          const a=parsed.data,ctx={execution_id:a.execution_id,receipt_reference:a.receipt_reference};
+          return result(write?await recovery.settle({...ctx,client_request_id:a.client_request_id,expected_runtime_hash:a.expected_runtime_hash,
+            expected_review_hash:a.confirmation.review_hash,confirmed:true,confirmation:a.confirmation}):await recovery.reviewChat(ctx));
+        } catch(err){return failure(err.code || 'scan_receipt_recovery_failed','Receipt recovery refused or uncertain. Read the current receipt review; never repeat the measurement.',err.status===429?rateLimitAdvice(err.data):undefined);}
+      }
       const maintenanceRead=canonical==='get_scan_status' && parsed.data.execution_id!==undefined;
       if(maintenanceOnly && canonical!=='get_capabilities' && !maintenanceRead && !def.maintenanceWrite)
         return failure('workflow_operation_unavailable','Only administrative scan review/closure is available without PRO access. Nothing was sent.');
@@ -142,6 +154,8 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         if(canonical==='get_capabilities' && profile==='specialist' && !maintenanceOnly) {
           try { data.scan_maintenance=(await client.get('/scans/maintenance/capabilities')).scan_maintenance || {available:false,read_available:false}; }
           catch { data.scan_maintenance={available:false,read_available:false}; }
+          if(recovery){try{data.scan_recovery=(await client.get('/scans/recovery/capabilities')).scan_recovery || {receipt_review_available:false,settlement_available:false};}
+            catch{data.scan_recovery={receipt_review_available:false,settlement_available:false};}}
         }
         return result(deprecated ? { deprecated: true, replacement: canonical, remove_in: '0.5.0', data } : data);
       } catch (err) { return failure(typeof err.code === 'string' ? err.code : 'workflow_request_failed', err.status ? `Site refused the request (${err.status}). ${err.message}` : err.message,
@@ -170,40 +184,40 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   for (const [name, def] of Object.entries(defs)) register(name, def);
   if (profile === 'specialist') for (const name of ['get_site_diagnostics','get_gsc_pages','get_redirects','get_images_missing_alt','get_topical_authority','start_scan','get_scan_status']) {
     register(name, name==='get_site_diagnostics'?{
-      description:'Stored coverage; metadata/index/schema: public managed pages; 404_urls: grouped retained URLs; 404_events: events, optional exact url. q: case-sensitive title/URL substring. Summary precedes q. No schema validity/live 404 claim or visitor details.',
+      description:'Stored metadata/index/schema for public managed pages; 404_urls grouped, 404_events optionally exact url. q: case-sensitive title/URL substring; summary unfiltered. No schema-validity/live-404 claim or visitor data.',
       specialist:true,path:()=>'/site/diagnostics',schema:{section:z.enum(['overview','metadata','index','schema','404_urls','404_events']).optional(),
         q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),
         url:z.string().min(1).max(4096).refine(v=>Buffer.byteLength(v,'utf8')<=4096).optional(),...paging},
       validate:a=>(a.section || 'overview')==='overview'?Object.keys(a).every(k=>k==='section'):!Object.hasOwn(a,'url') || (a.section==='404_events' && !Object.hasOwn(a,'q')),
     }:name==='get_gsc_pages'?{
-      description:'Stored Search Console URLs/metrics/windows. q: literal case-sensitive URL substring; default clicks_desc. Period must exist in snapshot, else total:null. Pass exact returned url to diagnose_page. No content, scores, tasks or fetch.',
+      description:'Stored GSC URLs/metrics/windows. q: case-sensitive URL substring; default clicks_desc. Missing period: total:null. Pass exact url to diagnose_page. No content/scores/tasks/fetch.',
       specialist:true, path:()=>'/gsc/pages', schema:{
         q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),
         order:z.enum(['clicks_desc','impressions_desc','ctr_asc','position_asc','url_asc']).optional(),
         period:z.union([z.literal(7),z.literal(28),z.literal(90)]).optional(),...paging,
       }
     }:name==='get_redirects'?{
-      description:'Stored rules/chains or trace + redirect_id. q: case-sensitive source/target substring. Literal graph only: never execute regex, infer URL equivalence or claim live destination/repair. No fetch/write.',
+      description:'Stored rules/chains or trace + redirect_id. q: case-sensitive source/target substring. Literal graph: no regex execution, URL equivalence, live destination/repair claim, fetch or write.',
       specialist:true,path:()=>'/redirects',schema:{section:z.enum(['rules','chains','trace']).optional(),redirect_id:pageId.optional(),
         q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),
         state:z.enum(['all','active','inactive']).optional(),match_type:z.enum(['exact','regex']).optional(),...paging},
       validate:a=>a.section==='trace'?a.redirect_id!==undefined && !['q','state','match_type'].some(k=>Object.hasOwn(a,k)):a.redirect_id===undefined,
     }:name==='get_images_missing_alt'?{
-      description:'Blank-alt candidates, not proven errors: decorative images may need empty alt. Usage unknown; public parent is not proof of use. q: case-sensitive title substring. stored_url is unverified GUID. No image/body fetch or alt write.',
+      description:'Blank-alt candidates, not errors: decorative alt may be empty. Usage unknown, even with public parent. q: case-sensitive title substring. stored_url: unverified GUID. No image/body fetch or write.',
       specialist:true,path:()=>'/images/missing-alt',schema:{
         q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),...paging},
     }:name==='get_topical_authority'?{
-      description:'Completed stored topical map; pages/topics need returned one-based cluster. Advice requires public managed pages. Historical suggestions, not proven demand/priority/tasks. No analysis, polling or content/link writes.',
+      description:'Stored topical map; pages/topics need returned one-based cluster. Advice needs public managed pages. Historical suggestions, not proven demand/priority/tasks. No analysis/polling/content/link writes.',
       specialist:true,path:()=>'/site/topical-authority',schema:{section:z.enum(['overview','clusters','pages','topics','gaps','recommendations']).optional(),cluster:z.number().int().min(1).max(10000).optional(),...paging},
       validate:a=>(a.section || 'overview')==='overview'?Object.keys(a).every(k=>k==='section'):['pages','topics'].includes(a.section)?a.cluster!==undefined:a.cluster===undefined,
     }:name==='get_scan_status'?{
-      description:'execution_id only: full closure review/history, scans:maintain. proposal_id only: private draft, issuing token/scans:plan. Otherwise stored job type/expected_ref. No poll/start/approval; missing is unknown.',
+      description:'execution_id: admin review; add receipt_reference for same-user receipt review. Show ALL targets/warnings. proposal_id: private draft. Otherwise stored type/expected_ref. No start/closure.',
       specialist:true,path:a=>a.execution_id?'/scans/maintenance/'+a.execution_id:a.proposal_id?'/scans/proposals/'+a.proposal_id:'/scans/status',omit:['proposal_id','execution_id'],
       schema:{type:z.enum(['index','pagespeed']).optional(),expected_ref:z.string().regex(/^stored:[a-f0-9]{32}$/).optional(),
-        proposal_id:scanId.optional(),execution_id:scanId.optional()},
-      validate:a=>a.proposal_id!==undefined || a.execution_id!==undefined?Object.keys(a).length===1:a.type!==undefined,
+        proposal_id:scanId.optional(),execution_id:scanId.optional(),receipt_reference:receiptReference.optional()},
+      validate:a=>a.receipt_reference!==undefined?a.execution_id!==undefined && Object.keys(a).length===2:a.proposal_id!==undefined || a.execution_id!==undefined?Object.keys(a).length===1:a.type!==undefined,
     }:{
-      description:'PageSpeed preview: exact 1–25 IDs. plan: 24h private draft, requires preview revision, request ID, scans:plan. Show all targets/budget/warnings. Replay identical input only. No approval/provider/start.',
+      description:'PageSpeed preview: 1–25 exact IDs. plan: private 24h draft, needs revision/request ID/scans:plan. Show all targets/budget/warnings. Identical replay only. No approval/provider/start.',
       specialist:true,scanPlan:true,path:a=>a.mode==='plan'?'/scans/proposals':'/scans/preview',schema:{mode:z.enum(['preview','plan']),type:z.literal('pagespeed'),
         post_ids:z.array(pageId).min(1).max(25).refine(ids=>new Set(ids).size===ids.length),expected_revision:z.string().regex(/^[a-f0-9]{64}$/).optional(),
         client_request_id:z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/).optional()},
@@ -212,7 +226,9 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
     });
   }
   if(profile==='specialist') register('close_scan',{
-    description:'Read get_scan_status execution_id; show ALL targets/warnings and obtain explicit chat approval. Copy review acknowledgements unchanged. Close as unknown; provider may continue. No rescan/website change. Uncertainty: read history; identical replay only. Current admin + site:read/scans:maintain; no PRO.',
-    specialist:true,maintenanceWrite:true,schema:closeScanSchema,path:a=>'/scans/maintenance/'+a.execution_id,
+    description:'Requires get_scan_status + chat approval of ALL targets/warnings; copy acknowledgements. receipt_reference: save received result, stop unstarted remainder (same user/PRO/recovery); confirmation.review_hash = outer review_hash. Without: admin closes as unknown, provider may continue. No retry/website change. Uncertain: review again.',
+    specialist:true,maintenanceWrite:true,schema:{...closeScanSchema,receipt_reference:receiptReference.optional(),
+      confirmation:closeScanSchema.confirmation.extend({acknowledgements:z.array(z.string()).length(4)})},
+    validate:a=>a.confirmation.acknowledgements.every((v,i)=>v===(a.receipt_reference?recoveryAcks:maintenanceAcks)[i]),path:a=>'/scans/maintenance/'+a.execution_id,
   });
 }
