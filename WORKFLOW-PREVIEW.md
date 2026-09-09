@@ -76,11 +76,11 @@ exact replay, stale rights/cache denial, cross-site refusal and late revocation 
 atomic rollback. Request-budget coverage also includes token rotation, separate
 buckets/site ceilings, concurrent processes, failed or altered counter writes,
 connection loss, and actual opt-in uninstall. No provider dispatch or real site
-data is used. External cache/security-plugin compatibility, receipt-tool integration and live
+data is used. External cache/security-plugin compatibility and live
 activation remain open. Setup and safe cleanup are documented in the PRO document
 linked above; this client test is launched by that harness with synthetic stdin only.
 
-## Private recovery receipt support (internal only)
+## Private recovery receipt support (explicit specialist opt-in)
 
 The V2 transport now redacts private scan-result receipt fields/packet strings and
 the request PAT from returned errors and saved-history responses. An internal,
@@ -92,15 +92,19 @@ An internal recovery bridge now loads a retained reference, obtains the verified
 server review and explicitly returns the packet for exact settlement. It never
 guesses the signed started hash or repeats a measurement. Besides the original
 six fixture chains, 12 private-file/internal-client chains now pass against native
-WordPress recovery REST routes in PRO's 686-check HTTP suite. Separate default-off
-recovery routes and bounded request limits are tested; MCP recovery-tool mapping
-and execution capture remain unconnected. See `SCAN-RECEIPTS.md`.
+WordPress recovery REST routes in PRO's 728-check HTTP suite, now via actual MCP
+stdio. Configure `TAMRANK_SCAN_RECEIPT_DIR` only in specialist preview. Existing
+`get_scan_status`/`close_scan` accept `receipt_reference` for full-target review and
+explicit attested settlement. No packet/path tool inputs; server flags remain
+off by default. Execution capture remains unconnected. See `SCAN-RECEIPTS.md`.
 
 The MCP repository document `SCAN-RECEIPTS.md` (branch `feat/mcp-workflows`) records
 the exact storage boundary, permissions, failure handling and activation gates.
 Test with `node --test test/workflow-scan-receipts.mjs`. This is not a customer
-setup instruction: explicit MCP recovery orchestration, safe local provisioning
-and cleanup still need integration before activation. The separately gated
+setup instruction for live use: dispatch/capture, interrupted-save/platform
+permissions and provider/privacy gates remain open. Explicit POSIX setup, inspection,
+export and exact-record erasure are now implemented via `receipt-storage.js`;
+see `SCAN-RECEIPTS.md` for exact commands and limits. The separately gated
 administrative closure is already tested; it does not replace same-user recovery.
 
 ## Stored PageSpeed diagnosis

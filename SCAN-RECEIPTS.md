@@ -1,11 +1,10 @@
 # Phase 4B — private local recovery receipts
 
-Status, 8 September 2026: local receipt storage and an opt-in transport capture
-hook and an internal receipt-review/recovery bridge are implemented and tested.
-They are **not wired into an entry point or scan execution tool**. Default clients
-do not create files. Separately gated native recovery REST routes and independent
-request limits now pass real WordPress tests with this internal client. MCP-tool
-mapping, private-store setup/cleanup, activation and Phase 4 remain open.
+Status, 9 September 2026: recovery is connected to explicitly configured specialist
+preview, with all targets and durable chat attestation tested through actual MCP
+stdio and WordPress. Explicit POSIX setup, inspection, export and exact-record
+erasure are implemented. Default clients do not create files. Dispatch/capture,
+interrupted-save/platform/privacy/rollout gates and Phase 4 remain open.
 
 Source: MCP repository, branch `feat/mcp-workflows`,
 `src/scan-receipt-store.js`, `src/workflow-rest.js`, `src/scan-receipt-recovery.js`,
@@ -20,7 +19,8 @@ A trusted future driver can explicitly construct a `ScanReceiptStore` with an
 existing, dedicated private directory, pass it to `WorkflowClient`, and opt one
 exact attempt request into `retainScanReceipt: true`. This is an internal library
 option, **not a tool argument, environment switch, new route or scan permission**.
-No current handler calls it. The shipped/preview entry points remain unchanged.
+No current scan handler calls it. Preview may configure read/recovery access to an
+existing store; this does not enable capture. The shipped legacy entry is unchanged.
 
 The exact outgoing attempt is copied before awaiting anything. Capture binds to
 the configured site URL (including the WordPress subdirectory), execution ID,
@@ -70,10 +70,10 @@ The saved record is not a substitute for the server audit.
 This is filesystem-permission protection, **not encryption**. Root, this OS user,
 trusted directory parents, local administrators, host backups and debuggers remain
 outside the isolation boundary. Each local account/profile must have its own
-trusted directory; this is not remote agency role management. Windows ACL storage,
-automatic setup, operator-controlled cleanup/export/erasure and safe interrupted
-save maintenance remain activation gates. No implementation silently claims those
-are solved by mode bits.
+trusted directory; this is not remote agency role management. Explicit operator
+setup/export/erasure is described below. Windows ACL support, extended/inherited
+ACL verification and safe interrupted-save maintenance remain activation gates;
+mode-bit checks do not solve those platform permission models.
 
 ## Client behavior and privacy
 
@@ -118,8 +118,8 @@ The library targets `/scans/recovery/{id}/receipt-review` and `/scans/recovery/{
 These paths are now registered natively only behind the separate default-off
 `TAMRANK_WORKFLOW_SCAN_RECOVERY_REST_ENABLED` gate, with existing recovery/read and
 settlement gates also required. Native routing, rights, independent request limits
-and this internal client are tested together. No MCP tool accepts a packet or
-calls the bridge. Full contract: PRO repository, branch `feat/mcp-workflows`,
+and the MCP chat chain are tested together. No MCP tool accepts a packet or path.
+Full contract: PRO repository, branch `feat/mcp-workflows`,
 `docs/mcp-phase4b-scan-receipt-reconciliation.md`.
 
 ## Remaining decisions and integration
@@ -131,11 +131,74 @@ chat consent: PRO repository, branch `feat/mcp-workflows`,
 `docs/mcp-phase4b-scan-maintenance.md`. That separately gated path now has native
 REST/MCP verification and traffic limits; it does not grant this recovery authority.
 
-Before activation: connect explicit MCP review/confirmation/settlement orchestration
-and execution capture to the tested native REST/internal-client chain, provision
-the private directory safely, finish cleanup, verify external provider/plugin
-compatibility, and finish privacy/export/erasure and coordinated rollout. No public
-approve-now/start-later operation is introduced.
+Before activation: connect execution/capture, finish interrupted-save/platform
+permission handling, verify external provider/plugin compatibility and remaining
+server privacy/export/erasure and coordinated rollout. No public approve-now/
+start-later operation is introduced.
+
+## Specialist chat mapping
+
+Only `index-workflow.js` with `TAMRANK_WORKFLOW_PREVIEW=1` and
+`TAMRANK_TOOL_PROFILE=specialist` may configure `TAMRANK_SCAN_RECEIPT_DIR`.
+It must name an existing canonical private POSIX directory. Startup checks only
+readability: it creates no files and does not require free capture capacity.
+A full store/pending writer must not block reading existing valid evidence.
+Invalid configuration refuses startup without printing private paths or packets.
+Server discovery must advertise `chat_review_contract: 1` and current rights;
+unpaid administrative access cannot become paid same-user recovery.
+
+1. `get_scan_status({execution_id, receipt_reference})` loads the exact site-bound
+   reference privately and obtains the server review. Show ALL
+   `review.proposal.targets`, before/after states, the received outcome and
+   `required_acknowledgements`; do not truncate the remaining devices.
+2. After explicit chat approval, call `close_scan` with those same fields, a fresh
+   `client_request_id`, the review's `expected_runtime_hash`, and `confirmation`
+   (`mode`, `confirmed`, `client`, `agent`, `acknowledgements`, `review_hash`).
+   The confirmation hash is the **outer client `review_hash`**.
+3. The client reloads/reviews and checks that complete proposal again, then maps
+   the client hash to the verified server `proposal_hash` for private settlement.
+   WordPress verifies that proposal inside the result/stop/release transaction
+   and retains client, agent, server time, hash, acknowledgements and
+   `user approved in chat`. Human identity is not independently verified.
+4. Already-recorded/settled returns a read-only no-op. Lost responses require fresh
+   review, never remeasurement. No automatic local receipt deletion.
+
+Without `receipt_reference`, `get_scan_status`/`close_scan` retain their separate
+administrative-unknown-closure behavior. Profiles remain 12/20/42; no new tool name
+and no read-triggered closure. No path, site override or raw packet is a tool input.
+
+## Explicit local receipt lifecycle
+
+`receipt-storage.js` is an operator CLI, not an MCP tool or startup routine. It
+makes no network requests and never prints packet bytes. Use a dedicated absolute
+directory under an existing trusted parent owned by this OS user and not group/
+world writable. Replace these illustrative paths/site with the intended values:
+
+```sh
+node receipt-storage.js init --directory /absolute/private-parent/tamrank-receipts
+node receipt-storage.js list --directory /absolute/private-parent/tamrank-receipts --site https://client.example
+```
+
+`init` exclusively creates one 0700 directory: no recursive parents, symlink
+aliases, reuse or permission repair. Configure it explicitly in the preview
+client. `list` returns references, execution IDs and local receipt times only for
+the requested site, plus bounded incomplete/busy counts; no foreign-site details.
+
+`inspect` also requires `--execution` and `--reference`. It returns a
+`deletion_hash` and warns that this may be the only retained evidence. `remove`
+requires those same fields, `--expected_hash` from inspection and
+`--confirm DELETE_PRIVATE_RECEIPT`. Under the exclusive writer lock it checks the
+exact record/site/execution and deletes only that file. No directories/stale locks
+are removed. This is not recoverable from the store; independent exports remain.
+A failed acknowledgement requires local inspection, not blind retry. Server state
+is unaffected; deleting does not settle, stop or retry a scan.
+
+`export` requires the same identity fields plus `--destination`: a NEW absolute
+filename in an existing canonical private directory. It writes a 0600 private copy
+without overwriting and retains the source. Exports/backups require separate
+erasure. An interrupted export may leave a private partial file. Malformed records,
+pending files and stale locks are deliberately not force-deleted; safe interrupted-
+save maintenance remains open. Neither mode bits nor exports provide encryption.
 
 ## Verification
 
@@ -158,7 +221,7 @@ native WordPress PAT/admin/locally stored PRO checks with passive receipt review
 and atomic settlement, including same-user rotation, other-client/user refusal
 and late revocation rollback. That earlier suite does not enable recovery HTTP.
 
-PRO's `docs/mcp-phase4b-scan-recovery-http-wordpress.mjs` now adds 686 passing checks
+PRO's `docs/mcp-phase4b-scan-recovery-http-wordpress.mjs` now adds 728 passing checks
 against actual native recovery routes, with single-site and two-client subdirectory
 multisite, both REST URL forms, request-limit concurrency/faults, role/PAT/PRO
 revocation, bounded inputs, redaction, explicit uninstall and immutable original
@@ -166,11 +229,15 @@ approval. It launches `test/workflow-scan-recovery-wordpress.mjs` for 12 actual
 private-file/internal-client/server-HMAC/WordPress/SQL chains: three sites, two URL
 forms, pending versus already-recorded results. Replacement-token review and exact
 explicit settlement preserve all 50 measurements without another provider call.
-No MCP entry point is connected. Results are synthetic; no real provider is called.
+These chains now use actual MCP stdio, all 50 devices and server attestation
+readback. Results are synthetic; no real provider is called.
 Server route, authority, accounting and test-reproduction contract:
 PRO repository, branch `feat/mcp-workflows`, `docs/mcp-phase4b-scan-recovery.md`.
 
 Current 12/20/42 workflow profiles and legacy 42-tool surface remain unchanged.
+Local lifecycle/chat plus existing receipt/bridge tests total 43 TAP tests; six
+maintenance MCP tests stay green. PRO adds 18 pure chat tests and retains its
+308 native maintenance checks. Specialist tools/list: 15,974 characters (max 16,000).
 The extracted package also passed a clean-cache dependency installation with the
 repository lock and install scripts disabled, including both REST forms and all
 three installed profiles. No active/global installation or version change.
