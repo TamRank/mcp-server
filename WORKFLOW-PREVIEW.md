@@ -43,7 +43,12 @@ on a work-queue target. Discovery currently covers missing title/description/alt
 tasks with fixed post/attachment IDs. Use one Action per proposal, never infer
 IDs from URLs or pass the dashboard group ID as an Action UUID. The server checks
 full current evidence and membership again; discovery is not write permission.
-URL-only research mapping remains unavailable in capabilities.
+Existing research targets can also supply an exact WordPress `post_id` with
+`url_mapping: exact_wordpress_roundtrip`. Keep the returned Action origin and
+original URL together. `unmapped`/`unavailable` means no verified page ID: do not
+guess a local ID or substitute a path from another property. Availability depends
+on the server's verified core-cache runtime; unknown persistent caches are not
+flushed. Other automatic per-URL source discovery remains open.
 `meta.update` uses a `post_id` and
 `meta_title`/`meta_description`; `image_alt.update` uses an `attachment_id` and
 `alt_text`. Every field is `{mode: set, value: ...}` or `{mode: remove}`. Empty is
@@ -71,7 +76,7 @@ uses only the official registry, fixed repository lock and a disposable cache wi
 scripts disabled. PRO `docs/mcp-phase4c-change-store-wordpress.mjs --field-mcp`
 calls `test/field-proposal-client.mjs` against owned WordPress/MySQL fixtures:
 both REST URL forms, both workflow profiles and two-client multisite, including
-shared-queue Action discovery, linked proposals, stale/foreign-origin refusal,
+shared-queue ID/research-URL discovery, linked proposals, stale/foreign-origin refusal,
 all 25 targets with long Unicode values and unchanged website fields. Neither test
 publishes a package, sends customer credentials or activates customer features.
 
