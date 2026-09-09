@@ -48,12 +48,19 @@ Existing research targets can also supply an exact WordPress `post_id` with
 original URL together. `unmapped`/`unavailable` means no verified page ID: do not
 guess a local ID or substitute a path from another property. Availability depends
 on the server's verified core-cache runtime; unknown persistent caches are not
-flushed. Other automatic per-URL source discovery remains open.
+flushed. Automatic low-CTR targets also expose their existing per-page Action
+origin; the full source proof is still required at planning time.
 `meta.update` uses a `post_id` and
 `meta_title`/`meta_description`; `image_alt.update` uses an `attachment_id` and
-`alt_text`. Every field is `{mode: set, value: ...}` or `{mode: remove}`. Empty is
-not removal. No duplicate storage IDs, invented Action origin, body/internal-link,
-social, redirect or schema substitution. Read `get_capabilities.field_proposals`
+`alt_text`. `social.update` uses a `post_id` and `social_title`, `social_description`,
+`social_image`. An image set needs an exact existing original media-library URL;
+no arbitrary image fetch, derivative/GUID guess or attachment edit. The server
+checks current media access and source state. This is a library-reference check,
+not proof of image delivery or social-platform output. Read the capability's
+image-mapping availability and field byte limits. Every field is `{mode: set,
+value: ...}` or `{mode: remove}`. Empty is not removal; removing a social override
+may reveal a fallback. No duplicate storage IDs, invented Action origin,
+body/internal-link, redirect or schema substitution. Read `get_capabilities.field_proposals`
 first; missing capabilities fail closed. Planning needs `site:read`, `changes:write`,
 `meta:write`; `get_changes({change_set_id})` needs `site:read`, `audit:read` and the
 original site/owner. A rotated same-owner audit PAT can read history, not adopt its

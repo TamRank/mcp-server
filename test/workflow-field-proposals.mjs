@@ -21,6 +21,16 @@ for(const bad of [{...actionRequest.origin,revision:0},{...actionRequest.origin,
   assert.equal((await actionCore.get('plan_changes').h({...actionRequest,origin:bad})).isError,true);assert.equal(calls.length,0);
 }
 const id='12345678-1234-1234-1234-123456789abc';await core.get('get_changes').h({change_set_id:id});assert.deepEqual(calls.pop(),{path:'/changes/'+id,query:{}});
+const socialCore=registry({field_proposals:{...caps.field_proposals,operations:[...caps.field_proposals.operations,'social.update']}});
+const social={...request,items:[{operation:'social.update',target:{post_id:1},fields:{social_title:{mode:'set',value:'Café'},social_description:{mode:'remove'},social_image:{mode:'set',value:'https://fixture.invalid/uploads/image.png'}}}]};
+assert.ok(!(await socialCore.get('plan_changes').h(social)).isError);assert.deepEqual(calls.pop(),{path:'/changes/proposals',body:social});
+assert.equal((await core.get('plan_changes').h(social)).isError,true);assert.equal(calls.length,0);
+for(const edit of [i=>i.fields.meta_title={mode:'set',value:'wrong'},i=>i.fields.social_title.value='é'.repeat(501),
+  i=>i.fields.social_image.value='https://fixture.invalid/x#fragment',i=>i.fields.social_image.value='https://u:p@fixture.invalid/x',
+  i=>i.fields.social_image.value='/relative.png',i=>i.fields.social_image.value='',i=>i.fields.social_image.value='https://fixture.invalid/a b.png',
+  i=>i.fields.social_image={mode:'remove',value:'x'},i=>i.target.attachment_id=2]){
+  const bad=structuredClone(social);edit(bad.items[0]);assert.equal((await socialCore.get('plan_changes').h(bad)).isError,true);assert.equal(calls.length,0);
+}
 const variants=[{...request,execute:true},{...request,origin:{...request.origin,kind:'action'}},{...request,items:[]},
   {...request,items:Array(26).fill(request.items[0])},{...request,items:[request.items[0],request.items[0]]}];
 for(const edit of [i=>i.operation='body.update',i=>i.target.attachment_id=3,i=>i.fields={},i=>i.fields.alt_text={mode:'set',value:'wrong'},

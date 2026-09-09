@@ -88,7 +88,7 @@ export function workflowDefinitions() {
         note: z.string().max(4000).refine(v=>Buffer.byteLength(v,'utf8')<=4000).describe('UTF-8 bytes.').optional(),
         priority: z.enum(['laag','middel','hoog']).optional(), deadline: z.union([z.literal(''),z.string().regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)]).optional(),
       }, validate: validWork },
-    plan_changes: { description: 'Draft only. Meta: post_id/meta fields; alt: attachment_id/alt_text. set needs value; remove omits it. Copy queue action_origin, never infer IDs from URLs. Exact replay.',
+    plan_changes: { description: 'Draft only. Meta/social: post_id; alt: attachment_id. Operation-matching fields. set: value; remove: no value. Social image: existing original library URL. Copy action_origin; never guess IDs. Exact replay.',
       schema:fieldProposalSchema,fieldPlan:true,path:()=>'/changes/proposals',validate:validFieldProposal },
     execute_change_set: { description: 'Unavailable.', schema: {} },
     get_changes: { description: 'Owner-private draft ID; historical, not revalidated/executable. No list.',
