@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm, realpath } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir, homedir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -31,10 +31,15 @@ try {
   assert.equal(packed.name,pkg.name);assert.equal(packed.version,pkg.version);
   assert.equal(packed.filename,packed.filename.split('/').pop());
   const paths=packed.files.map(f=>f.path);
-  for(const p of ['index.js','index-workflow.js','src/workflow-tools.js','src/workflow-rest.js','src/scan-maintenance.js','WORKFLOW-PREVIEW.md','package.json'])assert.ok(paths.includes(p),`Missing packed ${p}`);
+  for(const p of ['index.js','index-workflow.js','receipt-storage.js','src/workflow-tools.js','src/workflow-rest.js','src/scan-maintenance.js','src/scan-recovery-chat.js','src/scan-receipt-store.js','SCAN-RECEIPTS.md','WORKFLOW-PREVIEW.md','package.json'])assert.ok(paths.includes(p),`Missing packed ${p}`);
   assert.ok(paths.every(p=>!p.split('/').some(s=>s==='..' || s.startsWith('.')) && !/^(?:test|node_modules|docs)\//.test(p)), 'No test fixtures, credentials or hidden configuration in package');
   await run('tar',['-xzf',join(scratch,packed.filename),'-C',scratch],{timeout:10000});
   const installed=join(scratch,'package');
+  const privateDirectory=join(await realpath(scratch),'receipt-storage');
+  const setup=await run(process.execPath,[join(installed,'receipt-storage.js'),'init','--directory',privateDirectory],{env:environment});
+  assert.equal(JSON.parse(setup.stdout).created,true);
+  const inventory=await run(process.execPath,[join(installed,'receipt-storage.js'),'list','--directory',privateDirectory,'--site','https://fixture.invalid'],{env:environment});
+  assert.deepEqual(JSON.parse(inventory.stdout).items,[]);
   // npm excludes package-lock.json from archives. Supply the existing repository
   // lock only to this fixture, proving packaged code with known dependencies.
   // This is not a fresh registry dependency-resolution/install guarantee.
