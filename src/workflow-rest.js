@@ -61,6 +61,11 @@ export class WorkflowClient {
       if (value !== undefined) url.searchParams.set(key, String(value));
     }
     const controller = new AbortController();
+    // A 256-KiB signed field plan can expand ~3x under WordPress 6.0 JSON Unicode
+    // escaping. Only these exact private-draft routes get a bounded 1-MiB wire cap.
+    // Ordinary analytics/scan responses retain their existing 512-KiB limit.
+    const fieldDraft=(method==='POST'&&path==='/changes/proposals')||(method==='GET'&&/^\/changes\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(path));
+    const responseLimit=fieldDraft?1048576:524288;
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
       const response = await fetch(url, { method, redirect: 'manual', signal: controller.signal,
@@ -75,7 +80,7 @@ export class WorkflowClient {
       while (true) {
         const { done, value } = await reader.read(); if (done) break;
         bytes += value.byteLength;
-        if (bytes > 524288) { await reader.cancel(); throw new ApiError(503, 'workflow_response_limit', 'Response exceeds the transport budget. Use an explicit section or smaller page.'); }
+        if (bytes > responseLimit) { await reader.cancel(); throw new ApiError(503, 'workflow_response_limit', 'Response exceeds the transport budget. Use an explicit section or smaller page.'); }
         chunks.push(Buffer.from(value));
       }
       let data;

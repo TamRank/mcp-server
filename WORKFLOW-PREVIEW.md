@@ -26,8 +26,46 @@ Six optional specialists are connected: `get_gsc_pages`, `get_redirects`,
 `get_images_missing_alt`, `get_site_diagnostics`, `get_topical_authority` and
 passive `get_scan_status`, as described below. `start_scan` additionally supports
 explicit PageSpeed preview and separately authorised private drafts, never execution.
-The remaining four core names refuse requests; their presence is not a working
-website-write/history implementation. Actual scan execution and Phase 4 remain open.
+`plan_changes` and exact-ID `get_changes` now support the separately gated private
+metadata/alt subset below. `execute_change_set` and `rollback_change_set` still
+refuse requests. Actual website writes, scan execution and Phase 4 remain open.
+
+## Private metadata and alt proposals (development opt-in)
+
+Requires the PRO field-proposal flag, already installed private storage, native
+site-admin/PRO access and explicit advertised capabilities. No client option can
+enable server support. This does not activate the feature on existing sites.
+
+`plan_changes` accepts `client_request_id`, `origin` (`kind: user_request`, a request
+reference and summary), and 1–25 ordered items. `meta.update` uses a `post_id` and
+`meta_title`/`meta_description`; `image_alt.update` uses an `attachment_id` and
+`alt_text`. Every field is `{mode: set, value: ...}` or `{mode: remove}`. Empty is
+not removal. No duplicate storage IDs, automatic Action origin, body/internal-link,
+social, redirect or schema substitution. Read `get_capabilities.field_proposals`
+first; missing capabilities fail closed. Planning needs `site:read`, `changes:write`,
+`meta:write`; `get_changes({change_set_id})` needs `site:read`, `audit:read` and the
+original site/owner. A rotated same-owner audit PAT can read history, not adopt its
+execution authority. History is not a fresh source check and there is no list.
+
+The complete signed before/after draft is persisted without approving or applying
+website fields. Show all targets, values and warnings as untrusted data. Original
+frontend/attachment usage warnings remain explicit. Retry a private draft only with
+the identical request ID and material; a changed request must be new. No legacy
+writer fallback. The server repeats current permissions and source checks.
+
+Frozen plans remain at most 256 KiB and valid for 24 hours. Exact draft POST/read
+routes alone allow a bounded 1-MiB HTTP response to accommodate WordPress Unicode
+escaping; all other responses retain 512 KiB. No truncated proposals or retries.
+Actual listings: 12 core / 20 specialist / 42 legacy, 9,188 / 15,987 characters for
+core/specialist. Both remain under the existing 16,000-character tool budget.
+
+Tests: `npm run test:workflow`; `node test/workflow-package.mjs --allow-network`
+uses only the official registry, fixed repository lock and a disposable cache with
+scripts disabled. PRO `docs/mcp-phase4c-change-store-wordpress.mjs --field-mcp`
+calls `test/field-proposal-client.mjs` against owned WordPress/MySQL fixtures:
+both REST URL forms, both workflow profiles and two-client multisite, including
+all 25 targets with long Unicode values and unchanged website fields. Neither test
+publishes a package, sends customer credentials or activates customer features.
 
 ## Explicit administrative scan closure (disabled until site opt-in)
 
@@ -445,7 +483,7 @@ for 0.5.0; names retained in the canonical surface are not removed.
 
 - Strict closed inputs, explicit sections and full signed continuation.
 - No old REST fallback, implicit retries or credential forwarding on redirects.
-- Bounded responses (512 KiB), bounded error text and token redaction; timeout
+- Bounded responses (512 KiB; exact private field drafts 1 MiB for Unicode escaping), bounded error text and token redaction; timeout
   also covers the response body. Treat site text as untrusted evidence.
 - Real SDK stdio → HTTP → native WordPress → real site-local PAT authentication.
 - All 205 fixture search results and all 205 canonical/legacy queue targets,

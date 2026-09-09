@@ -31,6 +31,7 @@ try {
   assert.equal(packed.name,pkg.name);assert.equal(packed.version,pkg.version);
   assert.equal(packed.filename,packed.filename.split('/').pop());
   const paths=packed.files.map(f=>f.path);
+  assert.ok(paths.includes('src/field-proposals.js'),'Typed field proposal contract is packaged');
   for(const p of ['index.js','index-workflow.js','receipt-storage.js','src/workflow-tools.js','src/workflow-rest.js','src/scan-maintenance.js','src/scan-recovery-chat.js','src/scan-receipt-store.js','SCAN-RECEIPTS.md','WORKFLOW-PREVIEW.md','package.json'])assert.ok(paths.includes(p),`Missing packed ${p}`);
   assert.ok(paths.every(p=>!p.split('/').some(s=>s==='..' || s.startsWith('.')) && !/^(?:test|node_modules|docs)\//.test(p)), 'No test fixtures, credentials or hidden configuration in package');
   await run('tar',['-xzf',join(scratch,packed.filename),'-C',scratch],{timeout:10000});
@@ -56,15 +57,21 @@ try {
     reads:{get_site_context:{available:true}},specialist_reads:Object.fromEntries(specialists.map(name=>[name,{available:true}]))};
   capabilities.specialist_reads.start_scan={available:true,modes:['preview'],execution_enabled:false};
   capabilities.scan_proposals={available:true,read_available:true,modes:['plan'],execution_enabled:false};
+  capabilities.field_proposals={available:true,read_available:true,contract_version:2,operations:['meta.update','image_alt.update'],origin_kinds:['user_request']};
   const proposalId='aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  const fieldRequest={client_request_id:'package-fields-0001',origin:{kind:'user_request',reference:'synthetic',summary:'Synthetic metadata request'},
+    items:[{operation:'meta.update',target:{post_id:1},fields:{meta_title:{mode:'set',value:'Café'}}}]};
   server=createServer(async(req,res)=>{
     requests.push({method:req.method,url:req.url});
     assert.equal(req.headers.authorization,'Bearer '+pat);
     const url=new URL(req.url,'http://127.0.0.1');
     const route=url.searchParams.get('rest_route') || url.pathname.replace('/wp-json','');
     assert.ok(['/tamrank/v2/capabilities','/tamrank/v2/site/context','/tamrank/v2/site/diagnostics','/tamrank/v2/scans/status','/tamrank/v2/scans/preview',
-      '/tamrank/v2/scans/proposals','/tamrank/v2/scans/proposals/'+proposalId,'/tamrank/v2/scans/maintenance/capabilities'].includes(route),'No legacy REST fallback');
-    if(route==='/tamrank/v2/scans/proposals') {
+      '/tamrank/v2/scans/proposals','/tamrank/v2/scans/proposals/'+proposalId,'/tamrank/v2/scans/maintenance/capabilities',
+      '/tamrank/v2/changes/proposals','/tamrank/v2/changes/'+proposalId].includes(route),'No legacy REST fallback');
+    if(route==='/tamrank/v2/changes/proposals'){
+      assert.equal(req.method,'POST');let body='';for await(const chunk of req)body+=chunk;assert.deepEqual(JSON.parse(body),fieldRequest);
+    }else if(route==='/tamrank/v2/scans/proposals') {
       assert.equal(req.method,'POST');let body='';for await(const chunk of req)body+=chunk;
       assert.deepEqual(JSON.parse(body),{type:'pagespeed',post_ids:[205,1],expected_revision:'a'.repeat(64),client_request_id:'package-scan-draft-0001'});
     } else assert.equal(req.method,'GET','Only explicit draft storage may POST');
@@ -92,6 +99,8 @@ try {
       assert.equal(blocked.isError,true);assert.equal(requests.length,n);
       if(!preview){assert.equal((await client.callTool({name:'get_site_context',arguments:{}})).isError,true);assert.equal(requests.length,n);}
       else if(profile!=='legacy') {
+        assert.ok(!(await client.callTool({name:'plan_changes',arguments:fieldRequest})).isError);
+        assert.ok(!(await client.callTool({name:'get_changes',arguments:{change_set_id:proposalId}})).isError);
         const read=await client.callTool({name:'get_site_context',arguments:{}});
         assert.ok(!read.isError);assert.equal(JSON.parse(read.content[0].text).fixture,true);
         if(profile==='specialist') {
