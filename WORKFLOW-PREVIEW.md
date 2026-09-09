@@ -27,10 +27,10 @@ Six optional specialists are connected: `get_gsc_pages`, `get_redirects`,
 passive `get_scan_status`, as described below. `start_scan` additionally supports
 explicit PageSpeed preview and separately authorised private drafts, never execution.
 `plan_changes` and exact-ID `get_changes` now support the separately gated private
-metadata/alt subset below. `execute_change_set` and `rollback_change_set` still
+metadata/social/alt and redirect subsets below. `execute_change_set` and `rollback_change_set` still
 refuse requests. Actual website writes, scan execution and Phase 4 remain open.
 
-## Private metadata and alt proposals (development opt-in)
+## Private field and redirect proposals (development opt-in)
 
 Requires the PRO field-proposal flag, already installed private storage, native
 site-admin/PRO access and explicit advertised capabilities. No client option can
@@ -60,11 +60,32 @@ not proof of image delivery or social-platform output. Read the capability's
 image-mapping availability and field byte limits. Every field is `{mode: set,
 value: ...}` or `{mode: remove}`. Empty is not removal; removing a social override
 may reveal a fallback. No duplicate storage IDs, invented Action origin,
-body/internal-link, redirect or schema substitution. Read `get_capabilities.field_proposals`
+body/internal-link or schema substitution. Read `get_capabilities.field_proposals`
 first; missing capabilities fail closed. Planning needs `site:read`, `changes:write`,
 `meta:write`; `get_changes({change_set_id})` needs `site:read`, `audit:read` and the
 original site/owner. A rotated same-owner audit PAT can read history, not adopt its
 execution authority. History is not a fresh source check and there is no list.
+
+Redirect drafts additionally require the server-side
+`TAMRANK_WORKFLOW_REDIRECT_PROPOSALS_ENABLED=true` gate; metadata opt-in is not
+redirect opt-in. They require `redirects:write` instead of `meta:write`; a mixed
+set requires both. Read the advertised `operations` and `redirect_contracts`.
+
+| Operation | Target | All required fields (set only) |
+|---|---|---|
+| `redirect.create` | `source_url` | `target_url`, `redirect_type` |
+| `redirect.update` | `redirect_id` | `source_url`, `target_url`, `redirect_type` |
+| `redirect.delete` | `redirect_id` | `acknowledge_deletion: true` |
+
+Use exact site-local source paths and local/same-origin destinations, at most
+255 UTF-8 bytes. Status is an integer: 301/302/307, or 410/451 with empty target.
+No regex, foreign site, guessed redirect ID, silent sanitation or partial fields.
+Existing 404 work items can advertise exact Action/URL origins. Preserve the
+original evidence; update/delete use the existing redirect source. Ordered
+delete/recreate is supported; repeating an existing redirect ID is not.
+The conservative source/routing proof and passive hook inventory do not prove
+frontend routing, destinations or captured plugin runtime state. Keep the
+returned frontend/presave warnings; `runtime_verified` and execution stay false.
 
 The complete signed before/after draft is persisted without approving or applying
 website fields. Show all targets, values and warnings as untrusted data. Original
@@ -75,16 +96,17 @@ writer fallback. The server repeats current permissions and source checks.
 Frozen plans remain at most 256 KiB and valid for 24 hours. Exact draft POST/read
 routes alone allow a bounded 1-MiB HTTP response to accommodate WordPress Unicode
 escaping; all other responses retain 512 KiB. No truncated proposals or retries.
-Actual listings: 12 core / 20 specialist / 42 legacy, 9,351 / 15,963 characters for
+Actual listings: 12 core / 20 specialist / 42 legacy, 9,434 / 15,989 characters for
 core/specialist. Both remain under the existing 16,000-character tool budget.
 
 Tests: `npm run test:workflow`; `node test/workflow-package.mjs --allow-network`
 uses only the official registry, fixed repository lock and a disposable cache with
 scripts disabled. PRO `docs/mcp-phase4c-change-store-wordpress.mjs --field-mcp`
-calls `test/field-proposal-client.mjs` against owned WordPress/MySQL fixtures:
+calls `test/field-proposal-client.mjs` and `test/redirect-proposal-client.mjs` against owned WordPress/MySQL fixtures:
 both REST URL forms, both workflow profiles and two-client multisite, including
 shared-queue ID/research-URL discovery, linked proposals, stale/foreign-origin refusal,
-all 25 targets with long Unicode values and unchanged website fields. Neither test
+all 25 targets with long Unicode values, redirect/mixed drafts and unchanged
+website fields/redirect rows. The latest chain passes 1,140 checks. Neither test
 publishes a package, sends customer credentials or activates customer features.
 
 ## Explicit administrative scan closure (disabled until site opt-in)

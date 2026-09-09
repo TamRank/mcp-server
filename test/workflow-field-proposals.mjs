@@ -49,6 +49,30 @@ for(const bad of [{},{change_set_id:id,list:true},{change_set_id:'../unsafe'}]){
 assert.equal((await registry({field_proposals:{...caps.field_proposals,read_available:false}}).get('get_changes').h({change_set_id:id})).isError,true);
 assert.equal(calls.length,0);
 console.log('PASS: exact typed field proposals/read mapping, scope gates, no execution, no invalid requests sent.');
+const redirectCore=registry({field_proposals:{...caps.field_proposals,operations:['redirect.create','redirect.update','redirect.delete','meta.update']}});
+const redirect={...request,items:[{operation:'redirect.create',target:{source_url:'/old?x=1'},fields:{target_url:{mode:'set',value:'/new'},redirect_type:{mode:'set',value:307}}}]};
+assert.ok(!(await redirectCore.get('plan_changes').h(redirect)).isError);assert.deepEqual(calls.pop(),{path:'/changes/proposals',body:redirect});
+assert.equal((await core.get('plan_changes').h(redirect)).isError,true);assert.equal(calls.length,0);
+for(const edit of [i=>i.target.post_id=1,i=>i.target.source_url='https://fixture.invalid/old',i=>i.target.source_url='//other.invalid/old',
+  i=>i.fields.redirect_type.value='301',i=>i.fields.redirect_type.value=308,i=>i.fields.redirect_type.value=true,
+  i=>i.fields.target_url.value='',i=>i.fields.target_url.value='/new#fragment',i=>i.fields.target_url.value='/other/../new',
+  i=>i.fields.target_url.value='/new%2Fhidden',i=>i.fields.target_url.value='https://u:p@fixture.invalid/new',
+  i=>i.fields.target_url.value='/'+ 'é'.repeat(128),i=>i.fields.target_url.mode='remove',i=>delete i.fields.redirect_type,
+  i=>i.fields.source_url={mode:'set',value:'/extra'}]){
+  const bad=structuredClone(redirect);edit(bad.items[0]);assert.equal((await redirectCore.get('plan_changes').h(bad)).isError,true);assert.equal(calls.length,0);
+}
+const gone=structuredClone(redirect);gone.items[0].fields.redirect_type.value=410;gone.items[0].fields.target_url.value='';
+assert.ok(!(await redirectCore.get('plan_changes').h(gone)).isError);calls.pop();
+gone.items[0].fields.target_url.value='/ignored';assert.equal((await redirectCore.get('plan_changes').h(gone)).isError,true);assert.equal(calls.length,0);
+const deletion={operation:'redirect.delete',target:{redirect_id:1},fields:{acknowledge_deletion:{mode:'set',value:true}}};
+const update={operation:'redirect.update',target:{redirect_id:2},fields:{source_url:{mode:'set',value:'/old'},target_url:{mode:'set',value:'/new'},redirect_type:{mode:'set',value:302}}};
+const mixed={...request,items:[deletion,request.items[0],update,redirect.items[0]]};
+assert.ok(!(await redirectCore.get('plan_changes').h(mixed)).isError);assert.deepEqual(calls.pop().body,mixed);
+const repeated={...mixed,items:[deletion,{...update,target:{redirect_id:1}}]};
+assert.equal((await redirectCore.get('plan_changes').h(repeated)).isError,true);assert.equal(calls.length,0);
+for(const value of [false,'true',1]){const bad=structuredClone(deletion);bad.fields.acknowledge_deletion.value=value;
+  assert.equal((await redirectCore.get('plan_changes').h({...request,items:[bad]})).isError,true);assert.equal(calls.length,0);}
+console.log('PASS: typed redirect proposals, exact status/URL/deletion fields, namespaced identities and unavailable operations.');
 let bytes=600000;
 const http=createServer((req,res)=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify({contract_version:2,value:'x'.repeat(bytes)}));});
 await new Promise(resolve=>http.listen(0,'127.0.0.1',resolve));

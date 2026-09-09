@@ -74,8 +74,8 @@ export function workflowDefinitions() {
     get_signals: { description: 'Signals/windows/work relations; not tasks.', schema: { signal_id: pageId.optional(), section: z.enum(['overview','targets','relations']).optional(), type: z.string().max(64).optional(), subject_id: pageId.optional(), ...paging },
       path: a => '/signals' + (a.signal_id ? '/' + a.signal_id : ''), omit: ['signal_id'] },
     search_pages: { description: 'Published managed pages; paginated, not score-ranked.', schema: { q: z.string().max(200).optional(), type: z.string().regex(/^[a-z0-9_-]{1,32}$/).optional(), missing: z.enum(['meta_title','meta_description']).optional(), ...paging }, path: () => '/pages' },
-    get_page: { description: 'Stored page fields/raw content, not rendered.', schema: { post_id: pageId, section: z.enum(['overview','metadata','content','importance']).optional(), limit: z.number().int().min(1).max(4).optional(), cursor }, path: a => `/pages/${a.post_id}`, omit: ['post_id'] },
-    diagnose_page: { description: 'ID or exact URL (selected-property GSC only). Keywords: available_windows, adjacent/equal compare_to. Paginate stability/keywords. No fetch; missing is unknown.', schema: { post_id: pageId.optional(), url: z.string().min(1).max(2048).refine(validDiagnosisUrl).optional(), section: z.enum(['overview','metadata','gsc','index','pagespeed','stability','comparison','keywords']).optional(), query: z.string().min(1).max(512).refine(v=>Buffer.byteLength(v,'utf8')<=512 && !/[\x00-\x1f\x7f]/.test(v)).optional(), window: z.string().refine(validKeywordWindow).optional(), compare_to: z.string().refine(validKeywordWindow).optional(), ...paging }, path: a => a.url!==undefined?'/gsc/diagnosis':`/pages/${a.post_id}/diagnosis`, omit: ['post_id'], validate: validDiagnosis },
+    get_page: { description: 'Stored fields/raw content, not rendered.', schema: { post_id: pageId, section: z.enum(['overview','metadata','content','importance']).optional(), limit: z.number().int().min(1).max(4).optional(), cursor }, path: a => `/pages/${a.post_id}`, omit: ['post_id'] },
+    diagnose_page: { description: 'ID or exact selected-property GSC URL. Keywords: available_windows, equal/adjacent compare_to. Paginate stability/keywords. No fetch; missing=unknown.', schema: { post_id: pageId.optional(), url: z.string().min(1).max(2048).refine(validDiagnosisUrl).optional(), section: z.enum(['overview','metadata','gsc','index','pagespeed','stability','comparison','keywords']).optional(), query: z.string().min(1).max(512).refine(v=>Buffer.byteLength(v,'utf8')<=512 && !/[\x00-\x1f\x7f]/.test(v)).optional(), window: z.string().refine(validKeywordWindow).optional(), compare_to: z.string().refine(validKeywordWindow).optional(), ...paging }, path: a => a.url!==undefined?'/gsc/diagnosis':`/pages/${a.post_id}/diagnosis`, omit: ['post_id'], validate: validDiagnosis },
     update_work_item: { description: 'Explicit task edits: tasks:write/admin revision; note replaces/empty clears. Pickup: snapshot/targets. Importance: importance:write/get_page expected_value.',
       write: true, path: () => '/work-items', schema: {
         client_request_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/),
@@ -88,7 +88,7 @@ export function workflowDefinitions() {
         note: z.string().max(4000).refine(v=>Buffer.byteLength(v,'utf8')<=4000).describe('UTF-8 bytes.').optional(),
         priority: z.enum(['laag','middel','hoog']).optional(), deadline: z.union([z.literal(''),z.string().regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)]).optional(),
       }, validate: validWork },
-    plan_changes: { description: 'Draft only. Meta/social: post_id; alt: attachment_id. Operation-matching fields. set: value; remove: no value. Social image: existing original library URL. Copy action_origin; never guess IDs. Exact replay.',
+    plan_changes: { description: 'Drafts only. Meta/social: post_id; alt: attachment_id; redirect create: source_url, update/delete: redirect_id. Redirects: all fields set, delete acknowledge_deletion=true. Image: original library URL. Copy action_origin, not guessed IDs. Exact replay.',
       schema:fieldProposalSchema,fieldPlan:true,path:()=>'/changes/proposals',validate:validFieldProposal },
     execute_change_set: { description: 'Unavailable.', schema: {} },
     get_changes: { description: 'Owner-private draft ID; historical, not revalidated/executable. No list.',
@@ -194,7 +194,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   for (const [name, def] of Object.entries(defs)) register(name, def);
   if (profile === 'specialist') for (const name of ['get_site_diagnostics','get_gsc_pages','get_redirects','get_images_missing_alt','get_topical_authority','start_scan','get_scan_status']) {
     register(name, name==='get_site_diagnostics'?{
-      description:'Metadata/index/schema; 404_urls groups, 404_events + url. q: case-sensitive title/URL; summary unfiltered. No live validation/visitor data.',
+      description:'Stored diagnostics; 404_urls groups, 404_events + url. q: case-sensitive title/URL; summary unfiltered. No live/visitor data.',
       specialist:true,path:()=>'/site/diagnostics',schema:{section:z.enum(['overview','metadata','index','schema','404_urls','404_events']).optional(),
         q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),
         url:z.string().min(1).max(4096).refine(v=>Buffer.byteLength(v,'utf8')<=4096).optional(),...paging},
@@ -213,11 +213,11 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         state:z.enum(['all','active','inactive']).optional(),match_type:z.enum(['exact','regex']).optional(),...paging},
       validate:a=>a.section==='trace'?a.redirect_id!==undefined && !['q','state','match_type'].some(k=>Object.hasOwn(a,k)):a.redirect_id===undefined,
     }:name==='get_images_missing_alt'?{
-      description:'Blank alt may be decorative. Usage unknown despite public parent. q: case-sensitive title. stored_url: unverified GUID. No image/body fetch/write.',
+      description:'Alt may be decorative; public parent is not usage proof. q: case-sensitive title; stored_url: unverified GUID. No fetch/write.',
       specialist:true,path:()=>'/images/missing-alt',schema:{
         q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),...paging},
     }:name==='get_topical_authority'?{
-      description:'Topical map; pages/topics: one-based cluster. Historical advice, not demand/tasks. No analysis/content/link writes.',
+      description:'Historical topical map, not demand/tasks. pages/topics: one-based cluster. No analysis/content/link writes.',
       specialist:true,path:()=>'/site/topical-authority',schema:{section:z.enum(['overview','clusters','pages','topics','gaps','recommendations']).optional(),cluster:z.number().int().min(1).max(10000).optional(),...paging},
       validate:a=>(a.section || 'overview')==='overview'?Object.keys(a).every(k=>k==='section'):['pages','topics'].includes(a.section)?a.cluster!==undefined:a.cluster===undefined,
     }:name==='get_scan_status'?{
@@ -227,7 +227,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         proposal_id:scanId.optional(),execution_id:scanId.optional(),receipt_reference:receiptReference.optional()},
       validate:a=>a.receipt_reference!==undefined?a.execution_id!==undefined && Object.keys(a).length===2:a.proposal_id!==undefined || a.execution_id!==undefined?Object.keys(a).length===1:a.type!==undefined,
     }:{
-      description:'PageSpeed preview; plan: private 24h draft, revision/request ID/scans:plan. Show ALL targets/budget/warnings. Exact replay; no approval/provider/start.',
+      description:'PageSpeed preview/24h draft; revision/request ID/scans:plan. Show ALL targets/budget/warnings. Exact replay; no approval/provider/start.',
       specialist:true,scanPlan:true,path:a=>a.mode==='plan'?'/scans/proposals':'/scans/preview',schema:{mode:z.enum(['preview','plan']),type:z.literal('pagespeed'),
         post_ids:z.array(pageId).min(1).max(25).refine(ids=>new Set(ids).size===ids.length),expected_revision:z.string().regex(/^[a-f0-9]{64}$/).optional(),
         client_request_id:z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/).optional()},
