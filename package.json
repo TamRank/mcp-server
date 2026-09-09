@@ -10,6 +10,7 @@
   "files": [
     "index.js",
     "index-workflow.js",
+    "receipt-storage.js",
     "src/",
     "assets/",
     "README.md",

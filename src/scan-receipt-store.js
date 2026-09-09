@@ -1,7 +1,7 @@
 /** Private local retention only. This module grants no scan or recovery authority. */
 import { constants as F } from 'node:fs';
-import { open, lstat, realpath, readdir, link, unlink } from 'node:fs/promises';
-import { isAbsolute, resolve, join } from 'node:path';
+import { open, lstat, realpath, opendir, link, unlink, mkdir } from 'node:fs/promises';
+import { isAbsolute, resolve, join, dirname } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 
 const FORMAT = 'tamrank-scan-receipt-1';
@@ -52,6 +52,23 @@ function identity(input) {
 }
 const reference = input => 'receipt_' + hash(JSON.stringify(identity(input)));
 const safeError = error => error instanceof ScanReceiptError ? error : new ScanReceiptError();
+async function boundedEntries(directory){const entries=[];
+  for await(const entry of await opendir(directory)){
+    if(entries.length>=MAX_SCAN_RECEIPTS+2)throw new ScanReceiptError('scan_receipt_storage_full');entries.push(entry.name);
+  }return entries;
+}
+
+/** Explicit local setup only. Never creates ancestors, repairs permissions or reuses an existing path. */
+export async function initializeReceiptDirectory(directory){
+  try {
+    if(typeof directory!=='string' || !isAbsolute(directory) || typeof process.getuid!=='function')throw new Error();
+    const target=resolve(directory),parent=dirname(target),p=await lstat(parent);
+    if(await realpath(parent)!==parent || !p.isDirectory() || p.uid!==process.getuid() || (p.mode & 0o022)!==0)throw new Error();
+    await mkdir(target,{mode:0o700});
+    await new ScanReceiptStore({directory:target}).checkReadable();
+    return {created:true};
+  } catch {throw new ScanReceiptError('scan_receipt_setup_refused');}
+}
 
 /**
  * An explicitly configured, pre-existing private POSIX directory. No default path,
@@ -85,11 +102,12 @@ export class ScanReceiptStore {
     } catch (error) { await handle.close(); throw error; }
   }
   /** Read-only readiness check, not a reservation or guarantee against later I/O loss. */
+  async checkReadable(){let root;try{root=await this.#root();}catch(error){throw safeError(error);}finally{await root?.close();}}
   async checkReady() {
     let root;
     try {
       root = await this.#root();
-      const entries = await readdir(this.#directory);
+      const entries = await boundedEntries(this.#directory);
       if (entries.includes('.write-lock')) throw new ScanReceiptError('scan_receipt_storage_busy');
       if (entries.length >= MAX_SCAN_RECEIPTS) throw new ScanReceiptError('scan_receipt_storage_full');
     } catch (error) { throw safeError(error); }
@@ -129,7 +147,7 @@ export class ScanReceiptStore {
         await root.sync();
         return { receipt_reference: ref, retained: true, replayed: true };
       } catch (error) { if (error.code !== 'ENOENT') throw error; }
-      const entries = await readdir(this.#directory);
+      const entries = await boundedEntries(this.#directory);
       // Count incomplete saves too; never evict somebody else's private evidence.
       if (entries.filter(name => name !== '.write-lock').length >= MAX_SCAN_RECEIPTS)
         throw new ScanReceiptError('scan_receipt_storage_full');
@@ -170,5 +188,57 @@ export class ScanReceiptStore {
       return record;
     } catch (error) { throw safeError(error); }
     finally { await root?.close().catch(() => {}); }
+  }
+  /** Bounded local inventory, only for the explicitly requested site. No packets or foreign-site details. */
+  async list({site_url}){
+    let root;
+    try {
+      const site=receiptSite(site_url);root=await this.#root();const entries=await boundedEntries(this.#directory);
+      const items=[];let incomplete=0;
+      for(const name of entries.sort()){
+        if(!/^receipt_[a-f0-9]{64}\.json$/.test(name)){incomplete++;continue;}
+        const ref=name.slice(0,-5),record=await this.#read(ref);
+        if(record.receipt.site_url===site)items.push({receipt_reference:ref,execution_id:record.receipt.execution_id,stored_at:record.stored_at});
+      }
+      return {items,incomplete_entries:incomplete,write_busy:entries.includes('.write-lock'),private_result_returned:false};
+    } catch(error){throw safeError(error);}finally{await root?.close();}
+  }
+  /** Inspection grants no server settlement and explicitly warns before local evidence erasure. */
+  async inspect(ref,context){
+    const record=await this.load(ref,context);
+    return {receipt_reference:ref,execution_id:record.receipt.execution_id,stored_at:record.stored_at,
+      deletion_hash:hash(JSON.stringify(record)),required_confirmation:'DELETE_PRIVATE_RECEIPT',
+      warning:'Deleting this local file may remove the only retained evidence. It does not settle, stop or retry a server scan.',private_result_returned:false};
+  }
+  /** Explicit exact-record removal under the same exclusive writer lock. Never stale-lock stealing. */
+  async remove(ref,context,{expected_hash,confirmation}={}){
+    if(typeof expected_hash!=='string' || !digest.test(expected_hash) || confirmation!=='DELETE_PRIVATE_RECEIPT')
+      throw new ScanReceiptError('scan_receipt_delete_confirmation_required');
+    let root,lock,removed=false;
+    try {
+      root=await this.#root();
+      try{lock=await open(join(this.#directory,'.write-lock'),F.O_WRONLY|F.O_CREAT|F.O_EXCL|F.O_NOFOLLOW,0o600);}
+      catch(error){if(error.code==='EEXIST')throw new ScanReceiptError('scan_receipt_storage_busy');throw error;}
+      const preview=await this.inspect(ref,context);
+      if(preview.deletion_hash!==expected_hash)throw new ScanReceiptError('scan_receipt_delete_changed');
+      await unlink(this.#file(ref));removed=true;await root.sync();
+      return {removed:true,receipt_reference:ref,server_changed:false,recoverable_from_this_store:false};
+    } catch(error){if(removed)throw new ScanReceiptError('scan_receipt_delete_acknowledgement_uncertain');throw safeError(error);}
+    finally{if(lock){await lock.close().catch(()=>{});await unlink(join(this.#directory,'.write-lock')).catch(()=>{});}await root?.close();}
+  }
+  /** Explicit private export to a NEW file in an existing private directory; never prints packet bytes. */
+  async export(ref,context,destination){
+    let root,file;
+    try{
+      const record=await this.load(ref,context);
+      if(typeof destination!=='string' || !isAbsolute(destination) || resolve(destination)!==destination)throw new Error();
+      const parent=dirname(destination),stat=await lstat(parent);
+      if(await realpath(parent)!==parent || !this.#private(stat,true))throw new Error();
+      root=await open(parent,F.O_RDONLY|F.O_DIRECTORY|F.O_NOFOLLOW);
+      file=await open(destination,F.O_WRONLY|F.O_CREAT|F.O_EXCL|F.O_NOFOLLOW,0o600);
+      await file.writeFile(JSON.stringify(record),'utf8');await file.sync();await file.close();file=null;await root.sync();
+      return {exported:true,source_retained:true,contains_private_result:true};
+    }catch{throw new ScanReceiptError('scan_receipt_export_refused_or_uncertain');}
+    finally{await file?.close().catch(()=>{});await root?.close();}
   }
 }
