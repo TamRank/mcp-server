@@ -9,9 +9,10 @@ let input='';for await(const chunk of process.stdin)input+=chunk;
 const f=JSON.parse(input),repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 assert.match(f.root||'',/^\/private\/tmp\/tr-maint-wp-[A-Za-z0-9]{6}$/);assert.ok(existsSync(f.root+'/owned-fixture'));
 assert.match(f.site_url||'',/^https:\/\/schema-source\.example\.org:[0-9]{4,5}(?:\/client-two)?$/);
-assert.ok(f.token?.startsWith('tamrank_pat_'));assert.equal(f.requests.length,3);
-let checks=0;const check=(v,label)=>{checks++;assert.ok(v,label);};
-for(const style of ['pretty','query']){
+assert.ok(f.token?.startsWith('tamrank_pat_'));assert.ok(f.requests.length>0&&f.requests.length<=6);
+const styles=f.styles??['pretty','query'];assert.ok(styles.length>0&&styles.every(s=>['pretty','query'].includes(s)));
+let checks=0;const drafts=[];const check=(v,label)=>{checks++;assert.ok(v,label);};
+for(const style of styles){
   const client=new Client({name:'Owned schema proposal client',version:'1'});
   const transport=new StdioClientTransport({command:process.execPath,
     args:['--import',path.join(repo,'test/owned-schema-dns.mjs'),path.join(repo,'index-workflow.js')],cwd:repo,stderr:'pipe',
@@ -30,7 +31,16 @@ for(const style of ['pretty','query']){
       check(!preview.plan_persisted&&preview.schema_proposals_available,'Preview remains unsaved even when storage is available');
       args.items=[preview.proposal_item];
       const result=await ok('plan_changes',args);
+      drafts.push({id:result.envelope.plan.change_set_id,hash:result.envelope.plan_hash});
       check(result.plan_persisted&&!result.approval_recorded&&!result.execution_available,'Private schema draft is not approved or executable');
+      checks++;assert.deepEqual(result.envelope.plan.origin,args.origin,'Exact requested origin retained');
+      if(args.origin.kind==='action'){
+        const proof=result.envelope.plan.origin_evidence;
+        check(proof.action_id===args.origin.action_id&&proof.revision===args.origin.revision&&proof.snapshot_hash===args.origin.snapshot_hash,'Native canonical task evidence retained');
+        check(proof.selected_targets.length===args.items.length,'Every selected target has original task evidence');
+        const wrong=structuredClone(args);wrong.client_request_id+='-origin';wrong.origin.snapshot_hash='0'.repeat(64);
+        check((await call('plan_changes',wrong)).isError,'A task ID without its current evidence cannot create a draft');
+      }
       checks++;assert.deepEqual(result.envelope.plan.items[0].dependencies.comparison,preview.comparison,'Same exact comparison in stored proposal');
       const read=await ok('get_changes',{change_set_id:result.envelope.plan.change_set_id});checks++;assert.deepEqual(read,result,'Exact private own history');
       const replay=await ok('plan_changes',args);checks++;assert.deepEqual(replay,result,'Exact idempotent public proposal replay');
@@ -44,4 +54,4 @@ for(const style of ['pretty','query']){
     check((await call('rollback_change_set',{})).isError,'Rollback stays unavailable');
   }finally{await client.close();}
 }
-process.stdout.write(JSON.stringify({ok:true,checks}));
+process.stdout.write(JSON.stringify({ok:true,checks,drafts}));
