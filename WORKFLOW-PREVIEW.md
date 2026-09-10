@@ -20,10 +20,10 @@ The matching PRO route requires `TAMRANK_WORKFLOW_READS_ENABLED`,
 `TAMRANK_WORKFLOW_SCHEMA_CAPTURE_ENABLED` and
 `TAMRANK_WORKFLOW_SCHEMA_PREVIEW_REST_ENABLED`, plus all four scopes
 `site:read`, `changes:write`, `schema:write`, `scans:plan`. Native source planning
-now has the separate opt-in below; schema proposal storage is unfinished. Do not activate this
+and schema proposal storage each have the separate opt-ins below. Do not activate this
 on customer sites. Restart the bridge after changing advertised availability.
 
-The enabled core/specialist catalogs are 9,762/15,976 characters, within the
+The enabled core/specialist catalogs with schema storage are 9,879/15,995 characters, within the
 16,000-character budget. Local JSON Schema references and removal of redundant
 type/dialect information preserve all fields, limits and SDK validation. Unknown
 dialects/vocabulary are not rewritten. `test/workflow-catalog.mjs` checks every
@@ -72,8 +72,38 @@ The test counts every frontend attempt, verifies exact chat stubs and replay,
 compares the MCP result with an independent native database read, and checks that
 page/metadata remain unchanged. No prebuilt source receipt or successful HTML
 is supplied. Only the fixed test DNS/port/environment and temporary CA trust are
-injected. General host/output acceptance and public schema proposal storage
-remain open. See PRO `docs/mcp-phase4c-schema-capture.md`.
+injected. General host/output acceptance remains open. The separate private
+schema proposal route is described below. See PRO `docs/mcp-phase4c-schema-capture.md`.
+
+### Private native schema proposals (development opt-in)
+
+With `schema_preview.schema_proposals_available:true` and the exact operation in
+`field_proposals.operations`, use the preview's `proposal_item` unchanged inside
+`plan_changes({client_request_id,origin,items})`. Its `expected_revision` is
+mandatory when saving. `schema_preview` remains a separate compare-only request;
+never mix it with draft fields. Read the resulting private set using `get_changes`.
+
+The PRO flag `TAMRANK_WORKFLOW_SCHEMA_PROPOSALS_ENABLED` requires the existing
+field-draft and native-preview gates, installed private stores and current
+schema/scan-plan permissions. New schema proposals require native renderer
+evidence; old HTML-only internal drafts cannot bypass that by replaying their
+request ID. Historical native replay is not current-source revalidation.
+Storage records no approval and exposes no executor. Site identity is one
+standalone user-request item with `facts_confirmed:true`; page schema retains
+the canonical Action contract. Do not invent business facts or supply JSON-LD.
+Duplicate WordPress targets, including mixed schema/metadata, are refused.
+
+PRO `--schema-proposals-mcp` and `test/schema-proposals-native-client.mjs` pass
+888 checks per PHP 8.2/8.5, all three operations, both REST URL styles,
+single-site and two-client multisite. The fixture prepares actual native source
+receipts; the separate 936-check acquisition suite verifies creating them through
+MCP. Draft/read/replay preserve the native comparison and leave website and source
+jobs unchanged. Old preview-only mode and metadata/redirect chains remain tested.
+`test/workflow-schema-proposals.mjs` covers closed input, exact revisions, origin,
+mixed targets and capabilities. The catalog suite now has 16,228 equivalence checks.
+Remaining acceptance includes larger/mixed schema sets, public Action-origin
+chains and full source/output/host/cache/privacy compatibility. 4C remains open;
+execution and rollback belong to 4D.
 
 ## Entry and profiles
 
