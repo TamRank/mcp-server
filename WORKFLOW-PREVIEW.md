@@ -19,11 +19,11 @@ plan, approval or execution, and no automatic retry.
 The matching PRO route requires `TAMRANK_WORKFLOW_READS_ENABLED`,
 `TAMRANK_WORKFLOW_SCHEMA_CAPTURE_ENABLED` and
 `TAMRANK_WORKFLOW_SCHEMA_PREVIEW_REST_ENABLED`, plus all four scopes
-`site:read`, `changes:write`, `schema:write`, `scans:plan`. Public native source
-planning and schema proposal storage are still unfinished; do not activate this
+`site:read`, `changes:write`, `schema:write`, `scans:plan`. Native source planning
+now has the separate opt-in below; schema proposal storage is unfinished. Do not activate this
 on customer sites. Restart the bridge after changing advertised availability.
 
-The enabled core/specialist catalogs are 9,770/15,941 characters, within the
+The enabled core/specialist catalogs are 9,762/15,976 characters, within the
 16,000-character budget. Local JSON Schema references and removal of redundant
 type/dialect information preserve all fields, limits and SDK validation. Unknown
 dialects/vocabulary are not rewritten. `test/workflow-catalog.mjs` checks every
@@ -38,6 +38,33 @@ process maps DNS to loopback and trusts its temporary CA. This does not prove
 general hosting, builder, cache or competing-schema compatibility. Details are in
 `samkl8/tamrank-pro`, branch `feat/mcp-workflows`,
 `docs/mcp-phase4c-schema-selection.md`.
+
+### Native source acquisition (separate development opt-in)
+
+`start_scan` accepts `capture_mode: native_render` for schema-source preview/plan
+only when advertised in `schema_source_jobs.capture_modes`. Legacy source jobs
+omit the field and retain their original hashes. A native plan may additionally
+request `probe_content:true`, only with `probe_content_available:true`. That
+adds `additional_content_filter_pass` to the four original acknowledgements.
+Show the returned exact target, extra-pass warning and proposal before seeking
+chat approval. Run uses the saved job and exact plan hash; never repeat or change
+capture/probe fields during run. No transcript is stored; client/agent provenance
+is an attestation, not independently verified human approval.
+
+The PRO source route additionally requires
+`TAMRANK_WORKFLOW_SCHEMA_NATIVE_SOURCE_REST_ENABLED` and
+`TAMRANK_WORKFLOW_SCHEMA_RENDER_CAPTURE_ENABLED` strictly true. All normal source
+route flags, installed storage and scope checks still apply. No website/schema
+write is enabled. Responses never include private HTML/render observations.
+
+`test/workflow-source-scans.mjs` covers source/native/native-probe over real
+stdio/HTTP with synthetic API responses, both URL forms and uncertain results
+without automatic retry. The PRO `--schema-native-source-rest` fixture separately
+passes 648 checks per PHP 8.2/8.5: real REST dispatch through native storage to an
+independent TLS frontend and back into schema preview, single-/multisite. Its
+fixed test DNS/port/environment are injected, not the returned HTML. A single
+joined MCP/HTTP/native-acquisition test, general host/output acceptance and schema
+proposal storage remain open. See PRO `docs/mcp-phase4c-schema-capture.md`.
 
 ## Entry and profiles
 
