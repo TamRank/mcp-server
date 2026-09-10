@@ -107,8 +107,14 @@ task evidence, changed-task/member refusal with no partial storage, private-sour
 isolation, unchanged history and the actual MCP/TLS chain for select/detect.
 Completed fixture drafts are cancelled through
 the ordinary lifecycle, without raising product storage or HTTP limits.
-Remaining acceptance includes larger/mixed schema sets and full
-source/output/host/cache/privacy compatibility. 4C remains open;
+The separate `--schema-batch-mcp` PRO fixture with
+`test/schema-batch-native-client.mjs` now passes 1,443 checks per PHP 8.2/8.5.
+It covers eight independent native schema receipts and an exact 25-item
+schema/metadata Action-bound set, both URL styles, single-site/two-client multisite,
+later-item conflicts, missing metadata scope, storage failure after two inserts
+and full rollback followed by safe same-ID retry. Website fields remain unchanged.
+The 25-item proposal bound does not raise source acquisition quotas or source TTL.
+Remaining acceptance includes full source/output/host/cache/privacy compatibility. 4C remains open;
 execution and rollback belong to 4D.
 
 ## Entry and profiles
