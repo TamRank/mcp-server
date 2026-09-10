@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { registerTools as registerLegacy } from './tools.js';
 import { closeScanSchema, scanId } from './scan-maintenance.js';
 import {receiptReference,recoveryAcks} from './scan-recovery-chat.js';
-import {maintenanceAcks} from './scan-maintenance.js';
+import {maintenanceAcks,sourceMaintenanceAcks} from './scan-maintenance.js';
 import { rateLimitAdvice } from './workflow-rest.js';
 import {fieldProposalSchema,validFieldProposal} from './field-proposals.js';
 
@@ -121,10 +121,12 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
             expected_review_hash:a.confirmation.review_hash,confirmed:true,confirmation:a.confirmation}):await recovery.reviewChat(ctx));
         } catch(err){return failure(err.code || 'scan_receipt_recovery_failed','Receipt recovery refused or uncertain. Read the current receipt review; never repeat the measurement.',err.status===429?rateLimitAdvice(err.data):undefined);}
       }
-      const maintenanceRead=canonical==='get_scan_status' && parsed.data.execution_id!==undefined;
+      const sourceMaintenance=parsed.data.source_job_id!==undefined && (canonical==='get_scan_status'||canonical==='close_scan');
+      const maintenanceRead=canonical==='get_scan_status' && (parsed.data.execution_id!==undefined || sourceMaintenance);
       if(maintenanceOnly && canonical!=='get_capabilities' && !maintenanceRead && !def.maintenanceWrite)
         return failure('workflow_operation_unavailable','Only administrative scan review/closure is available without PRO access. Nothing was sent.');
-      if((maintenanceRead || def.maintenanceWrite) && capabilities?.scan_maintenance?.[def.maintenanceWrite?'available':'read_available']!==true)
+      const maintenanceCapabilities=sourceMaintenance?capabilities?.scan_maintenance?.schema_source:capabilities?.scan_maintenance;
+      if((maintenanceRead || def.maintenanceWrite) && maintenanceCapabilities?.[def.maintenanceWrite?'available':'read_available']!==true)
         return failure('workflow_operation_unavailable','Administrative scan maintenance requires explicit site support and scans:maintain. Nothing was sent.');
       if (!def.path) return failure('workflow_operation_unavailable',`${canonical} has no verified implementation in this preview. No request or mutation was sent.`);
       if((def.fieldPlan||def.fieldRead)&&(capabilities?.field_proposals?.contract_version!==2
@@ -221,13 +223,13 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       specialist:true,path:()=>'/site/topical-authority',schema:{section:z.enum(['overview','clusters','pages','topics','gaps','recommendations']).optional(),cluster:z.number().int().min(1).max(10000).optional(),...paging},
       validate:a=>(a.section || 'overview')==='overview'?Object.keys(a).every(k=>k==='section'):['pages','topics'].includes(a.section)?a.cluster!==undefined:a.cluster===undefined,
     }:name==='get_scan_status'?{
-      description:'execution_id: review; receipt_reference: same-user recovery; proposal_id: draft; else type/expected_ref. Show ALL targets/warnings; no start/closure.',
-      specialist:true,path:a=>a.execution_id?'/scans/maintenance/'+a.execution_id:a.proposal_id?'/scans/proposals/'+a.proposal_id:'/scans/status',omit:['proposal_id','execution_id'],
+      description:'Review: source_job_id/execution_id; recovery: receipt_reference; draft: proposal_id; else type/expected_ref. Show ALL targets/warnings. No start.',
+      specialist:true,path:a=>a.source_job_id?'/scans/maintenance/sources/'+a.source_job_id:a.execution_id?'/scans/maintenance/'+a.execution_id:a.proposal_id?'/scans/proposals/'+a.proposal_id:'/scans/status',omit:['proposal_id','execution_id','source_job_id'],
       schema:{type:z.enum(['index','pagespeed']).optional(),expected_ref:z.string().regex(/^stored:[a-f0-9]{32}$/).optional(),
-        proposal_id:scanId.optional(),execution_id:scanId.optional(),receipt_reference:receiptReference.optional()},
-      validate:a=>a.receipt_reference!==undefined?a.execution_id!==undefined && Object.keys(a).length===2:a.proposal_id!==undefined || a.execution_id!==undefined?Object.keys(a).length===1:a.type!==undefined,
+        proposal_id:scanId.optional(),execution_id:scanId.optional(),source_job_id:scanId.optional(),receipt_reference:receiptReference.optional()},
+      validate:a=>a.receipt_reference!==undefined?a.execution_id!==undefined && Object.keys(a).length===2:a.proposal_id!==undefined || a.execution_id!==undefined || a.source_job_id!==undefined?Object.keys(a).length===1:a.type!==undefined,
     }:{
-      description:'PageSpeed preview/24h draft; revision/request ID/scans:plan. Show ALL targets/budget/warnings. Exact replay; no approval/provider/start.',
+      description:'PageSpeed preview/24h draft (scans:plan). ALL targets/budget/warnings; exact replay. No consent/provider.',
       specialist:true,scanPlan:true,path:a=>a.mode==='plan'?'/scans/proposals':'/scans/preview',schema:{mode:z.enum(['preview','plan']),type:z.literal('pagespeed'),
         post_ids:z.array(pageId).min(1).max(25).refine(ids=>new Set(ids).size===ids.length),expected_revision:z.string().regex(/^[a-f0-9]{64}$/).optional(),
         client_request_id:z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/).optional()},
@@ -236,9 +238,13 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
     });
   }
   if(profile==='specialist') register('close_scan',{
-    description:'get_scan_status, chat approval of ALL targets/warnings, copy acknowledgements. receipt_reference: retain result/stop remainder (same user/PRO); confirmation.review_hash = outer review_hash. Else unknown; provider may continue. No retry/site change. Uncertain: review again.',
-    specialist:true,maintenanceWrite:true,schema:{...closeScanSchema,receipt_reference:receiptReference.optional(),
+    description:'After get_scan_status and exact chat approval, copy hash/acks. Source: expected_revision; scan: expected_runtime_hash. Unknown unless receipt recovery; provider may continue. No resend.',
+    specialist:true,maintenanceWrite:true,schema:{...closeScanSchema,execution_id:scanId.optional(),source_job_id:scanId.optional(),
+      expected_runtime_hash:closeScanSchema.expected_runtime_hash.optional(),expected_revision:closeScanSchema.expected_runtime_hash.optional(),receipt_reference:receiptReference.optional(),
       confirmation:closeScanSchema.confirmation.extend({acknowledgements:z.array(z.string()).length(4)})},
-    validate:a=>a.confirmation.acknowledgements.every((v,i)=>v===(a.receipt_reference?recoveryAcks:maintenanceAcks)[i]),path:a=>'/scans/maintenance/'+a.execution_id,
+    validate:a=>(a.source_job_id!==undefined?a.expected_revision!==undefined && a.execution_id===undefined && a.expected_runtime_hash===undefined && a.receipt_reference===undefined
+      :a.execution_id!==undefined && a.expected_runtime_hash!==undefined && a.expected_revision===undefined)
+      &&a.confirmation.acknowledgements.every((v,i)=>v===(a.source_job_id?sourceMaintenanceAcks:a.receipt_reference?recoveryAcks:maintenanceAcks)[i]),
+    path:a=>a.source_job_id?'/scans/maintenance/sources/'+a.source_job_id:'/scans/maintenance/'+a.execution_id,
   });
 }

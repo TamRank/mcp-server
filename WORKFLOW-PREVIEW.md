@@ -143,7 +143,24 @@ See PRO repository, branch `feat/mcp-workflows`,
 `docs/mcp-phase4b-scan-maintenance.md` and `docs/mcp-phase4b-maintenance-budget.md`
 for the full contract, fixed-window limits and verification gates.
 Tests: `node --test test/workflow-scan-maintenance.mjs test/workflow-maintenance-budget.mjs`, plus the existing surface
-and package checks. The full list remains within 16,000 characters (15,982 measured).
+and package checks. The full list remains within 16,000 characters (15,998 measured).
+
+Schema source jobs use those same two tools: `get_scan_status({source_job_id})`
+reads the exact admin review; `close_scan` takes `source_job_id`,
+`expected_revision`, `client_request_id` and the exact chat confirmation.
+Copy `review_hash` and every source-specific acknowledgement; source closure
+preserves the consumed attempt, it does not release a PageSpeed reservation.
+Do not combine source IDs with execution IDs, runtime hashes or receipt references.
+The server separately advertises `scan_maintenance.schema_source`; PageSpeed
+readiness does not imply source readiness. Source-only maintenance discovery
+works after a PRO denial, but never after an auth/network failure. No PRO,
+schema-write or scan-execute grant is gained by administrative maintenance.
+
+PRO branch `feat/mcp-workflows`, `docs/mcp-phase4c-schema-capture.md` records
+the source contract. The native source suite has 518 WordPress/MySQL/REST checks
+on PHP 8.2/8.5. Client source routing is tested via actual stdio and synthetic
+HTTP responses in both URL styles; this is not yet full native source HTTP-MCP
+acceptance. Source planning/start, privacy/lifecycle and schema preview stay open.
 
 Full-bootstrap verification (8 September 2026): PRO's
 `docs/mcp-phase4b-scan-maintenance-wordpress.mjs` now drives this repository's

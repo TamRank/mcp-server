@@ -4,6 +4,8 @@ import { rateLimitAdvice } from './workflow-rest.js';
 export const scanId=z.string().regex(/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/);
 export const maintenanceAcks=['outcome_remains_unknown','inflight_provider_request_may_continue',
   'release_only_this_reservation_without_retry','preserve_original_results_and_approval'];
+export const sourceMaintenanceAcks=['outcome_remains_unknown','inflight_provider_request_may_continue',
+  'preserve_consumed_attempt_without_retry','preserve_original_results_and_approval'];
 const hash=z.string().regex(/^[a-f0-9]{64}$/);
 const text=bytes=>z.string().min(1).max(bytes).refine(v=>v.trim().length>0 && Buffer.byteLength(v,'utf8')<=bytes && !/[\x00-\x1f\x7f<>]/.test(v));
 export const closeScanSchema={execution_id:scanId,client_request_id:z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/),
@@ -27,7 +29,7 @@ export async function discoverWorkflows(client,{preview=false,profile='core'}={}
   if(preview && profile==='specialist' && (preflight.ok || preflight.code==='pro_required')) {
     try {
       const maintenance=await client.get('/scans/maintenance/capabilities');
-      if(maintenance.scan_maintenance?.read_available===true) {
+      if(maintenance.scan_maintenance?.read_available===true || maintenance.scan_maintenance?.schema_source?.read_available===true) {
         maintenanceOnly=!preflight.ok;
         capabilities=maintenanceOnly?maintenance:{...capabilities,scan_maintenance:maintenance.scan_maintenance};
         preflight={ok:true};

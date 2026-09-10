@@ -4,7 +4,7 @@ import {createServer} from 'node:http';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {registerWorkflowTools} from '../src/workflow-tools.js';
-import {discoverWorkflows,maintenanceAcks} from '../src/scan-maintenance.js';
+import {discoverWorkflows,maintenanceAcks,sourceMaintenanceAcks} from '../src/scan-maintenance.js';
 const id='11111111-1111-4111-8111-111111111111';
 const input={execution_id:id,client_request_id:'close-fixture-0001',expected_runtime_hash:'a'.repeat(64),confirmation:{
   mode:'chat_attested',review_hash:'b'.repeat(64),confirmed:true,client:{name:'Fixture',version:null},agent:{name:'Test agent'},acknowledgements:maintenanceAcks}};
@@ -47,6 +47,31 @@ test('Unpaid maintenance-only mode excludes every other operation',async()=>{
   assert.equal(calls.length,0);await tools.get('get_capabilities').h({});assert.equal(calls.pop().path,'/scans/maintenance/capabilities');
   assert.ok(!(await tools.get('get_scan_status').h({execution_id:id})).isError);
 });
+test('Source maintenance uses the same tools with independent support and exact consent',async()=>{
+  const sourceInput={source_job_id:id,client_request_id:'source-close-0001',expected_revision:'a'.repeat(64),
+    confirmation:{...input.confirmation,acknowledgements:sourceMaintenanceAcks}};
+  const sourceCaps={scan_maintenance:{available:false,read_available:false,schema_source:{available:true,read_available:true}}};
+  const {tools,calls}=registry({capabilities:sourceCaps,maintenanceOnly:true});assert.equal(tools.size,20);
+  assert.ok(!(await tools.get('get_scan_status').h({source_job_id:id})).isError);
+  assert.ok(!(await tools.get('close_scan').h(sourceInput)).isError);
+  assert.deepEqual(calls,[{method:'GET',path:'/scans/maintenance/sources/'+id,query:{}},
+    {method:'POST',path:'/scans/maintenance/sources/'+id,body:sourceInput}]);
+  calls.length=0;
+  for(const bad of [{...sourceInput,execution_id:id},{...sourceInput,expected_runtime_hash:'a'.repeat(64)},
+    {...sourceInput,receipt_reference:'invalid'},{...sourceInput,expected_revision:undefined},
+    {...sourceInput,confirmation:{...sourceInput.confirmation,acknowledgements:maintenanceAcks}},
+    {...input,expected_revision:'a'.repeat(64)}, {...input,execution_id:undefined}])
+    assert.equal((await tools.get('close_scan').h(bad)).isError,true);
+  for(const bad of [{source_job_id:id,execution_id:id},{source_job_id:id,type:'pagespeed'},{source_job_id:id,proposal_id:id}])
+    assert.equal((await tools.get('get_scan_status').h(bad)).isError,true);
+  assert.equal(calls.length,0);
+  for(const capabilities of [caps,{},null,{scan_maintenance:{schema_source:{read_available:true}}}]){
+    const r=registry({capabilities});assert.equal((await r.tools.get('close_scan').h(sourceInput)).isError,true);assert.equal(r.calls.length,0);
+  }
+  const discovery=await discoverWorkflows({get:async path=>{if(path==='/capabilities')throw Object.assign(new Error(),{code:'pro_required'});return sourceCaps;}},
+    {preview:true,profile:'specialist'});
+  assert.equal(discovery.preflight.ok,true);assert.equal(discovery.maintenanceOnly,true);
+});
 test('Discovery exception is explicit preview + specialist + licence denial only',async()=>{
   for(const code of ['pro_required','agent_token_revoked','agent_token_invalid','network_error','timeout']){
     const calls=[];const c={get:async path=>{calls.push(path);if(path==='/capabilities')throw Object.assign(new Error(),{code});return {contract_version:2,...caps};}};
@@ -60,14 +85,17 @@ test('Discovery exception is explicit preview + specialist + licence denial only
 });
 test('Real stdio SDK -> HTTP, both URL styles, no scan or silent replay',async()=>{
   let posts=0;const pat='tamrank_pat_synthetic_maintenance_only';const requests=[];
+  const sourceInput={source_job_id:id,client_request_id:'source-sdk-close-01',expected_revision:'a'.repeat(64),
+    confirmation:{...input.confirmation,acknowledgements:sourceMaintenanceAcks}};
   const server=createServer(async(req,res)=>{
     const url=new URL(req.url,'http://fixture.invalid'),path=url.searchParams.get('rest_route') || url.pathname.replace(/^\/wp-json/,'');
     assert.equal(req.headers.authorization,'Bearer '+pat);requests.push(path);
     res.setHeader('Content-Type','application/json');
     if(path==='/tamrank/v2/capabilities'){res.statusCode=402;res.end(JSON.stringify({code:'pro_required'}));return;}
-    if(path==='/tamrank/v2/scans/maintenance/capabilities'){res.end(JSON.stringify({contract_version:2,...caps}));return;}
-    assert.equal(path,'/tamrank/v2/scans/maintenance/'+id);
-    if(req.method==='POST'){let body='';for await(const part of req)body+=part;assert.deepEqual(JSON.parse(body),input);posts++;
+    if(path==='/tamrank/v2/scans/maintenance/capabilities'){res.end(JSON.stringify({contract_version:2,scan_maintenance:{...caps.scan_maintenance,schema_source:{available:true,read_available:true}}}));return;}
+    const source=path==='/tamrank/v2/scans/maintenance/sources/'+id;
+    if(!source)assert.equal(path,'/tamrank/v2/scans/maintenance/'+id);
+    if(req.method==='POST'){let body='';for await(const part of req)body+=part;assert.deepEqual(JSON.parse(body),source?sourceInput:input);posts++;
       res.end(JSON.stringify({contract_version:2,state:'abandoned',outcome:'unknown',human_verified:false,provider_requested_this_call:false}));}
     else {assert.equal(req.method,'GET');res.end(JSON.stringify({contract_version:2,review_hash:input.confirmation.review_hash,targets:Array.from({length:50},(_,i)=>({measurement_id:i})),required_acknowledgements:maintenanceAcks}));}
   });
@@ -82,7 +110,9 @@ test('Real stdio SDK -> HTTP, both URL styles, no scan or silent replay',async()
       const review=await client.callTool({name:'get_scan_status',arguments:{execution_id:id}});assert.equal(JSON.parse(review.content[0].text).targets.length,50);
       const n=requests.length;assert.equal((await client.callTool({name:'close_scan',arguments:{...input,force:true}})).isError,true);assert.equal(requests.length,n);
       const result=await client.callTool({name:'close_scan',arguments:input});assert.equal(JSON.parse(result.content[0].text).outcome,'unknown');
+      const sourceReview=await client.callTool({name:'get_scan_status',arguments:{source_job_id:id}});assert.equal(sourceReview.isError,undefined);
+      const sourceResult=await client.callTool({name:'close_scan',arguments:sourceInput});assert.equal(JSON.parse(sourceResult.content[0].text).outcome,'unknown');
       assert.equal((await client.callTool({name:'get_site_context',arguments:{}})).isError,true);
     }finally{await client.close();}
-  }assert.equal(posts,2);}finally{await new Promise(resolve=>server.close(resolve));}
+  }assert.equal(posts,4);}finally{await new Promise(resolve=>server.close(resolve));}
 });
