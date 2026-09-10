@@ -31,6 +31,7 @@ try {
   assert.equal(packed.name,pkg.name);assert.equal(packed.version,pkg.version);
   assert.equal(packed.filename,packed.filename.split('/').pop());
   const paths=packed.files.map(f=>f.path);
+  for(const p of ['src/source-scans.js','src/workflow-identity.js'])assert.ok(paths.includes(p),`Missing packed ${p}`);
   assert.ok(paths.includes('src/field-proposals.js'),'Typed field proposal contract is packaged');
   for(const p of ['index.js','index-workflow.js','receipt-storage.js','src/workflow-tools.js','src/workflow-rest.js','src/scan-maintenance.js','src/scan-recovery-chat.js','src/scan-receipt-store.js','SCAN-RECEIPTS.md','WORKFLOW-PREVIEW.md','package.json'])assert.ok(paths.includes(p),`Missing packed ${p}`);
   assert.ok(paths.every(p=>!p.split('/').some(s=>s==='..' || s.startsWith('.')) && !/^(?:test|node_modules|docs)\//.test(p)), 'No test fixtures, credentials or hidden configuration in package');
@@ -67,7 +68,7 @@ try {
     const url=new URL(req.url,'http://127.0.0.1');
     const route=url.searchParams.get('rest_route') || url.pathname.replace('/wp-json','');
     assert.ok(['/tamrank/v2/capabilities','/tamrank/v2/site/context','/tamrank/v2/site/diagnostics','/tamrank/v2/scans/status','/tamrank/v2/scans/preview',
-      '/tamrank/v2/scans/proposals','/tamrank/v2/scans/proposals/'+proposalId,'/tamrank/v2/scans/maintenance/capabilities',
+      '/tamrank/v2/scans/proposals','/tamrank/v2/scans/proposals/'+proposalId,'/tamrank/v2/scans/maintenance/capabilities','/tamrank/v2/scans/sources/capabilities',
       '/tamrank/v2/changes/proposals','/tamrank/v2/changes/'+proposalId].includes(route),'No legacy REST fallback');
     if(route==='/tamrank/v2/changes/proposals'){
       assert.equal(req.method,'POST');let body='';for await(const chunk of req)body+=chunk;assert.deepEqual(JSON.parse(body),fieldRequest);

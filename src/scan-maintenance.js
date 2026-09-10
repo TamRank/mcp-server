@@ -12,6 +12,10 @@ export const closeScanSchema={execution_id:scanId,client_request_id:z.string().r
   expected_runtime_hash:hash,confirmation:z.object({mode:z.literal('chat_attested'),review_hash:hash,confirmed:z.literal(true),
     client:z.object({name:text(80),version:text(40).nullable()}).strict(),agent:z.object({name:text(80)}).strict(),
     acknowledgements:z.array(z.string()).length(4).refine(v=>v.every((item,i)=>item===maintenanceAcks[i]))}).strict()};
+export async function discoverSourceScans(client){
+  try{const r=await client.get('/scans/sources/capabilities');return r.contract_version===2?r.schema_source_jobs||{available:false}:{available:false};}
+  catch{return {available:false,read_available:false,execute_available:false};}
+}
 
 /** Only explicit development/specialist mode may discover this separate lane.
  * A licence denial may enter maintenance-only mode; auth/network failures may not.
@@ -41,5 +45,7 @@ export async function discoverWorkflows(client,{preview=false,profile='core'}={}
         preflight={ok:false,code:'scan_maintenance_rate_limit',message:'Administrative maintenance is rate-limited. Wait before restarting; no automatic retry.',...rateLimitAdvice(err.data)};
     }
   }
+  if(preview && profile==='specialist' && preflight.ok && !maintenanceOnly)
+    capabilities={...capabilities,schema_source_jobs:await discoverSourceScans(client)};
   return {capabilities,preflight,maintenanceOnly};
 }

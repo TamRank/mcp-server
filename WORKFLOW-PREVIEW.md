@@ -143,7 +143,7 @@ See PRO repository, branch `feat/mcp-workflows`,
 `docs/mcp-phase4b-scan-maintenance.md` and `docs/mcp-phase4b-maintenance-budget.md`
 for the full contract, fixed-window limits and verification gates.
 Tests: `node --test test/workflow-scan-maintenance.mjs test/workflow-maintenance-budget.mjs`, plus the existing surface
-and package checks. The full list remains within 16,000 characters (15,998 measured).
+and package checks. The full list remains within 16,000 characters (15,993 measured).
 
 Schema source jobs use those same two tools: `get_scan_status({source_job_id})`
 reads the exact admin review; `close_scan` takes `source_job_id`,
@@ -157,10 +157,43 @@ works after a PRO denial, but never after an auth/network failure. No PRO,
 schema-write or scan-execute grant is gained by administrative maintenance.
 
 PRO branch `feat/mcp-workflows`, `docs/mcp-phase4c-schema-capture.md` records
-the source contract. The native source suite has 518 WordPress/MySQL/REST checks
+the source contract. The native source suite has 623 WordPress/MySQL/REST checks
 on PHP 8.2/8.5. Client source routing is tested via actual stdio and synthetic
 HTTP responses in both URL styles; this is not yet full native source HTTP-MCP
-acceptance. Source planning/start, privacy/lifecycle and schema preview stay open.
+acceptance. Privacy/lifecycle and schema preview stay open.
+
+### Explicit source acquisition (development specialist profile)
+
+The separately enabled server publishes `schema_source_jobs` capabilities. Source
+acquisition requires PRO and source/scan scopes; maintenance-only access cannot
+start or read an owner's private job. Use the existing tools, not legacy writers:
+
+1. `start_scan({type:"schema_source",mode:"preview",post_ids:[123]})` reads the
+   exact current URL, limits, warnings and revision. It does not fetch HTML.
+2. `start_scan({type:"schema_source",mode:"plan",post_ids:[123],
+   expected_revision:"<preview revision>",client_request_id:"<unique request>"})`
+   stores the exact proposal. Display its URL, limits and all warnings in chat.
+3. Only after explicit approval, call `start_scan` with `type:"schema_source"`,
+   `mode:"run"`, `source_job_id`, `client_request_id` and closed `confirmation`:
+   `{plan_hash:"<server plan_hash>",confirmed:true,agent:"<agent name>",
+   acknowledgements:["anonymous_page_request","private_source_storage",
+   "source_is_not_verified_schema","no_automatic_retry"]}`.
+   No `post_ids` or `expected_revision` on run. Agent text is bounded to 80 UTF-8
+   bytes; no extra fields, reordered warnings, caller URL or transport override.
+4. Read that same job with `get_scan_status({type:"schema_source",proposal_id})`.
+   This is an owner read; `{source_job_id}` without a type remains admin review.
+
+The bridge adds `mode:chat_attested`, its own actual MCP server name/version and
+the bounded agent name to the native confirmation. Callers cannot spoof the
+bridge identity. This is an agent attestation, not independently verified human
+identity or a stored chat transcript. The server binds approval to `plan_hash`,
+not the changing job revision. An uncertain response never triggers a retry or a
+replacement job: read the existing job first. No schema is written by this scan.
+PageSpeed still supports preview/plan only. Core/legacy gain no source-start tool.
+
+`node --test test/workflow-source-scans.mjs` checks exact routing, malformed input,
+grants, stdio identity and uncertainty handling with synthetic HTTP in both URL
+styles. Full native WordPress-to-MCP source acceptance remains a separate gate.
 
 Full-bootstrap verification (8 September 2026): PRO's
 `docs/mcp-phase4b-scan-maintenance-wordpress.mjs` now drives this repository's

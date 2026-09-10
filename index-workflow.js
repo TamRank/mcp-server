@@ -8,6 +8,7 @@ import { discoverWorkflows } from './src/scan-maintenance.js';
 import {discoverRecovery} from './src/scan-recovery-chat.js';
 import {ScanReceiptRecovery} from './src/scan-receipt-recovery.js';
 import {ScanReceiptStore} from './src/scan-receipt-store.js';
+import {workflowIdentity} from './src/workflow-identity.js';
 
 let client;
 try {
@@ -31,7 +32,7 @@ if(process.env.TAMRANK_SCAN_RECEIPT_DIR){
       pat:process.env.TAMRANK_PAT,receiptStore,timeoutMs:Number(process.env.TAMRANK_TIMEOUT || 30000),routeStyle:process.env.TAMRANK_REST_STYLE || 'pretty'});}
   } catch {console.error('Private recovery storage is unavailable. Check the configured private directory; no files were created or changed.');process.exit(1);}
 }
-const server = new McpServer({ name: 'tamrank-workflow-preview', version: '0.4.0-preview' },
+const server = new McpServer(workflowIdentity,
   { instructions: WORKFLOW_INSTRUCTIONS + (preflight.ok ? '' : '\nStartup: ' + preflight.message) });
 registerWorkflowTools(server, client, { profile, capabilities, preflight, maintenanceOnly, recovery });
 await server.connect(new StdioServerTransport());
