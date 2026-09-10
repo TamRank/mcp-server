@@ -62,9 +62,18 @@ stdio/HTTP with synthetic API responses, both URL forms and uncertain results
 without automatic retry. The PRO `--schema-native-source-rest` fixture separately
 passes 648 checks per PHP 8.2/8.5: real REST dispatch through native storage to an
 independent TLS frontend and back into schema preview, single-/multisite. Its
-fixed test DNS/port/environment are injected, not the returned HTML. A single
-joined MCP/HTTP/native-acquisition test, general host/output acceptance and schema
-proposal storage remain open. See PRO `docs/mcp-phase4c-schema-capture.md`.
+fixed test DNS/port/environment are injected, not the returned HTML.
+
+The joined chain is now tested by PRO `--schema-native-source-mcp` and
+`test/schema-source-native-client.mjs`: 936 checks per PHP 8.2/8.5, both REST URL
+styles, single-site and two-client multisite. Real stdio/HTTPS REST creates and
+runs the source job; a separate PHP server renders the actual frontend over TLS.
+The test counts every frontend attempt, verifies exact chat stubs and replay,
+compares the MCP result with an independent native database read, and checks that
+page/metadata remain unchanged. No prebuilt source receipt or successful HTML
+is supplied. Only the fixed test DNS/port/environment and temporary CA trust are
+injected. General host/output acceptance and public schema proposal storage
+remain open. See PRO `docs/mcp-phase4c-schema-capture.md`.
 
 ## Entry and profiles
 
