@@ -7,6 +7,7 @@ import {maintenanceAcks,sourceMaintenanceAcks,discoverSourceScans} from './scan-
 import { rateLimitAdvice } from './workflow-rest.js';
 import {fieldProposalSchema,validFieldProposal} from './field-proposals.js';
 import {schemaPreviewItem,validSchemaPreviewResponse} from './schema-preview.js';
+import {workflowCatalog} from './workflow-catalog.js';
 import {sourceConfirmation,validSourceStart,sourcePath,sourceArgs} from './source-scans.js';
 
 export const WORKFLOW_INSTRUCTIONS = `TamRank serves one configured site. Start with get_capabilities. get_work_queue is existing work; get_signals is separate evidence, never automatic work. Use explicit sections and follow next_cursor with identical filters until null; a four-page dashboard preview is not the full target list. A changed-source error requires restarting that read, not silently joining different snapshots.
@@ -101,6 +102,7 @@ export function workflowDefinitions() {
 
 export function registerWorkflowTools(server, client, { profile = 'core', preflight = { ok: true }, capabilities = null, maintenanceOnly = false, recovery = null } = {}) {
   if (!['core','legacy','specialist'].includes(profile)) throw new Error('Unknown workflow tool profile.');
+  const catalog=workflowCatalog(server);server=catalog.server;
   const defs = workflowDefinitions();
   // Do not spend the context budget describing an absent development feature.
   // Availability is refreshed on bridge restart; invocation still checks it below.
@@ -227,7 +229,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
           description: `Deprecated until 0.5.0; use ${canonical}. ${defs[canonical].description}` }, canonical, true);
       } else server.registerTool(name, { ...config, description: `Deprecated; migrate to canonical workflows. This legacy command is disabled.` }, async () => upgrade(name));
     }
-    return;
+    catalog.publish();return;
   }
   for (const [name, def] of Object.entries(defs)) register(name, def);
   if (profile === 'specialist') for (const name of ['get_site_diagnostics','get_gsc_pages','get_redirects','get_images_missing_alt','get_topical_authority','start_scan','get_scan_status']) {
@@ -285,4 +287,5 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       &&a.confirmation.acknowledgements.every((v,i)=>v===(a.source_job_id?sourceMaintenanceAcks:a.receipt_reference?recoveryAcks:maintenanceAcks)[i]),
     path:a=>a.source_job_id?'/scans/maintenance/sources/'+a.source_job_id:'/scans/maintenance/'+a.execution_id,
   });
+  catalog.publish();
 }
