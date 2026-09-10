@@ -62,9 +62,9 @@ export class WorkflowClient {
     }
     const controller = new AbortController();
     // A 256-KiB signed field plan can expand ~3x under WordPress 6.0 JSON Unicode
-    // escaping. Only these exact private-draft routes get a bounded 1-MiB wire cap.
+    // escaping. Exact private-draft/native-preview routes get a 1-MiB wire cap.
     // Ordinary analytics/scan responses retain their existing 512-KiB limit.
-    const fieldDraft=(method==='POST'&&path==='/changes/proposals')||(method==='GET'&&/^\/changes\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(path));
+    const fieldDraft=(method==='POST'&&['/changes/proposals','/schema/preview'].includes(path))||(method==='GET'&&/^\/changes\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(path));
     const responseLimit=fieldDraft?1048576:524288;
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {

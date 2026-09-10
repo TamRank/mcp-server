@@ -6,6 +6,7 @@ import {receiptReference,recoveryAcks} from './scan-recovery-chat.js';
 import {maintenanceAcks,sourceMaintenanceAcks,discoverSourceScans} from './scan-maintenance.js';
 import { rateLimitAdvice } from './workflow-rest.js';
 import {fieldProposalSchema,validFieldProposal} from './field-proposals.js';
+import {schemaPreviewItem,validSchemaPreviewResponse} from './schema-preview.js';
 import {sourceConfirmation,validSourceStart,sourcePath,sourceArgs} from './source-scans.js';
 
 export const WORKFLOW_INSTRUCTIONS = `TamRank serves one configured site. Start with get_capabilities. get_work_queue is existing work; get_signals is separate evidence, never automatic work. Use explicit sections and follow next_cursor with identical filters until null; a four-page dashboard preview is not the full target list. A changed-source error requires restarting that read, not silently joining different snapshots.
@@ -101,6 +102,15 @@ export function workflowDefinitions() {
 export function registerWorkflowTools(server, client, { profile = 'core', preflight = { ok: true }, capabilities = null, maintenanceOnly = false, recovery = null } = {}) {
   if (!['core','legacy','specialist'].includes(profile)) throw new Error('Unknown workflow tool profile.');
   const defs = workflowDefinitions();
+  // Do not spend the context budget describing an absent development feature.
+  // Availability is refreshed on bridge restart; invocation still checks it below.
+  if(capabilities?.schema_preview?.contract_version===2&&capabilities.schema_preview.available===true&&!maintenanceOnly){
+    defs.plan_changes={...defs.plan_changes,
+      description:'Draft: copy action_origin. Or schema_preview alone: native comparison, no save/approval/execution. Use current source_job; never invent business facts.',
+      schema:{...Object.fromEntries(Object.entries(fieldProposalSchema).map(([k,v])=>[k,v.optional()])),schema_preview:schemaPreviewItem.optional()},
+      validate:a=>a.schema_preview!==undefined?Object.keys(a).length===1&&Buffer.byteLength(JSON.stringify(a.schema_preview),'utf8')<=16384
+        :z.object(fieldProposalSchema).strict().safeParse(a).success&&validFieldProposal(a)};
+  }
   if(maintenanceOnly) defs.get_capabilities.path=()=>'/scans/maintenance/capabilities';
   const register = (name, def, canonical = name, deprecated = false) => {
     const schema = z.object(def.schema).strict();
@@ -143,6 +153,16 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         }catch(err){return failure(err.code||'source_job_request_failed',mode==='run'
           ?'Source result is refused or uncertain. Read this proposal_id with type=schema_source; never start a replacement job automatically.'
           :'Source request failed; no schema change was requested.',err.status===429?rateLimitAdvice(err.data):undefined);}
+      }
+      if(def.fieldPlan&&parsed.data.schema_preview!==undefined){
+        const item=parsed.data.schema_preview,support=capabilities?.schema_preview;
+        if(support?.contract_version!==2||support.available!==true||!Array.isArray(support.operations)||!support.operations.includes(item.operation))
+          return failure('workflow_operation_unavailable','Native schema preview is unavailable. No request was sent.');
+        try{
+          const data=await client.post('/schema/preview',item);
+          if(!validSchemaPreviewResponse(data,item))return failure('schema_preview_invalid_response','Preview response was incompatible. No approval or execution was requested; do not treat this as a saved plan.');
+          return result(data);
+        }catch(err){return failure(err.code||'schema_preview_failed','Schema preview failed. No approval, storage or execution was requested. No automatic retry.',err.status===429?rateLimitAdvice(err.data):undefined);}
       }
       if((def.fieldPlan||def.fieldRead)&&(capabilities?.field_proposals?.contract_version!==2
         ||capabilities.field_proposals[def.fieldPlan?'available':'read_available']!==true

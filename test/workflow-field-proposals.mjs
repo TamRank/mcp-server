@@ -80,9 +80,12 @@ try{
   const client=new WorkflowClient({siteUrl:'http://127.0.0.1:'+http.address().port,pat:'synthetic-only'});
   assert.equal((await client.get('/changes/'+id)).value.length,600000);
   assert.equal((await client.post('/changes/proposals',request)).value.length,600000);
+  assert.equal((await client.post('/schema/preview',{})).value.length,600000);
+  await assert.rejects(client.get('/schema/preview'),e=>e.code==='workflow_response_limit');
   await assert.rejects(client.get('/pages'),e=>e.code==='workflow_response_limit');
   await assert.rejects(client.get('/changes/proposals'),e=>e.code==='workflow_response_limit');
   await assert.rejects(client.post('/changes/'+id,{}),e=>e.code==='workflow_response_limit');
   bytes=1048576;await assert.rejects(client.get('/changes/'+id),e=>e.code==='workflow_response_limit');
+  await assert.rejects(client.post('/schema/preview',{}),e=>e.code==='workflow_response_limit');
   console.log('PASS: bounded private-draft Unicode wire budget; ordinary read limits unchanged.');
 }finally{await new Promise(resolve=>http.close(resolve));}
