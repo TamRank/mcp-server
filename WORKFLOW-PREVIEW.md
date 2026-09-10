@@ -159,8 +159,13 @@ schema-write or scan-execute grant is gained by administrative maintenance.
 PRO branch `feat/mcp-workflows`, `docs/mcp-phase4c-schema-capture.md` records
 the source contract. The native source suite has 623 WordPress/MySQL/REST checks
 on PHP 8.2/8.5. Client source routing is tested via actual stdio and synthetic
-HTTP responses in both URL styles; this is not yet full native source HTTP-MCP
-acceptance. Privacy/lifecycle and schema preview stay open.
+HTTP responses in both URL styles. The additional PRO harness
+`docs/mcp-phase4c-schema-source-wordpress.mjs` passes 263 full native
+WordPress/HTTP/stdio checks on PHP 8.2/8.5, single/multisite and both URL forms.
+It covers source planning/run/owner reads, grants, exact replay, lost result
+storage and no-PRO administrative closure. Only source success transport and
+the storage failure are injected; frontend coverage is not established.
+Privacy/lifecycle and schema preview stay open.
 
 ### Explicit source acquisition (development specialist profile)
 
@@ -193,7 +198,8 @@ PageSpeed still supports preview/plan only. Core/legacy gain no source-start too
 
 `node --test test/workflow-source-scans.mjs` checks exact routing, malformed input,
 grants, stdio identity and uncertainty handling with synthetic HTTP in both URL
-styles. Full native WordPress-to-MCP source acceptance remains a separate gate.
+styles. The full native WordPress-to-MCP harness is recorded above; it does not
+prove arbitrary host compatibility or complete frontend source coverage.
 
 Full-bootstrap verification (8 September 2026): PRO's
 `docs/mcp-phase4b-scan-maintenance-wordpress.mjs` now drives this repository's
