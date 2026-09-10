@@ -108,7 +108,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   // Availability is refreshed on bridge restart; invocation still checks it below.
   if(capabilities?.schema_preview?.contract_version===2&&capabilities.schema_preview.available===true&&!maintenanceOnly){
     defs.plan_changes={...defs.plan_changes,
-      description:'Draft: copy action_origin. Or schema_preview alone: native comparison, no save/approval/execution. Use current source_job; never invent business facts.',
+      description:'Draft: copy action_origin. schema_preview alone: compare only, no save/approval/execution. Use current source_job; never invent business facts.',
       schema:{...Object.fromEntries(Object.entries(fieldProposalSchema).map(([k,v])=>[k,v.optional()])),schema_preview:schemaPreviewItem.optional()},
       validate:a=>a.schema_preview!==undefined?Object.keys(a).length===1&&Buffer.byteLength(JSON.stringify(a.schema_preview),'utf8')<=16384
         :z.object(fieldProposalSchema).strict().safeParse(a).success&&validFieldProposal(a)};
@@ -147,7 +147,9 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       if(sourceStart || sourceRead){
         const support=capabilities?.schema_source_jobs,mode=parsed.data.mode;
         if(support?.[sourceRead?'read_available':mode==='run'?'execute_available':'available']!==true
-          ||(sourceStart && !support.modes?.includes(mode)))
+          ||(sourceStart && (!support.modes?.includes(mode)
+            ||(parsed.data.capture_mode!==undefined&&(!Array.isArray(support.capture_modes)||!support.capture_modes.includes(parsed.data.capture_mode)))
+            ||((parsed.data.probe_content===true||parsed.data.confirmation?.acknowledgements.length===5)&&support.probe_content_available!==true))))
           return failure('workflow_operation_unavailable','Source jobs require explicit site support and current schema/scan rights. Nothing was sent.');
         try{
           return result(sourceRead?await client.get('/scans/sources/'+parsed.data.proposal_id):mode==='preview'
@@ -267,12 +269,13 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         proposal_id:scanId.optional(),execution_id:scanId.optional(),source_job_id:scanId.optional(),receipt_reference:receiptReference.optional()},
       validate:a=>a.type==='schema_source'?a.proposal_id!==undefined && Object.keys(a).length===2:a.receipt_reference!==undefined?a.execution_id!==undefined && Object.keys(a).length===2:a.proposal_id!==undefined || a.execution_id!==undefined || a.source_job_id!==undefined?Object.keys(a).length===1:a.type!==undefined,
     }:{
-      description:'Preview then plan; show URL/limits/warnings. schema_source: one post; run needs exact chat/plan_hash. Uncertain: read job. PageSpeed cannot run.',
+      description:'Preview→plan; show URL/limits/warnings. schema_source: one post, exact chat. Uncertain: read job. No PageSpeed run.',
       specialist:true,scanPlan:true,path:a=>a.mode==='plan'?'/scans/proposals':'/scans/preview',schema:{mode:z.enum(['preview','plan','run']),type:z.enum(['pagespeed','schema_source']),
         post_ids:z.array(pageId).min(1).max(25).refine(ids=>new Set(ids).size===ids.length).optional(),expected_revision:z.string().regex(/^[a-f0-9]{64}$/).optional(),
         source_job_id:scanId.optional(),confirmation:sourceConfirmation.optional(),
+        capture_mode:z.literal('native_render').optional(),probe_content:z.literal(true).optional(),
         client_request_id:z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/).optional()},
-      validate:a=>a.type==='schema_source'?validSourceStart(a):a.post_ids!==undefined && a.source_job_id===undefined && a.confirmation===undefined
+      validate:a=>a.type==='schema_source'?validSourceStart(a):a.post_ids!==undefined && a.source_job_id===undefined && a.confirmation===undefined&&a.capture_mode===undefined&&a.probe_content===undefined
         &&(a.mode==='plan'?a.expected_revision!==undefined && a.client_request_id!==undefined:a.mode==='preview' && a.client_request_id===undefined),
       query:a=>a.mode==='plan'?strip(a,['mode']):({...strip(a,['mode']),post_ids:a.post_ids.join(',')}),
     });
