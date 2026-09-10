@@ -1,7 +1,7 @@
 /** Exact private drafts only; never approval, execution, body or schema writes. */
 import {z} from 'zod';
 const text=n=>z.string().max(n).refine(v=>Buffer.byteLength(v,'utf8')<=n&&!/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f<>]/.test(v));
-const id=z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const id=z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
 const change=n=>z.object({mode:z.enum(['set','remove']),value:z.union([text(n),z.number().int(),z.boolean()]).optional()}).strict()
   .refine(v=>v.mode==='set'?v.value!==undefined:v.value===undefined);
 const limits={meta_title:1000,meta_description:10000,alt_text:2000,social_title:1000,social_description:10000,social_image:4096};
@@ -45,6 +45,7 @@ const item=z.object({operation:z.enum(Object.keys(allowed)),
   if(keys.length!==allowed[v.operation].length||(key==='source_url'&&!redirectUrl(v.target.source_url,true)))return false;
   return v.operation==='redirect.delete'||(v.fields.redirect_type.value>=400?v.fields.target_url.value==='':v.fields.target_url.value!=='');
 });
+export const fieldProposalItem=item;
 export const fieldProposalSchema={
   client_request_id:z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/),
   origin:z.union([
@@ -54,5 +55,6 @@ export const fieldProposalSchema={
   items:z.array(item).min(1).max(25),
 };
 export const validFieldProposal=a=>Buffer.byteLength(JSON.stringify(a),'utf8')<=262144
+  &&a.items.every(v=>v.operation!=='schema_settings.update'||(a.items.length===1&&a.origin.kind==='user_request'))
   &&new Set(a.items.map(v=>v.operation==='redirect.create'?'redirect-source:'+v.target.source_url:
-    v.operation.startsWith('redirect.')?'redirect-id:'+v.target.redirect_id:'post:'+ (v.target.post_id??v.target.attachment_id))).size===a.items.length;
+    v.operation.startsWith('redirect.')?'redirect-id:'+v.target.redirect_id:v.operation==='schema_settings.update'?'site:current':'post:'+ (v.target.post_id??v.target.attachment_id))).size===a.items.length;

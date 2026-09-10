@@ -24,12 +24,13 @@ function sample(s){
   if(s.type==='boolean')return true;
   return 'fixture';
 }
-for(const profile of ['core','specialist','legacy'])for(const enabled of [false,true]){
+for(const profile of ['core','specialist','legacy'])for(const enabled of [false,true,'storage']){
   const server=new McpServer({name:'catalog-fixture',version:'1'}),client=new Client({name:'catalog-client',version:'1'}),handles=new Map();
   const nativeRegister=server.registerTool.bind(server);server.registerTool=(name,config,handler)=>{
     const handle=nativeRegister(name,config,handler);handles.set(name,handle);return handle;
   };
-  registerWorkflowTools(server,{}, {profile,capabilities:enabled?{schema_preview:{contract_version:2,available:true,operations:['schema.detect']}}:null});
+  registerWorkflowTools(server,{}, {profile,capabilities:enabled?{schema_preview:{contract_version:2,available:true,operations:['schema.detect'],schema_proposals_available:enabled==='storage'},
+    ...(enabled==='storage'?{field_proposals:{contract_version:2,available:true,operations:['schema.detect']}}:{})}:null});
   const [a,b]=InMemoryTransport.createLinkedPair();await server.connect(a);await client.connect(b);
   try{
     const listing=await client.listTools();equal(listing.tools.length,{core:12,specialist:20,legacy:42}[profile],'Tool names/count preserved');

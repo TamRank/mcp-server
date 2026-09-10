@@ -2,7 +2,7 @@
 import {z} from 'zod';
 import {scanId} from './scan-maintenance.js';
 const hash=z.string().regex(/^[a-f0-9]{64}$/);
-const id=z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const id=z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
 const text=z.string().max(1000).refine(v=>Buffer.byteLength(v,'utf8')<=1000&&!/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f<>]/.test(v));
 const url=z.string().max(4096).refine(v=>{
   if(Buffer.byteLength(v,'utf8')>4096||/[\s\x00-\x1f\x7f\\]/.test(v))return false;
@@ -28,9 +28,10 @@ export const schemaPreviewItem=z.object({
   return JSON.stringify(Object.keys(v.target).sort())===JSON.stringify(setting?['sample_post_id','site']:['post_id'])
     &&keys.every(k=>v.fields[k]!==undefined)&&Object.keys(v.fields).every(k=>keys.includes(k));
 });
-export function validSchemaPreviewResponse(data,item){
+export function validSchemaPreviewResponse(data,item,storageAvailable=false){
   if(data?.contract_version!==2||data.full_v2_compatible!==false
-    ||['plan_persisted','approval_recorded','provider_requested_this_call','execution_available','schema_proposals_available'].some(k=>data[k]!==false))return false;
+    ||data.schema_proposals_available!==storageAvailable
+    ||['plan_persisted','approval_recorded','provider_requested_this_call','execution_available'].some(k=>data[k]!==false))return false;
   if(data.comparison?.contract!=='schema_selection_comparison_v1'||data.comparison?.source_evidence?.render_binding?.current_graph_matches!==true
     ||['frontend_output_verified','ownership_verified','execution_available'].some(k=>data.comparison[k]!==false))return false;
   const proposal=schemaPreviewItem.safeParse(data.proposal_item),revision=data.comparison?.revision;
