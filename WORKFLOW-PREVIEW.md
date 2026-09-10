@@ -101,8 +101,14 @@ MCP. Draft/read/replay preserve the native comparison and leave website and sour
 jobs unchanged. Old preview-only mode and metadata/redirect chains remain tested.
 `test/workflow-schema-proposals.mjs` covers closed input, exact revisions, origin,
 mixed targets and capabilities. The catalog suite now has 16,228 equivalence checks.
-Remaining acceptance includes larger/mixed schema sets, public Action-origin
-chains and full source/output/host/cache/privacy compatibility. 4C remains open;
+The extended suite now passes 1,986 checks per PHP 8.2/8.5, including public canonical
+Action origins for post IDs and both URL target kinds. It verifies exact native
+task evidence, changed-task/member refusal with no partial storage, private-source
+isolation, unchanged history and the actual MCP/TLS chain for select/detect.
+Completed fixture drafts are cancelled through
+the ordinary lifecycle, without raising product storage or HTTP limits.
+Remaining acceptance includes larger/mixed schema sets and full
+source/output/host/cache/privacy compatibility. 4C remains open;
 execution and rollback belong to 4D.
 
 ## Entry and profiles
