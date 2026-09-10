@@ -4,6 +4,41 @@ Branch `feat/mcp-workflows` prepares MCP `0.4.0-preview` in package
 `@tam-rank/mcp-server`. The shipped entry, npm bin and package version remain
 unchanged. This is not a release or a replacement of the active MCP connection.
 
+## Native schema preview (development only)
+
+When the server explicitly advertises `schema_preview.available` with contract 2,
+`plan_changes` accepts `schema_preview` **alone**, containing the typed REST item
+`{operation, target, fields}`. The operations are `schema.select`, `schema.detect`
+and `schema_settings.update`. Do not mix this with a request ID, origin, draft
+items or execution. A current native source-job receipt is required; an ordinary
+HTML source job cannot replace it. Initial previews omit `expected_revision`;
+returned items bind the exact server-derived revision. No raw JSON-LD or invented
+business facts are accepted. This compares only: no new source request, stored
+plan, approval or execution, and no automatic retry.
+
+The matching PRO route requires `TAMRANK_WORKFLOW_READS_ENABLED`,
+`TAMRANK_WORKFLOW_SCHEMA_CAPTURE_ENABLED` and
+`TAMRANK_WORKFLOW_SCHEMA_PREVIEW_REST_ENABLED`, plus all four scopes
+`site:read`, `changes:write`, `schema:write`, `scans:plan`. Public native source
+planning and schema proposal storage are still unfinished; do not activate this
+on customer sites. Restart the bridge after changing advertised availability.
+
+The enabled core/specialist catalogs are 9,770/15,941 characters, within the
+16,000-character budget. Local JSON Schema references and removal of redundant
+type/dialect information preserve all fields, limits and SDK validation. Unknown
+dialects/vocabulary are not rewritten. `test/workflow-catalog.mjs` checks every
+schema against independent validators and verifies the enabled specialist budget.
+
+The PRO command `node docs/mcp-phase4c-change-store-wordpress.mjs --schema-preview-mcp`
+with the documented owned database/core/FREE variables and `TAMRANK_MAINT_MCP`
+tests the joined chain: actual stdio, native fetch, verified local TLS, normal
+WordPress REST boot, both profiles/URL forms and single-/multisite. It passes 732
+checks per PHP 8.2/8.5. The test supplies the native source receipt; only the test
+process maps DNS to loopback and trusts its temporary CA. This does not prove
+general hosting, builder, cache or competing-schema compatibility. Details are in
+`samkl8/tamrank-pro`, branch `feat/mcp-workflows`,
+`docs/mcp-phase4c-schema-selection.md`.
+
 ## Entry and profiles
 
 Run `node index-workflow.js` explicitly with site-local `TAMRANK_PAT` and
