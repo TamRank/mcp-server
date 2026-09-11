@@ -4,6 +4,41 @@ Branch `feat/mcp-workflows` prepares MCP `0.4.0-preview` in package
 `@tam-rank/mcp-server`. The shipped entry, npm bin and package version remain
 unchanged. This is not a release or a replacement of the active MCP connection.
 
+## Native schema history reads (development opt-in)
+
+With `schema_execution.contract_version:1`, `read_available:true`,
+`record_contract:schema_execution_view_v1` and `private_proofs_omitted:true`,
+the existing `get_changes({kind:"execution",change_set_id})` reads native schema
+forward/inverse records. All targets, exact changes, schema samples, original
+chat-attestation stub, item outcomes and audit/reversal links remain visible.
+Raw database/source/restoration proofs and cache receipts are not tool output.
+The original hash/token cover the full stored plan, including omitted proofs;
+do not hash the displayed subset or submit it as a native execution envelope.
+Stored approval remains an agent assertion, not verified human identity.
+
+This capability permits reads ONLY: schema plan execution, rollback and recovery
+are still unavailable over MCP. No extra tool, source scan or automatic retry.
+The server requires `TAMRANK_WORKFLOW_SCHEMA_EXECUTION_READ_ENABLED`, existing
+read-route readiness/storage, current audit-read rights and the same owner/site.
+A same-owner read-only PAT can inspect history without gaining schema-write
+permission. Restart the bridge after capability changes.
+
+PRO `--schema-public-read` passes **4,842 combined checks per PHP 8.2/8.5**,
+single-site and two-client multisite, including prior native runner/recovery
+checks. Actual MCP/verified TLS/WordPress reads cover planned/executed records,
+both profiles/REST forms, repeated reads and other-owner refusal. All projected
+native matrix records also pass the bridge validator, including 25-item and
+mixed inverse sets. Inverse redirects keep their real row pairs and new-ID
+requirement; they are not forced into a page-URL shape.
+
+`test/workflow-schema-execution-read.mjs` adds 275 contract/capability/SDK
+checks. The full workflow suite passes 50,559 catalog-equivalence checks;
+the full redirect/schema-read specialist catalog is 15,993 characters.
+Clean-cache extracted-package installation passes with the repository lock
+and scripts disabled; the offline attempt lacked a cached dependency.
+These results do not prove public schema writes or general hosting/privacy
+acceptance. Full Phase 4 remains open.
+
 ## Native schema preview (development only)
 
 When the server explicitly advertises `schema_preview.available` with contract 2,

@@ -23,7 +23,7 @@
     "test": "node test/smoke.mjs && node test/surface.mjs",
     "test:smoke": "node test/smoke.mjs",
     "test:surface": "node test/surface.mjs",
-    "test:workflow": "node test/workflow-surface.mjs && node test/workflow-field-proposals.mjs && node test/workflow-field-execution.mjs && node test/workflow-field-recovery.mjs && node test/workflow-redirect-execution.mjs && node test/workflow-schema-preview.mjs && node test/workflow-schema-proposals.mjs && node test/workflow-catalog.mjs",
+    "test:workflow": "node test/workflow-surface.mjs && node test/workflow-field-proposals.mjs && node test/workflow-field-execution.mjs && node test/workflow-field-recovery.mjs && node test/workflow-redirect-execution.mjs && node test/workflow-schema-preview.mjs && node test/workflow-schema-proposals.mjs && node test/workflow-schema-execution-read.mjs && node test/workflow-catalog.mjs",
     "test:workflow-package": "node test/workflow-package.mjs",
     "test:integration": "node test/phase0-integration.mjs",
     "test:all": "npm test && npm run test:integration",

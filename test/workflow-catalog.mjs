@@ -24,16 +24,18 @@ function sample(s){
   if(s.type==='boolean')return true;
   return 'fixture';
 }
-for(const profile of ['core','specialist','legacy'])for(const enabled of [false,true,'storage','execution','recovery','redirect','redirect_recovery']){
+for(const profile of ['core','specialist','legacy'])for(const enabled of [false,true,'storage','execution','recovery','redirect','redirect_recovery','schema_read','schema_mixed_read']){
   const server=new McpServer({name:'catalog-fixture',version:'1'}),client=new Client({name:'catalog-client',version:'1'}),handles=new Map();
   const nativeRegister=server.registerTool.bind(server);server.registerTool=(name,config,handler)=>{
     const handle=nativeRegister(name,config,handler);handles.set(name,handle);return handle;
   };
-  const storage=['storage','execution','recovery','redirect','redirect_recovery'].includes(enabled);
-  const redirect=['redirect','redirect_recovery'].includes(enabled),recovery=['recovery','redirect_recovery'].includes(enabled);
+  const storage=['storage','execution','recovery','redirect','redirect_recovery','schema_mixed_read'].includes(enabled);
+  const redirect=['redirect','redirect_recovery','schema_mixed_read'].includes(enabled),recovery=['recovery','redirect_recovery','schema_mixed_read'].includes(enabled);
   registerWorkflowTools(server,{}, {profile,capabilities:enabled?{schema_preview:{contract_version:2,available:true,operations:['schema.detect'],schema_proposals_available:storage},
     ...(storage?{field_proposals:{contract_version:2,available:true,operations:['schema.detect']}}:{}),
-    ...(['execution','recovery','redirect','redirect_recovery'].includes(enabled)?{field_execution:{contract_version:1,available:true,read_available:true,rollback_available:true,recovery_available:recovery,operations:['meta.update','social.update','image_alt.update']}}:{}),
+    ...(['execution','recovery','redirect','redirect_recovery','schema_mixed_read'].includes(enabled)?{field_execution:{contract_version:1,available:true,read_available:true,rollback_available:true,recovery_available:recovery,operations:['meta.update','social.update','image_alt.update']}}:{}),
+    ...(['schema_read','schema_mixed_read'].includes(enabled)?{schema_execution:{contract_version:1,available:false,read_available:true,rollback_available:false,
+      recovery_available:false,operations:[],record_contract:'schema_execution_view_v1',private_proofs_omitted:true}}:{}),
     ...(redirect?{redirect_execution:{contract_version:1,available:true,mixed_available:true,read_available:true,rollback_available:true,recovery_available:recovery,
       operations:['meta.update','social.update','image_alt.update','redirect.create','redirect.update','redirect.delete']}}:{})}:null});
   const [a,b]=InMemoryTransport.createLinkedPair();await server.connect(a);await client.connect(b);
