@@ -23,7 +23,7 @@ export async function runFieldExecutionClient({origin,fixture:f,inspect,tlsRoot,
       for(let attempt=0;attempt<8;attempt++){
         const r=await client.callTool({name,arguments:args});let data;
         try{data=JSON.parse(r.content[0].text);}catch{return r;}
-        if(!r.isError||!['rate_limit_exceeded','workflow_rate_limit','field_execution_rate_limit'].includes(data.code))return r;
+        if(!r.isError||!['rate_limit_exceeded','workflow_rate_limit','change_execution_rate_limited'].includes(data.code))return r;
         assert.ok(attempt<7,'Native window must reopen');console.log('WAIT: exact refused redirect fixture request; native budget unchanged.');
         await new Promise(resolve=>setTimeout(resolve,10000));
       }

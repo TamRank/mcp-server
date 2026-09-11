@@ -223,9 +223,23 @@ profiles. An extracted package with clean-cache, locked `npm ci` and scripts
 disabled starts correctly; that package smoke test is not native execution
 acceptance or a test of unconstrained dependency resolution. Remaining work
 includes Action origins, maximum-size/result and connection/late-authority
-cases, inverse/all-applied worker recovery, redirect privacy/retention,
+cases, further worker/cache boundaries, redirect privacy/retention,
 schema execution and general host/release acceptance. See PRO
 `docs/mcp-phase4d-execution.md` on branch `feat/mcp-workflows`.
+
+The separate PRO `--redirect-recovery-mcp` mode and
+`test/redirect-recovery-native-client.mjs` pass **1,152 native checks per PHP
+8.2/8.5**. Seven scenarios cover inverse deletion/restoration mixed with metadata,
+actual worker death before/after the first COMMIT and after all item commits,
+fresh restored row IDs, reciprocal audit integrity, and a revoked original PAT
+after a fully-applied forward batch. Every recovery obtains a fresh chat
+attestation through the existing tools. A real committed recovery response is
+then dropped: the client reports uncertainty, reads the existing result and
+does not automatically retry. Explicit replay adds no website/audit writes;
+only a newly-approved rollback may reverse remaining original items. These are
+owned single-site/two-client multisite fixtures. Runtime flags and product
+quotas are unchanged. This does not complete privacy/retention, arbitrary cache
+transaction interruption, schema execution or general host/release acceptance.
 
 ## Entry and profiles
 
