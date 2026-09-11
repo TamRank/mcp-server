@@ -2,6 +2,7 @@
 import {z} from 'zod';
 import {scanId} from './scan-maintenance.js';
 export const fieldOperations=['meta.update','social.update','image_alt.update'];
+export const fieldExecutionPolicies=['workflow-field-execution-1','workflow-field-rollback-1'];
 const digest=z.string().regex(/^[a-f0-9]{64}$/);
 const requestId=z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/);
 export const executionSchema={change_set_id:scanId,change_token:z.string().regex(/^(?:trce1|trcr1)\.[a-f0-9]{64}$/),
@@ -20,12 +21,13 @@ export function isFieldExecutionPlan(input,support){
   return support?.contract_version===1&&support.available===true&&Array.isArray(input.items)&&input.items.length>0
     &&input.items.every(i=>fieldOperations.includes(i.operation)&&support.operations?.includes(i.operation));
 }
-export function validExecutionResponse(data,id=null,hash=null){
+export function validExecutionResponse(data,id=null,hash=null,policies=fieldExecutionPolicies){
   if(data?.contract_version!==1||!data.record||typeof data.record!=='object'||Array.isArray(data.record))return false;
   const r=data.record,p=r.envelope?.plan,h=r.history??r.history_record?.record?.history;
   const resultId=p?.change_set_id??h?.change_set_id,resultHash=r.envelope?.plan_hash??h?.original_plan_hash;
   if(!scanId.safeParse(resultId).success||!digest.safeParse(resultHash).success||(id!==null&&id!==resultId)||(hash!==null&&hash!==resultHash))return false;
-  if(p&&!['workflow-field-execution-1','workflow-field-rollback-1'].includes(p.policy_version))return false;
+  if(p&&!policies.includes(p.policy_version))return false;
   if(h&&!['field_execution_history','unused_execution_history'].includes(h.kind))return false;
+  if(h?.source_policy!==undefined&&!policies.includes(h.source_policy))return false;
   return ['planned','expired','running','executed','partial','failed','cancelled','retired','attribution_purged','attribution_retired'].includes(r.state);
 }

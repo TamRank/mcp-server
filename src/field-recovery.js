@@ -5,7 +5,7 @@ import {confirmationBody,validExecutionResponse,fieldOperations,executionSchema}
 const hash=z.string().regex(/^[a-f0-9]{64}$/),id=z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
 export const fieldRecoveryAcks=['pending_items_will_not_run','applied_items_are_not_reversed'];
 const acknowledgements=z.array(z.enum(fieldRecoveryAcks)).length(2);
-const planShape=z.object({contract_version:z.literal(1),policy_version:z.literal('workflow-field-recovery-1'),
+export const fieldRecoveryPlanShape=z.object({contract_version:z.literal(1),policy_version:z.literal('workflow-field-recovery-1'),
   binding:z.object({installation_id:scanId,blog_id:id,operator_id:id,token_id:id,site_origin:z.string().url().max(4096)}).strict(),
   change_set_id:scanId,original_plan_hash:hash,execution_id:scanId,original_token_id:id,expected_state_hash:hash,
   created_at:id,expires_at:id,items:z.array(z.object({item_id:scanId,operation:z.enum(fieldOperations),
@@ -23,7 +23,7 @@ export const recoveryExecutionSchema={...executionSchema,change_token:z.string()
 export const recoveryInput=a=>({proposal:{plan:a.recovery_plan,plan_hash:a.confirmation.plan_hash,recovery_token:a.change_token},confirmation:a.confirmation});
 const sameAcks=a=>JSON.stringify(a)===JSON.stringify(fieldRecoveryAcks);
 export function validRecoveryProposal(v,setId=null){
-  if(!envelope.safeParse(v).success||!planShape.safeParse(v.plan).success||Buffer.byteLength(JSON.stringify(v),'utf8')>33024)return false;
+  if(!envelope.safeParse(v).success||!fieldRecoveryPlanShape.safeParse(v.plan).success||Buffer.byteLength(JSON.stringify(v),'utf8')>33024)return false;
   const p=v.plan;if((setId!==null&&p.change_set_id!==setId)||p.expires_at!==p.created_at+900||!sameAcks(p.required_acknowledgements))return false;
   let pending=false;const seen=new Set();
   for(const item of p.items){

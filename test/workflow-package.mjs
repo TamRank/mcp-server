@@ -33,6 +33,7 @@ try {
   const paths=packed.files.map(f=>f.path);
   for(const p of ['src/source-scans.js','src/workflow-identity.js'])assert.ok(paths.includes(p),`Missing packed ${p}`);
   assert.ok(paths.includes('src/field-proposals.js'),'Typed field proposal contract is packaged');
+  for(const p of ['src/field-execution.js','src/field-recovery.js','src/redirect-execution.js'])assert.ok(paths.includes(p),`Missing typed execution contract ${p}`);
   for(const p of ['index.js','index-workflow.js','receipt-storage.js','src/workflow-tools.js','src/workflow-rest.js','src/scan-maintenance.js','src/scan-recovery-chat.js','src/scan-receipt-store.js','SCAN-RECEIPTS.md','WORKFLOW-PREVIEW.md','package.json'])assert.ok(paths.includes(p),`Missing packed ${p}`);
   assert.ok(paths.every(p=>!p.split('/').some(s=>s==='..' || s.startsWith('.')) && !/^(?:test|node_modules|docs)\//.test(p)), 'No test fixtures, credentials or hidden configuration in package');
   await run('tar',['-xzf',join(scratch,packed.filename),'-C',scratch],{timeout:10000});
