@@ -141,7 +141,7 @@ passive `get_scan_status`, as described below. `start_scan` additionally support
 explicit PageSpeed preview and separately authorised private drafts, never execution.
 `plan_changes` and exact-ID `get_changes` now support the separately gated private
 metadata/social/alt and redirect subsets below. The three field operations also have
-the separately gated execution bridge below. Native MCP failure/HTTPS acceptance,
+the separately gated execution bridge below. Remaining native MCP failure/owner acceptance,
 scan execution and Phase 4 remain open; there is no customer-site activation.
 
 ## Exact field execution bridge (development opt-in)
@@ -195,8 +195,19 @@ handshake provenance and version-3 Action/cache receipts survive the entire chai
 The test waits for explicit native 429 windows; product limits and automatic-retry
 behavior are unchanged. All runner-owned synthetic databases are removed.
 
-This establishes the combined normal path, not HTTPS, worker/lost-response
-recovery, the complete native MCP failure/owner matrix, schema/redirect writers,
+This establishes the combined normal path. The PRO runner's additional
+`--field-execution-tls` mode passes 582 checks per PHP 8.2/8.5 over an independent
+owned TLS terminator. A temporary CA is trusted only by the MCP child; a client
+without that CA is refused. No system trust or TLS verification is disabled.
+The proxy drops one completed execution response per site after WordPress commits
+all three fields/audits. The MCP reports uncertainty and sends no automatic retry;
+an independent request counter verifies this. Explicit `get_changes(kind=execution)`
+recovers the original result, and only a deliberate identical retry sends another
+invocation, without further mutations/audits. Approved rollback still restores the
+original values. Temporary CA files, listeners and synthetic databases are removed.
+
+This does not cover worker death mid-batch, unreadable journals,
+the complete native MCP conflict/owner matrix, schema/redirect writers,
 host compatibility, privacy completion or release readiness. The server removes
 available field tools from its pending list but keeps `full_v2_compatible=false`.
 
