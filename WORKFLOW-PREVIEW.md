@@ -206,8 +206,17 @@ recovers the original result, and only a deliberate identical retry sends anothe
 invocation, without further mutations/audits. Approved rollback still restores the
 original values. Temporary CA files, listeners and synthetic databases are removed.
 
+The separate `--field-execution-failures` PRO mode invokes
+`test/field-execution-failures-client.mjs` and passes 136 checks per PHP 8.2/8.5
+over HTTPS. Newer manual edits prevent both an old forward proposal and an already
+planned rollback from overwriting them. Rejected preflight records no execution
+approval. Other operators cannot read/execute the set, and a valid first-site token
+is refused on the second multisite client. A connected client's cached availability
+cannot override token revocation. Another valid audit-only token of the same owner
+can still reconcile existing history, without obtaining write permission.
+
 This does not cover worker death mid-batch, unreadable journals,
-the complete native MCP conflict/owner matrix, schema/redirect writers,
+all concurrent edit/role-change timings, revoked-owner running-work recovery, schema/redirect writers,
 host compatibility, privacy completion or release readiness. The server removes
 available field tools from its pending list but keeps `full_v2_compatible=false`.
 
