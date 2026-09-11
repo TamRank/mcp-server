@@ -117,6 +117,15 @@ The 25-item proposal bound does not raise source acquisition quotas or source TT
 Remaining acceptance includes full source/output/host/cache/privacy compatibility. 4C remains open;
 execution and rollback belong to 4D.
 
+The separate PRO `--field-execution-worker` mode and
+`test/field-execution-worker-client.mjs` pass 99 checks per PHP 8.2/8.5 over
+real stdio/HTTPS and single-site/two-client WordPress. The owned PHP worker is
+actually killed after the first item commit and restarted. Readback preserves
+the running record without writes; explicit reconciliation skips pending items
+even within the original lease. Exact replay adds no fields/audits or consent.
+A newly approved rollback restores only the applied item. This does not prove
+revoked-owner/unreadable-journal recovery or death inside every transaction.
+
 ## Entry and profiles
 
 Run `node index-workflow.js` explicitly with site-local `TAMRANK_PAT` and
