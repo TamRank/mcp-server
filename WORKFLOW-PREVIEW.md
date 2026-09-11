@@ -141,7 +141,7 @@ passive `get_scan_status`, as described below. `start_scan` additionally support
 explicit PageSpeed preview and separately authorised private drafts, never execution.
 `plan_changes` and exact-ID `get_changes` now support the separately gated private
 metadata/social/alt and redirect subsets below. The three field operations also have
-the separately gated execution bridge below. Full native MCP execution acceptance,
+the separately gated execution bridge below. Native MCP failure/HTTPS acceptance,
 scan execution and Phase 4 remain open; there is no customer-site activation.
 
 ## Exact field execution bridge (development opt-in)
@@ -181,8 +181,24 @@ Verification: 94 bridge/real-SDK/owned-loopback checks plus the full workflow su
 22,300 catalog equivalence checks with the maximal specialist profile under
 16,000 characters, and shared instructions under 1,500. HTTP tests cover exact
 one-MiB limits, wrong versions and no automatic retry. Native WordPress REST
-execution was tested separately (447 checks per PHP 8.2/8.5); the combined native
-MCP-to-WordPress execution/rollback chain is still the next acceptance step.
+execution/rights were tested separately (465 checks per PHP 8.2/8.5).
+
+The PRO runner's `--field-execution-mcp` mode now invokes
+`test/field-execution-native-client.mjs` through real stdio MCP and loopback HTTP
+into a disposable WordPress installation. 564 checks pass per PHP 8.2/8.5 across
+core/specialist, pretty/query URL forms, single-site and two multisite clients.
+Independent database reads verify exact forward values/absence, no proposal or
+invalid-approval field writes, three forward audits, original-field restoration
+after separately approved rollback, and exactly three reversal audits. Repeating
+either execution preserves results without further mutations/audits. Real client
+handshake provenance and version-3 Action/cache receipts survive the entire chain.
+The test waits for explicit native 429 windows; product limits and automatic-retry
+behavior are unchanged. All runner-owned synthetic databases are removed.
+
+This establishes the combined normal path, not HTTPS, worker/lost-response
+recovery, the complete native MCP failure/owner matrix, schema/redirect writers,
+host compatibility, privacy completion or release readiness. The server removes
+available field tools from its pending list but keeps `full_v2_compatible=false`.
 
 ## Private field and redirect proposals (development opt-in)
 
