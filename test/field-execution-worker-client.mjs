@@ -128,9 +128,12 @@ export async function runFieldExecutionClient({origin,fixture:f,tlsRoot,inspect,
       equal(recovered.registration.attestation.attested_by_token_id,f.tokens.execution.id,'Original attribution remains tied to revoked token');
       equal(recovered.registration.recovery.attestation.attested_by_token_id,f.tokens.replacement.id,'New recovery attribution is separate');
       equal(recovered.registration.recovery.attestation.human_verified,false);
+      equal(recovered.item_results[0].invalidation,'delivered','Recovered applied field has completed native cache/Action delivery');
+      equal(recovered.item_results[0].delivery.status,'delivered');
+      equal(recovered.item_results[0].delivery.attempts,2,'Backend failure retried only derived-data delivery');
     }finally{await auditReader.close();}
     equal(inspect(),afterRevocation,'Native recovery and MCP readback change neither applied nor pending fields');
-    console.log('PASS: revoked interrupted execution → separately approved native recovery; atomic stop, no field writes, stable replay.');
+    console.log('PASS: revoked interrupted execution → approved native stop and cache/Action delivery; no repeated field writes, stable replay.');
   }finally{await client.close();}
   return checks;
 }
