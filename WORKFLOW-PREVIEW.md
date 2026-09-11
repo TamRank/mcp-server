@@ -23,7 +23,7 @@ The matching PRO route requires `TAMRANK_WORKFLOW_READS_ENABLED`,
 and schema proposal storage each have the separate opt-ins below. Do not activate this
 on customer sites. Restart the bridge after changing advertised availability.
 
-The enabled core/specialist catalogs with schema storage, field execution and recovery are 10,330/15,999 characters, within the
+The enabled core/specialist catalogs with schema storage, field execution and recovery are 10,330/15,999 characters; adding redirect execution/recovery gives 10,324/15,993, within the
 16,000-character budget. Local JSON Schema references and removal of redundant
 type/dialect information preserve all fields, limits and SDK validation. Unknown
 dialects/vocabulary are not rewritten. `test/workflow-catalog.mjs` checks every
@@ -177,6 +177,56 @@ delivery-only recovery, unreadable evidence, other-owner recovery, host/cache,
 large-history admission, redirect/schema writers or complete Phase 4 acceptance.
 Feature gates, normal entrypoint and package version remain unchanged.
 
+## Exact redirects and mixed sets (development opt-in)
+
+With contract-1 `redirect_execution.available:true`, `plan_changes` creates
+a native execution proposal for `redirect.create`, `redirect.update` and
+`redirect.delete`. Field/redirect mixtures additionally require
+`mixed_available:true` and every operation in the advertised list. Field-only
+plans keep their existing contract. Source-only drafts never become executable.
+
+Use the returned record's exact `envelope.plan.change_set_id`,
+`envelope.change_token` and `envelope.plan_hash` for `execute_change_set`.
+After showing ALL targets, values and warnings and obtaining chat approval,
+supply `confirmation:{plan_hash,confirmed:true,acknowledgements}`, copying
+`envelope.plan.required_acknowledgements` exactly (including an empty array).
+The bridge never invents deletion approval. Rollback still means a NEW proposal,
+NEW chat approval and execution, not an immediate undo tool.
+
+For recovery, `get_changes({change_set_id,kind:"recovery"})` returns a signed
+redirect recovery plan when current read/management rights allow it. Copy that
+plan/token/hash and exact acknowledgements using the recovery call described
+above. `stop_pending` retains applied items and stops pending ones;
+`delivery_only` only finishes delivery for already-applied work and may remain
+`running` if that delivery cannot complete. Neither mode repeats website writes.
+The server remains authoritative for signatures, live rights, item sources and
+history. Use `get_changes(kind:"execution")` after an uncertain result;
+there is no automatic retry or old-writer fallback.
+
+The PRO flag `TAMRANK_WORKFLOW_REDIRECT_EXECUTION_REST_ENABLED` is default off
+and requires the native writer/storage/runner/delivery opt-ins; rollback and
+recovery have separate native gates. Restart after capability changes. No
+customer configuration is changed, no new tool is added, and full V2 readiness
+is not advertised. Pure redirect writes do not require metadata rights.
+
+Verified: 144 bridge/SDK checks; **892 native MCP/TLS checks per PHP 8.2/8.5**
+using PRO `--redirect-execution-mcp` and
+`test/redirect-execution-native-client.mjs`. Actual native redirects/metadata,
+fresh-ID restoration, both profiles/REST forms, single-/two-client multisite,
+owner/client isolation, lost committed replies, real worker death before/after
+COMMIT, revoked original PAT, new replacement-token recovery and approved
+subset rollback are covered. No execution results are injected. All data and
+servers are owned synthetic fixtures; frontend routing is not verified.
+
+39,453 catalog equivalence checks include the combined schema/field/redirect
+profiles. An extracted package with clean-cache, locked `npm ci` and scripts
+disabled starts correctly; that package smoke test is not native execution
+acceptance or a test of unconstrained dependency resolution. Remaining work
+includes Action origins, maximum-size/result and connection/late-authority
+cases, inverse/all-applied worker recovery, redirect privacy/retention,
+schema execution and general host/release acceptance. See PRO
+`docs/mcp-phase4d-execution.md` on branch `feat/mcp-workflows`.
+
 ## Entry and profiles
 
 Run `node index-workflow.js` explicitly with site-local `TAMRANK_PAT` and
@@ -201,7 +251,7 @@ passive `get_scan_status`, as described below. `start_scan` additionally support
 explicit PageSpeed preview and separately authorised private drafts, never execution.
 `plan_changes` and exact-ID `get_changes` now support the separately gated private
 metadata/social/alt and redirect subsets below. The three field operations also have
-the separately gated execution bridge below. Remaining native MCP failure/owner acceptance,
+the separately gated execution bridge below; redirects/mixed sets use the new lane above. Remaining native MCP failure/owner acceptance,
 scan execution and Phase 4 remain open; there is no customer-site activation.
 
 ## Exact field execution bridge (development opt-in)
