@@ -23,7 +23,7 @@ The matching PRO route requires `TAMRANK_WORKFLOW_READS_ENABLED`,
 and schema proposal storage each have the separate opt-ins below. Do not activate this
 on customer sites. Restart the bridge after changing advertised availability.
 
-The enabled core/specialist catalogs with schema storage are 9,879/15,995 characters, within the
+The enabled core/specialist catalogs with schema storage and field execution are 10,305/15,974 characters, within the
 16,000-character budget. Local JSON Schema references and removal of redundant
 type/dialect information preserve all fields, limits and SDK validation. Unknown
 dialects/vocabulary are not rewritten. `test/workflow-catalog.mjs` checks every
@@ -140,8 +140,49 @@ Six optional specialists are connected: `get_gsc_pages`, `get_redirects`,
 passive `get_scan_status`, as described below. `start_scan` additionally supports
 explicit PageSpeed preview and separately authorised private drafts, never execution.
 `plan_changes` and exact-ID `get_changes` now support the separately gated private
-metadata/social/alt and redirect subsets below. `execute_change_set` and `rollback_change_set` still
-refuse requests. Actual website writes, scan execution and Phase 4 remain open.
+metadata/social/alt and redirect subsets below. The three field operations also have
+the separately gated execution bridge below. Full native MCP execution acceptance,
+scan execution and Phase 4 remain open; there is no customer-site activation.
+
+## Exact field execution bridge (development opt-in)
+
+`field_execution` contract 1 advertises `available`, `read_available` and
+`rollback_available` independently. Only `meta.update`, `social.update` and
+`image_alt.update` enter this policy. A fresh `plan_changes` containing exclusively
+advertised field operations now creates an execution-policy proposal at
+`POST /changes/executions`; it does not record approval or change website fields.
+Old private drafts and mixed/schema/redirect drafts remain non-executable.
+
+Show the entire returned proposal and warnings, then obtain explicit approval in
+chat. `execute_change_set` takes the exact `change_set_id`, `change_token` and
+`confirmation:{plan_hash,confirmed:true}`. No replacement items or client identity
+arguments are accepted. The bridge derives `client_request_id` as
+`mcp-execute-` plus the immutable proposal hash, so exact retries retain identity.
+The MCP handshake supplies a bounded client name/version (self-reported, not
+verified identity); the agent name is explicitly `unknown`. The server records
+the bounded chat-attestation stub with `human_verified=false`, not a transcript.
+
+Use `get_changes({change_set_id,kind:"execution"})` for reconciliation, especially
+after an uncertain response. Omitting kind or using `kind:"draft"` retains old
+draft reads. No automatic POST retry or fallback to legacy writers occurs.
+`rollback_change_set({change_set_id,client_request_id,item_ids})` creates a NEW
+rollback proposal only. Show that exact proposal, obtain new approval, then use
+`execute_change_set` with its new ID/hash/token. Newer intervening edits remain
+protected by the native executor.
+
+Only exact native execution method/route pairs accept contract 1 and responses
+up to one MiB. Existing routes still require contract 2 and retain their existing
+limits. Result reads/executions verify set identity; executions also verify the
+returned proposal hash. The bridge cannot verify the server's private HMAC itself.
+Metadata/social/alt execution and rollback require the PRO REST/storage/executor/
+Action-convergence flags and current scopes; no client can enable these flags.
+
+Verification: 94 bridge/real-SDK/owned-loopback checks plus the full workflow suite;
+22,300 catalog equivalence checks with the maximal specialist profile under
+16,000 characters, and shared instructions under 1,500. HTTP tests cover exact
+one-MiB limits, wrong versions and no automatic retry. Native WordPress REST
+execution was tested separately (447 checks per PHP 8.2/8.5); the combined native
+MCP-to-WordPress execution/rollback chain is still the next acceptance step.
 
 ## Private field and redirect proposals (development opt-in)
 
@@ -630,7 +671,7 @@ the original receipt and do not repeat mutations over more recent progress.
 Work changes require explicit user instruction. Completion means a manual task or research is
 finished, not that a page was repaired or SEO recovered. The token owner is checked
 by WordPress on every request; browser login or client-supplied actor IDs cannot
-substitute. Website change-set execution remains disabled.
+substitute. These work permissions do not grant website change-set execution.
 
 For explicit page importance, first read `get_page(post_id, section=importance)`.
 Pass its effective `importance.value` as `expected_value` to `update_work_item`
