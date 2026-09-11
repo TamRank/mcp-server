@@ -102,6 +102,51 @@ export async function runFieldExecutionClient({origin,fixture:f,tlsRoot,inspect,
     equal((await call('get_changes',{change_set_id:uncommittedId,kind:'execution'})).record,failed,'Rejected rollback preserves failure history');
     console.log('PASS: owned worker SIGKILL before COMMIT → native atomic rollback → no deferred execution or false reversal.');
 
+    // Separate real-wire recovery, before the later revocation/privacy fault
+    // matrix consumes that fixture. No direct PHP recovery call in this lane.
+    const wireBefore=inspect();
+    const wirePlan=(await call('plan_changes',{client_request_id:'native-worker-wire-recovery-plan',
+      origin:{kind:'user_request',reference:'owned-fixture',summary:'Synthetic MCP recovery transport'},items:[
+        {operation:'meta.update',target:{post_id:f.posts.publish},fields:{meta_title:{mode:'set',value:'Retain from MCP recovery'}}},
+        {operation:'social.update',target:{post_id:f.posts.bulk[0]},fields:{social_title:{mode:'set',value:'Never apply during recovery'}}},
+        {operation:'image_alt.update',target:{attachment_id:f.posts.image},fields:{alt_text:{mode:'set',value:'Never apply during recovery'}}},
+      ]})).record;
+    const wireId=wirePlan.envelope.plan.change_set_id;
+    worker.arm(wireId);const wireRun=raw('execute_change_set',confirmation(wirePlan));
+    await worker.interrupt();ok((await wireRun).isError,'Wire recovery begins with actual uncertain worker death');await worker.restart();
+    const wireKilled=inspect();equal(wireKilled.audits.length-wireBefore.audits.length,1);
+    const recoveryClient=new Client({name:'Owned wire recovery client',version:'1'});
+    try{
+      await recoveryClient.connect(new StdioClientTransport({command:process.execPath,args:['--import',path.join(cwd,'test/owned-schema-dns.mjs'),path.join(cwd,'index-workflow.js')],cwd,stderr:'pipe',
+        env:{PATH:process.env.PATH,NODE_EXTRA_CA_CERTS:tlsRoot+'/ca.pem',TAMRANK_SCHEMA_FIXTURE_ROOT:tlsRoot,
+          TAMRANK_PAT:f.tokens.replacement.token,TAMRANK_SITE_URL:origin,TAMRANK_TOOL_PROFILE:'core',TAMRANK_REST_STYLE:'query',TAMRANK_WORKFLOW_PREVIEW:'1'}}));
+      const recoverRaw=(name,args)=>recoveryClient.callTool({name,arguments:args});
+      const recoverCall=async(name,args)=>{const r=await recoverRaw(name,args);ok(!r.isError,JSON.stringify(r));return JSON.parse(r.content[0].text);};
+      const support=await recoverCall('get_capabilities',{});
+      ok(support.field_execution.recovery_available&&support.field_execution.recovery_delivery_available,'Native HTTP advertises exact recovery and delivery');
+      const preview=(await recoverCall('get_changes',{change_set_id:wireId,kind:'recovery'})).recovery_proposal;
+      equal(preview.plan.binding.token_id,f.tokens.replacement.id,'Proposal bound to replacement PAT');
+      equal(preview.plan.original_token_id,f.tokens.execution.id,'Original token not rewritten');
+      equal(preview.plan.items.map(i=>i.disposition),['retain_applied','skip_pending','skip_pending']);
+      equal(inspect(),wireKilled,'MCP recovery preview does not change fields or audits');
+      const recoveryArgs={change_set_id:wireId,change_token:preview.recovery_token,recovery_plan:preview.plan,
+        confirmation:{plan_hash:preview.plan_hash,confirmed:true,acknowledgements:preview.plan.required_acknowledgements}};
+      ok((await recoverRaw('execute_change_set',{...recoveryArgs,confirmation:{...recoveryArgs.confirmation,confirmed:false}})).isError,'No recovery without new affirmative approval');
+      equal(inspect(),wireKilled,'Rejected approval leaves fields and audits unchanged');
+      const recovered=(await recoverCall('execute_change_set',recoveryArgs)).record;
+      equal(recovered.state,'partial');equal(recovered.item_results.map(i=>i.state),['applied','skipped','skipped']);
+      equal(recovered.item_results.map(i=>i.attempts),[1,0,0]);
+      equal(recovered.registration.recovery.plan_hash,preview.plan_hash);
+      equal(recovered.registration.recovery.attestation.client,{name:'Owned wire recovery client',version:'1'});
+      equal(recovered.registration.recovery.attestation.human_verified,false);
+      equal(recovered.item_results[0].delivery.status,'delivered','Real HTTP recovery completes native derived-data delivery');
+      equal(inspect(),wireKilled,'Approved recovery performs no new field/audit writes');
+      equal((await recoverCall('execute_change_set',recoveryArgs)).record,recovered,'Exact MCP recovery replay is stable');
+      equal((await recoverCall('get_changes',{change_set_id:wireId,kind:'execution'})).record,recovered,'MCP readback matches recovery');
+      equal(inspect(),wireKilled,'Readback and replay do not execute pending fields');
+    }finally{await recoveryClient.close();}
+    console.log('PASS: actual worker death → stdio MCP/TLS recovery preview → new chat attestation → native stop/delivery → exact readback.');
+
     const revokedPlan=(await call('plan_changes',{client_request_id:'native-worker-revoked-owner-plan',
       origin:{kind:'user_request',reference:'owned-fixture',summary:'Synthetic revoked token recovery'},items:[
         {operation:'meta.update',target:{post_id:f.posts.publish},fields:{meta_title:{mode:'set',value:'Retain after revocation'}}},
