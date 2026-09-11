@@ -1,22 +1,34 @@
-/** Real stdio MCP -> loopback HTTP -> native WP executor; owned PRO runner only. */
+/** Real stdio MCP -> owned HTTP/TLS -> native WP executor; owned PRO runner only. */
 import assert from 'node:assert/strict';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
+import {existsSync} from 'node:fs';
 const cwd=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-export async function runFieldExecutionClient({origin,fixture:f,inspect}){
-  assert.match(origin,/^http:\/\/127\.0\.0\.1:\d{4,5}(?:\/client-two)?$/);
+export async function runFieldExecutionClient({origin,fixture:f,inspect,tlsRoot=null,faults=null}){
+  if(tlsRoot){assert.match(tlsRoot,/^\/private\/tmp\/tr-maint-wp-[A-Za-z0-9]{6}$/);assert.ok(existsSync(tlsRoot+'/owned-fixture'));
+    assert.match(origin,/^https:\/\/schema-source\.example\.org:\d{4,5}(?:\/client-two)?$/);
+  }else assert.match(origin,/^http:\/\/127\.0\.0\.1:\d{4,5}(?:\/client-two)?$/);
   assert.equal(typeof inspect,'function');let checks=0;
   const equal=(a,b,label)=>{assert.deepEqual(a,b,label);checks++;};
   const ok=(v,label)=>{assert.ok(v,label);checks++;};
+  const transport=(profile,style,trusted=true)=>new StdioClientTransport({command:process.execPath,
+    args:tlsRoot?['--import',path.join(cwd,'test/owned-schema-dns.mjs'),path.join(cwd,'index-workflow.js')]:['index-workflow.js'],cwd,stderr:'pipe',
+    env:{PATH:process.env.PATH,...(tlsRoot?{TAMRANK_SCHEMA_FIXTURE_ROOT:tlsRoot,...trusted?{NODE_EXTRA_CA_CERTS:tlsRoot+'/ca.pem'}:{}}:{}),
+      TAMRANK_PAT:f.tokens.execution.token,TAMRANK_SITE_URL:origin,TAMRANK_TOOL_PROFILE:profile,TAMRANK_REST_STYLE:style,TAMRANK_WORKFLOW_PREVIEW:'1'}});
+  if(tlsRoot){
+    const before=inspect(),untrusted=new Client({name:'untrusted-TLS-fixture',version:'1'});
+    try{await untrusted.connect(transport('core','pretty',false));
+      const refused=await untrusted.callTool({name:'get_capabilities',arguments:{}});
+      ok(refused.isError,'Untrusted certificate is refused');equal(inspect(),before,'TLS rejection makes no website change');
+    }finally{await untrusted.close();}
+  }
   for(const profile of ['core','specialist'])for(const style of ['pretty','query']){
     const client=new Client({name:'owned-native-field-client',version:'1.2.3'});
     const label=`native-execute-${profile}-${style}`;
     try{
-      await client.connect(new StdioClientTransport({command:process.execPath,args:['index-workflow.js'],cwd,stderr:'pipe',
-        env:{PATH:process.env.PATH,TAMRANK_PAT:f.tokens.execution.token,TAMRANK_SITE_URL:origin,
-          TAMRANK_TOOL_PROFILE:profile,TAMRANK_REST_STYLE:style,TAMRANK_WORKFLOW_PREVIEW:'1'}}));
+      await client.connect(transport(profile,style));
       const raw=async(name,args)=>{
         // Test scheduling only: native 429 is a refusal before execution. Keep
         // the exact request, wait for the real window, never raise product limits.
@@ -50,7 +62,15 @@ export async function runFieldExecutionClient({origin,fixture:f,inspect}){
       ok((await raw('execute_change_set',{...args,confirmation:{...args.confirmation,confirmed:false}})).isError,'Unapproved call refused');
       ok((await raw('execute_change_set',{...args,confirmation:{...args.confirmation,plan_hash:'0'.repeat(64)}})).isError,'Wrong native hash refused');
       equal(inspect(),before,'Invalid approvals leave fields/audits unchanged');
-      const done=(await call('execute_change_set',args)).record;
+      let done;
+      if(faults&&profile==='core'&&style==='pretty'){
+        faults.arm(id);
+        const lost=await raw('execute_change_set',args),error=JSON.parse(lost.content[0].text);
+        ok(lost.isError&&error.code==='network_error'&&error.automatic_retry===false,'Lost committed result requires explicit reconciliation');
+        equal(faults.attempts(),1,'Bridge sends the write only once despite the lost result');
+        equal(inspect().audits.length-before.audits.length,3,'Lost reply follows a real committed batch');
+        done=(await call('get_changes',{change_set_id:id,kind:'execution'})).record;
+      }else done=(await call('execute_change_set',args)).record;
       equal(done.state,'executed',JSON.stringify(done.item_results?.map(r=>({state:r.state,invalidation:r.invalidation,delivery:r.delivery}))));equal(done.registration.attestation.human_verified,false);
       equal(done.registration.attestation.client,{name:'owned-native-field-client',version:'1.2.3'},'Actual handshake persisted');
       equal(done.registration.attestation.agent,{name:'unknown'});
@@ -62,6 +82,7 @@ export async function runFieldExecutionClient({origin,fixture:f,inspect}){
       equal(applied.audits.length-before.audits.length,3,'One real audit per executed item');
       for(const result of done.item_results){equal(result.attempts,1);equal(result.delivery.result.contract_version,3);}
       equal((await call('execute_change_set',args)).record,done,'Exact executor replay');
+      if(faults&&profile==='core'&&style==='pretty')equal(faults.attempts(),2,'Only explicit exact retry sends the second invocation');
       equal(inspect(),applied,'Retry never reapplies fields or duplicates audits');
       equal((await call('get_changes',{change_set_id:id,kind:'execution'})).record,done,'Native read-only recovery');
       const reverse=(await call('rollback_change_set',{change_set_id:id,client_request_id:label+'-rollback',
