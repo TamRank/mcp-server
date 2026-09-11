@@ -23,7 +23,7 @@ The matching PRO route requires `TAMRANK_WORKFLOW_READS_ENABLED`,
 and schema proposal storage each have the separate opt-ins below. Do not activate this
 on customer sites. Restart the bridge after changing advertised availability.
 
-The enabled core/specialist catalogs with schema storage and field execution are 10,305/15,974 characters, within the
+The enabled core/specialist catalogs with schema storage, field execution and recovery are 10,330/15,999 characters, within the
 16,000-character budget. Local JSON Schema references and removal of redundant
 type/dialect information preserve all fields, limits and SDK validation. Unknown
 dialects/vocabulary are not rewritten. `test/workflow-catalog.mjs` checks every
@@ -130,21 +130,52 @@ committed admission and its budget remain, explicit recovery skips all items,
 and rollback of an uncommitted item returns `rollback_unavailable`. This does not
 prove revoked-owner/unreadable-journal recovery or death inside every transaction.
 
-The worker suite now totals 306 checks per PHP 8.2/8.5, adding actual interrupted
+An earlier worker-suite milestone totalled 306 checks per PHP 8.2/8.5, adding actual interrupted
 execution with revoked PAT. MCP rejects the old token; a separate native PHP
 recovery proposal binds a valid same-owner replacement token and exact verified
 journal, with zero website writes. This `trfr1` proposal is not an execute token,
-not stored approval and not yet a connected recovery tool. Atomic recovery,
-new attestation and privacy/retention integration remain open.
+not stored approval. At that milestone atomic recovery, new attestation and
+privacy/retention integration were still open; see the current recovery lane below.
 
-The extended worker suite now passes 471 checks per PHP 8.2/8.5: native, separately
+The next worker-suite milestone passed 471 checks per PHP 8.2/8.5: native, separately
 approved recovery stops pending items atomically without field/audit writes and
 preserves the original admission. Busy independent execution locks, three-table
 faults, late native token revocation, lost COMMIT replies and exact/conflicting
 replays are covered. Actual stdio/HTTPS `get_changes` with an audit-only token
-reads both original and recovery attestations. The recovery mutation itself is
-still native-only/default-off, not a public MCP operation. Recovery erasure,
-post-commit delivery, retention integration and public wiring remain open.
+reads both original and recovery attestations. Recovery was native-only at that
+milestone; subsequent delivery/privacy/retention and MCP acceptance are below.
+
+## Exact recovery through existing tools (development opt-in)
+
+When contract-1 `field_execution` advertises both `recovery_available` and
+`read_available`, use `get_changes({change_set_id,kind:"recovery"})` for a signed,
+read-only stop proposal. Show its exact item dispositions and obtain NEW chat
+approval. Then call `execute_change_set` with the same `change_set_id`, copy the
+returned `plan` as `recovery_plan`, its `recovery_token` as `change_token`, and
+`confirmation:{plan_hash,confirmed:true,acknowledgements}` using the returned
+hash and exact ordered `required_acknowledgements`. Do not edit the returned plan.
+
+The bridge posts to the separately gated `/changes/executions/{id}/recover`,
+not the field execution endpoint. It derives `mcp-recover-{plan_hash}` as the
+stable request ID and records bounded, unverified MCP client provenance, unknown
+agent identity and chat attestation. No transcript or verified-human claim.
+The server verifies its signature, fresh authority and actual journal state.
+Recovery stops pending items and retains applied items; it never reapplies fields
+or implicitly rolls them back. Authorized cache/Action delivery can finish after
+the stop. A failure can occur AFTER that stop commits: read `kind:"execution"`
+before any exact retry, never call a legacy writer or retry automatically.
+Recovery may be available without authority to start new field execution.
+
+Verified: 92 bridge/SDK checks and 858 native worker checks per PHP 8.2/8.5 across
+single-site and two-client multisite. The latter includes actual PHP worker death,
+stdio MCP plus verified TLS, a same-owner replacement PAT, fresh recovery preview,
+new chat attestation, native stop/delivery, exact replay/readback, and the existing
+revocation/privacy/retention/rollback fault matrix. All fields are synthetic.
+The catalog remains 12 core / 20 specialist / 42 legacy tools; instructions are
+1,459 characters. This does not close whole-request WordPress privacy, all-applied
+delivery-only recovery, unreadable evidence, other-owner recovery, host/cache,
+large-history admission, redirect/schema writers or complete Phase 4 acceptance.
+Feature gates, normal entrypoint and package version remain unchanged.
 
 ## Entry and profiles
 
@@ -206,8 +237,8 @@ returned proposal hash. The bridge cannot verify the server's private HMAC itsel
 Metadata/social/alt execution and rollback require the PRO REST/storage/executor/
 Action-convergence flags and current scopes; no client can enable these flags.
 
-Verification: 94 bridge/real-SDK/owned-loopback checks plus the full workflow suite;
-22,300 catalog equivalence checks with the maximal specialist profile under
+Verification: 104 execution bridge/real-SDK/owned-loopback checks plus the full workflow suite;
+28,137 catalog equivalence checks with the maximal specialist profile under
 16,000 characters, and shared instructions under 1,500. HTTP tests cover exact
 one-MiB limits, wrong versions and no automatic retry. Native WordPress REST
 execution/rights were tested separately (465 checks per PHP 8.2/8.5).

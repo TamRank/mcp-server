@@ -90,7 +90,8 @@ await new Promise(resolve=>http.listen(0,'127.0.0.1',resolve));
 try{
   const wire=new WorkflowClient({siteUrl:'http://127.0.0.1:'+http.address().port,pat:'synthetic-only'});
   const routes=[['post','/changes/executions'],['get','/changes/executions/'+id],
-    ['post','/changes/executions/'+id+'/execute'],['post','/changes/executions/'+id+'/rollback-proposals']];
+    ['post','/changes/executions/'+id+'/execute'],['post','/changes/executions/'+id+'/rollback-proposals'],
+    ['post','/changes/executions/'+id+'/recovery-proposals'],['post','/changes/executions/'+id+'/recover']];
   for(const [method,path]of routes)check((await wire[method](path,{})).value.length===wireBytes,'Execution route accepts bounded expanded response');
   for(const [method,path]of [['get','/changes/executions'],['post','/changes/executions/'+id],
     ['get','/changes/executions/'+id+'/execute'],['post','/changes/executions/not-a-uuid/execute']]){
