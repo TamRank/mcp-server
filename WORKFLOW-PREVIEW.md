@@ -221,9 +221,9 @@ servers are owned synthetic fixtures; frontend routing is not verified.
 39,453 catalog equivalence checks include the combined schema/field/redirect
 profiles. An extracted package with clean-cache, locked `npm ci` and scripts
 disabled starts correctly; that package smoke test is not native execution
-acceptance or a test of unconstrained dependency resolution. Remaining work
-includes Action origins, maximum-size/result and connection/late-authority
-cases, further worker/cache boundaries, redirect privacy/retention,
+acceptance or a test of unconstrained dependency resolution. The real-404 Action
+and 25-item scenarios have their own native matrix below. Remaining work includes
+other source/connection/late-authority cases, further worker/cache boundaries, redirect privacy/retention,
 schema execution and general host/release acceptance. See PRO
 `docs/mcp-phase4d-execution.md` on branch `feat/mcp-workflows`.
 
@@ -240,6 +240,40 @@ only a newly-approved rollback may reverse remaining original items. These are
 owned single-site/two-client multisite fixtures. Runtime flags and product
 quotas are unchanged. This does not complete privacy/retention, arbitrary cache
 transaction interruption, schema execution or general host/release acceptance.
+
+### Full batches and real queue provenance
+
+PRO `--redirect-batch-mcp` uses `test/redirect-batch-native-client.mjs` through
+actual stdio, verified owned TLS and WordPress on a standalone site and two
+network clients. Run it with the same explicit core/FREE/MySQL variables as the
+other native modes and `TAMRANK_MAINT_MCP` pointing to this checkout. Both core /
+pretty and specialist / query routes are exercised. All data are fictitious.
+The full matrix passes on PHP 8.5 (792 checks) and PHP 8.2 (783 checks). Scenario
+coverage is the same; the total includes variable native quota-wait assertions.
+
+- An actual FREE 404 observation becomes a canonical Action via the real task
+  adapter. Stale revision/hash and removed-source proposals are refused. A newly
+  approved redirect resolves that Action; newly approved rollback reopens it.
+  Both native audits retain its identity. Queue responses are not injected.
+- Exactly 25 long-path redirects, and 24 large Unicode metadata values plus one
+  redirect, survive full preview, execution, readback and replay. Native rows,
+  assigned IDs and 25 audit entries are independently compared. All 25 inverse
+  items run in the reverse order with separate approval and 25 further audits;
+  the 26th forward or inverse item is refused.
+- Actual Unicode execution responses peak at 710,183 bytes on a root site and
+  716,161 bytes on the second client's subpath. The existing 1-MiB execution-route
+  response cap and 256-KiB plan bound are unchanged. Test telemetry stores only
+  bounded route/status/byte counts, never payloads or credentials.
+
+PRO's bounded verification reuse fixes the repeated historical checks that
+caused the first heavy rollback to hit PHP's 30-second limit. Current rights,
+rows and audits are rechecked; no approval or mutable history is cached across
+reads. A separate 663-check native REST matrix on PHP 8.2/8.5 tests changed stored
+proofs, counterpart audits and fresh SQL failures after a successful read.
+The test never re-executes an uncertain write: it reads the same set and requires
+terminal state plus actual native comparisons before accepting success. Known
+pre-admission quota refusals are paced without changing product limits.
+This is not frontend routing, customer activation or general hosting acceptance.
 
 ## Entry and profiles
 
