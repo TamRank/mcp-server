@@ -130,6 +130,13 @@ committed admission and its budget remain, explicit recovery skips all items,
 and rollback of an uncommitted item returns `rollback_unavailable`. This does not
 prove revoked-owner/unreadable-journal recovery or death inside every transaction.
 
+The worker suite now totals 306 checks per PHP 8.2/8.5, adding actual interrupted
+execution with revoked PAT. MCP rejects the old token; a separate native PHP
+recovery proposal binds a valid same-owner replacement token and exact verified
+journal, with zero website writes. This `trfr1` proposal is not an execute token,
+not stored approval and not yet a connected recovery tool. Atomic recovery,
+new attestation and privacy/retention integration remain open.
+
 ## Entry and profiles
 
 Run `node index-workflow.js` explicitly with site-local `TAMRANK_PAT` and

@@ -6,7 +6,7 @@ import {existsSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 const cwd=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-export async function runFieldExecutionClient({origin,fixture:f,tlsRoot,inspect,worker}){
+export async function runFieldExecutionClient({origin,fixture:f,tlsRoot,inspect,worker,control,recovery}){
   assert.match(tlsRoot,/^\/private\/tmp\/tr-maint-wp-[A-Za-z0-9]{6}$/);assert.ok(existsSync(tlsRoot+'/owned-fixture'));
   assert.match(origin,/^https:\/\/schema-source\.example\.org:\d{4,5}(?:\/client-two)?$/);
   let checks=0;const equal=(a,b,label)=>{assert.deepEqual(a,b,label);checks++;};const ok=(v,label)=>{assert.ok(v,label);checks++;};
@@ -101,6 +101,23 @@ export async function runFieldExecutionClient({origin,fixture:f,tlsRoot,inspect,
     equal(inspect(),beforeTransaction,'Rejected rollback cannot write a field or reversal audit');
     equal((await call('get_changes',{change_set_id:uncommittedId,kind:'execution'})).record,failed,'Rejected rollback preserves failure history');
     console.log('PASS: owned worker SIGKILL before COMMIT → native atomic rollback → no deferred execution or false reversal.');
+
+    const revokedPlan=(await call('plan_changes',{client_request_id:'native-worker-revoked-owner-plan',
+      origin:{kind:'user_request',reference:'owned-fixture',summary:'Synthetic revoked token recovery'},items:[
+        {operation:'meta.update',target:{post_id:f.posts.publish},fields:{meta_title:{mode:'set',value:'Retain after revocation'}}},
+        {operation:'social.update',target:{post_id:f.posts.bulk[0]},fields:{social_title:{mode:'set',value:'Do not execute after revocation'}}},
+        {operation:'image_alt.update',target:{attachment_id:f.posts.image},fields:{alt_text:{mode:'set',value:'Do not execute after revocation'}}},
+      ]})).record;
+    const revokedId=revokedPlan.envelope.plan.change_set_id;
+    worker.arm(revokedId);const revokedRun=raw('execute_change_set',confirmation(revokedPlan));
+    await worker.interrupt();ok((await revokedRun).isError,'Interrupted request is not reported as executed');
+    control('revoke_execution');await worker.restart();
+    const afterRevocation=inspect(),refused=await raw('execute_change_set',confirmation(revokedPlan));
+    ok(refused.isError&&JSON.parse(refused.content[0].text).code==='agent_token_revoked','Old token cannot reconcile by replaying execution');
+    const nativeRecovery=recovery(revokedId);checks+=nativeRecovery.checks;
+    equal(nativeRecovery.proposal.plan.items.map(i=>i.disposition),['retain_applied','skip_pending','skip_pending']);
+    equal(inspect(),afterRevocation,'Native recovery proposal changes neither applied nor pending fields');
+    console.log('PASS: revoked interrupted execution → separately signed native replacement-token recovery proposal; no recovery execution yet.');
   }finally{await client.close();}
   return checks;
 }
