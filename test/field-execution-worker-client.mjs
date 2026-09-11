@@ -6,7 +6,7 @@ import {existsSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 const cwd=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-export async function runFieldExecutionClient({origin,fixture:f,tlsRoot,inspect,worker,control,recovery}){
+export async function runFieldExecutionClient({origin,fixture:f,tlsRoot,inspect,worker,control,recovery,recoveryRetention}){
   assert.match(tlsRoot,/^\/private\/tmp\/tr-maint-wp-[A-Za-z0-9]{6}$/);assert.ok(existsSync(tlsRoot+'/owned-fixture'));
   assert.match(origin,/^https:\/\/schema-source\.example\.org:\d{4,5}(?:\/client-two)?$/);
   let checks=0;const equal=(a,b,label)=>{assert.deepEqual(a,b,label);checks++;};const ok=(v,label)=>{assert.ok(v,label);checks++;};
@@ -125,15 +125,17 @@ export async function runFieldExecutionClient({origin,fixture:f,tlsRoot,inspect,
       ok(!readBack.isError,'MCP audit-only reader can read recovered execution');
       const recovered=JSON.parse(readBack.content[0].text).record;
       equal(recovered.state,'partial');equal(recovered.item_results.map(i=>i.state),['applied','skipped','skipped']);
-      equal(recovered.registration.attestation.attested_by_token_id,f.tokens.execution.id,'Original attribution remains tied to revoked token');
-      equal(recovered.registration.recovery.attestation.attested_by_token_id,f.tokens.replacement.id,'New recovery attribution is separate');
+      ok(!('attested_by_token_id' in recovered.registration.attestation),'Original direct attribution removed by native privacy request');
+      ok(!('attested_by_token_id' in recovered.registration.recovery.attestation),'Separate recovery direct attribution removed too');
+      ok(recovered.registration.recovery.attestation.attribution_removed_at>0,'Redacted recovery retains removal event');
       equal(recovered.registration.recovery.attestation.human_verified,false);
       equal(recovered.item_results[0].invalidation,'delivered','Recovered applied field has completed native cache/Action delivery');
       equal(recovered.item_results[0].delivery.status,'delivered');
       equal(recovered.item_results[0].delivery.attempts,2,'Backend failure retried only derived-data delivery');
     }finally{await auditReader.close();}
-    equal(inspect(),afterRevocation,'Native recovery and MCP readback change neither applied nor pending fields');
-    console.log('PASS: revoked interrupted execution → approved native stop and cache/Action delivery; no repeated field writes, stable replay.');
+    checks+=recoveryRetention(nativeRecovery.proposal).checks;
+    equal(inspect(),afterRevocation,'Native recovery, privacy and retention change neither applied nor pending fields');
+    console.log('PASS: revoked interrupted execution → approved recovery, delivery, native privacy and retention; no repeated field writes.');
   }finally{await client.close();}
   return checks;
 }
