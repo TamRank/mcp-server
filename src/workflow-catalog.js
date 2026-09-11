@@ -13,9 +13,32 @@ const scalarType=(v,t)=>t==='null'?v===null:t==='integer'?Number.isInteger(v):['
 export function simplifyWorkflowSchema(s){
   const out=children(s,simplifyWorkflowSchema);
   if(!out||typeof out!=='object'||Array.isArray(out))return out;
+  // Distinct scalar types with only type-specific constraints can share a type
+  // union. maxLength, for example, never restricts the integer/boolean branches.
+  if(Object.keys(out).length===1&&Array.isArray(out.anyOf)){
+    const scalarKeys={string:['minLength','maxLength','pattern','format'],integer:['minimum','maximum','exclusiveMinimum','exclusiveMaximum','multipleOf'],
+      number:['minimum','maximum','exclusiveMinimum','exclusiveMaximum','multipleOf'],boolean:[],null:[]};
+    const types=out.anyOf.map(b=>b?.type);
+    if(types.length>1&&new Set(types).size===types.length&&!(types.includes('integer')&&types.includes('number'))
+      &&out.anyOf.every(b=>b&&Object.hasOwn(scalarKeys,b.type)&&Object.keys(b).every(k=>k==='type'||scalarKeys[b.type].includes(k)))){
+      const merged={type:types};for(const branch of out.anyOf)for(const[k,v]of Object.entries(branch))if(k!=='type')merged[k]=v;
+      if(JSON.stringify(merged).length<JSON.stringify(out).length)return merged;
+    }
+  }
   // const/enum already exclude every other value and therefore imply this type.
   const values=Object.hasOwn(out,'const')?[out.const]:out.enum;
   if(typeof out.type==='string'&&Array.isArray(values)&&values.length&&values.every(v=>scalarType(v,out.type)))delete out.type;
+  // In a closed object with exactly N declared keys, requiring all N keys is
+  // equivalent to minProperties=N. Keep the shorter spelling, not fewer checks.
+  // Pattern properties could admit other keys, so that case is deliberately excluded.
+  if(out.type==='object'&&out.properties&&out.additionalProperties===false&&!out.patternProperties
+    &&Array.isArray(out.required)&&out.required.length===Object.keys(out.properties).length
+    &&new Set(out.required).size===out.required.length&&out.required.every(k=>Object.hasOwn(out.properties,k))){
+    const minimum=Math.max(out.minProperties||0,out.required.length);
+    if(JSON.stringify({minProperties:minimum}).length<JSON.stringify({required:out.required}).length){
+      delete out.required;out.minProperties=minimum;
+    }
+  }
   if(out.type==='object'&&out.properties&&Object.keys(out.properties).length===0&&out.additionalProperties===false
     &&Object.keys(out).every(k=>['type','properties','additionalProperties'].includes(k)))return {type:'object',maxProperties:0};
   return out;
@@ -65,7 +88,7 @@ export function compactWorkflowSchema(root){
         children(s,x=>{count(x);return x;});
       }
       count(schema);
-      const name='d'+i,ref={$ref:'#/$defs/'+name},size=JSON.stringify(ref).length;
+      const name=i.toString(36),ref={$ref:'#/$defs/'+name},size=JSON.stringify(ref).length;
       let best=null,saving=0;
       for(const [key,n]of counts){const gain=(n-1)*key.length-n*size-name.length-4;
         if(n>1&&gain>saving){best=key;saving=gain;}}
