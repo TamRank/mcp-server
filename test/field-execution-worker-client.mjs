@@ -133,8 +133,8 @@ export async function runFieldExecutionClient({origin,fixture:f,tlsRoot,inspect,
       equal(recovered.item_results[0].delivery.status,'delivered');
       equal(recovered.item_results[0].delivery.attempts,2,'Backend failure retried only derived-data delivery');
     }finally{await auditReader.close();}
-    checks+=recoveryRetention(nativeRecovery.proposal).checks;
     equal(inspect(),afterRevocation,'Native recovery, privacy and retention change neither applied nor pending fields');
+    checks+=recoveryRetention(nativeRecovery.proposal).checks;
     console.log('PASS: revoked interrupted execution → approved recovery, delivery, native privacy and retention; no repeated field writes.');
   }finally{await client.close();}
   return checks;
