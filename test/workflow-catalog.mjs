@@ -24,15 +24,15 @@ function sample(s){
   if(s.type==='boolean')return true;
   return 'fixture';
 }
-for(const profile of ['core','specialist','legacy'])for(const enabled of [false,true,'storage','execution']){
+for(const profile of ['core','specialist','legacy'])for(const enabled of [false,true,'storage','execution','recovery']){
   const server=new McpServer({name:'catalog-fixture',version:'1'}),client=new Client({name:'catalog-client',version:'1'}),handles=new Map();
   const nativeRegister=server.registerTool.bind(server);server.registerTool=(name,config,handler)=>{
     const handle=nativeRegister(name,config,handler);handles.set(name,handle);return handle;
   };
-  const storage=['storage','execution'].includes(enabled);
+  const storage=['storage','execution','recovery'].includes(enabled);
   registerWorkflowTools(server,{}, {profile,capabilities:enabled?{schema_preview:{contract_version:2,available:true,operations:['schema.detect'],schema_proposals_available:storage},
     ...(storage?{field_proposals:{contract_version:2,available:true,operations:['schema.detect']}}:{}),
-    ...(enabled==='execution'?{field_execution:{contract_version:1,available:true,read_available:true,rollback_available:true,operations:['meta.update','social.update','image_alt.update']}}:{})}:null});
+    ...(['execution','recovery'].includes(enabled)?{field_execution:{contract_version:1,available:true,read_available:true,rollback_available:true,recovery_available:enabled==='recovery',operations:['meta.update','social.update','image_alt.update']}}:{})}:null});
   const [a,b]=InMemoryTransport.createLinkedPair();await server.connect(a);await client.connect(b);
   try{
     const listing=await client.listTools();equal(listing.tools.length,{core:12,specialist:20,legacy:42}[profile],'Tool names/count preserved');
@@ -73,7 +73,10 @@ const focused=[closed,{...closed,minProperties:3},{...closed,maxProperties:1},
   {...closed,patternProperties:{'^extra':{type:'string'}}},scalarUnion,
   {anyOf:[{type:'integer',minimum:4},{type:'number',maximum:2}]},
   {anyOf:[{type:'string',minLength:3},{type:'string',maxLength:1}]},
-  {anyOf:[{type:'string',enum:['allowed']},{type:'null'}]}];
+  {anyOf:[{type:'string',enum:['allowed']},{type:'null'}]},
+  {type:'object',additionalProperties:true},{type:'object',additionalProperties:{}},
+  {anyOf:[{const:7},{enum:[28,90]},{const:7}]},
+  {anyOf:[{const:'a',description:'Keep annotation'},{const:'b'}]}];
 const objects=[];
 for(const a of [undefined,'valid',false])for(const b of [undefined,2,'2'])for(const extra of [false,true]){
   objects.push({...a!==undefined?{long_required_name:a}:{},...b!==undefined?{another_required_name:b}:{},...extra?{extra_key:'x'}:{}});
@@ -87,4 +90,11 @@ equal(simplifyWorkflowSchema(closed).minProperties,2,'All required closed keys c
 equal(simplifyWorkflowSchema(focused[5]).required,closed.required,'Pattern properties preserve required keys');
 equal(simplifyWorkflowSchema(scalarUnion).type,['string','integer','boolean','null'],'Disjoint constrained scalars compacted');
 equal(simplifyWorkflowSchema(focused[7]),focused[7],'Overlapping integer/number branches not merged');
+equal(simplifyWorkflowSchema(focused[12]),{enum:[7,28,90]},'Literal union compacts without losing alternatives');
+const leaf={type:'string',minLength:3,maxLength:100,pattern:'^[a-z]+$'};
+const repeated={type:'object',properties:{first_long_key:leaf,second_long_key:leaf},additionalProperties:false,required:['first_long_key','second_long_key']};
+const nested={$schema:'http://json-schema.org/draft-07/schema#',type:'object',properties:{a:repeated,b:repeated,c:leaf}};
+const nestedCompact=compactWorkflowSchema(nested),expanded=expandLocalSchema(nested);delete expanded.$schema;
+equal(expandLocalSchema(nestedCompact),simplifyWorkflowSchema(expanded),'Nested extracted definitions stay acyclic and equivalent');
+equal(Object.keys(nestedCompact.$defs||{}).length>=2,true,'Shared leaves inside extracted definitions are compacted too');
 console.log(`PASS: ${checks} catalog equivalence checks; full enabled specialist profile stays under 16,000 characters.`);

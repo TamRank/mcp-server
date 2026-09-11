@@ -13,9 +13,21 @@ const scalarType=(v,t)=>t==='null'?v===null:t==='integer'?Number.isInteger(v):['
 export function simplifyWorkflowSchema(s){
   const out=children(s,simplifyWorkflowSchema);
   if(!out||typeof out!=='object'||Array.isArray(out))return out;
+  // An omitted additionalProperties accepts any value, exactly like true or
+  // an empty schema. This commonly occurs in server-issued opaque proposals.
+  if(out.additionalProperties===true||(out.additionalProperties&&typeof out.additionalProperties==='object'
+    &&!Array.isArray(out.additionalProperties)&&Object.keys(out.additionalProperties).length===0))delete out.additionalProperties;
   // Distinct scalar types with only type-specific constraints can share a type
   // union. maxLength, for example, never restricts the integer/boolean branches.
   if(Object.keys(out).length===1&&Array.isArray(out.anyOf)){
+    // A union of literal-only alternatives is one enum, including mixed types.
+    // Constrained or annotated alternatives are deliberately left untouched.
+    if(out.anyOf.length&&out.anyOf.every(b=>b&&Object.keys(b).length===1
+      &&(Object.hasOwn(b,'const')||Array.isArray(b.enum)))){
+      const values=out.anyOf.flatMap(b=>Object.hasOwn(b,'const')?[b.const]:b.enum);
+      const merged={enum:[...new Map(values.map(v=>[JSON.stringify(v),v])).values()]};
+      if(JSON.stringify(merged).length<JSON.stringify(out).length)return merged;
+    }
     const scalarKeys={string:['minLength','maxLength','pattern','format'],integer:['minimum','maximum','exclusiveMinimum','exclusiveMaximum','multipleOf'],
       number:['minimum','maximum','exclusiveMinimum','exclusiveMaximum','multipleOf'],boolean:[],null:[]};
     const types=out.anyOf.map(b=>b?.type);
@@ -88,13 +100,19 @@ export function compactWorkflowSchema(root){
         children(s,x=>{count(x);return x;});
       }
       count(schema);
+      // Earlier extracted definitions can still share smaller sub-schemas.
+      // Include them, then replace only existing definitions before adding the
+      // new one, so the new definition can never refer to itself.
+      for(const value of Object.values(definitions))count(value);
       const name=i.toString(36),ref={$ref:'#/$defs/'+name},size=JSON.stringify(ref).length;
       let best=null,saving=0;
       for(const [key,n]of counts){const gain=(n-1)*key.length-n*size-name.length-4;
         if(n>1&&gain>saving){best=key;saving=gain;}}
       if(!best)break;
       const replace=s=>JSON.stringify(s)===best?ref:children(s,replace);
-      schema=replace(schema);definitions[name]=values.get(best);
+      schema=replace(schema);
+      for(const key of Object.keys(definitions))definitions[key]=replace(definitions[key]);
+      definitions[name]=values.get(best);
     }
     const result=Object.keys(definitions).length?{...schema,$defs:definitions}:schema;
     return JSON.stringify(result).length<JSON.stringify(root).length?result:root;
