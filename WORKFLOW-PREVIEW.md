@@ -123,8 +123,12 @@ real stdio/HTTPS and single-site/two-client WordPress. The owned PHP worker is
 actually killed after the first item commit and restarted. Readback preserves
 the running record without writes; explicit reconciliation skips pending items
 even within the original lease. Exact replay adds no fields/audits or consent.
-A newly approved rollback restores only the applied item. This does not prove
-revoked-owner/unreadable-journal recovery or death inside every transaction.
+A newly approved rollback restores only the applied item. The extended suite
+passes 177 checks per PHP 8.2/8.5, adding actual worker death immediately before
+the first item COMMIT: native field/audit/receipt writes roll back together,
+committed admission and its budget remain, explicit recovery skips all items,
+and rollback of an uncommitted item returns `rollback_unavailable`. This does not
+prove revoked-owner/unreadable-journal recovery or death inside every transaction.
 
 ## Entry and profiles
 

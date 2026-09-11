@@ -1,4 +1,4 @@
-/** Real owned PHP process death after one commit; not a mocked stop response. */
+/** Real owned PHP process death before/after an item commit; no mocked stop response. */
 import assert from 'node:assert/strict';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -60,6 +60,47 @@ export async function runFieldExecutionClient({origin,fixture:f,tlsRoot,inspect,
     equal(inspect().audits.length-before.audits.length,2,'One forward audit and one explicit reversal audit');
     equal((await call('get_changes',{change_set_id:id,kind:'execution'})).record.registration,stopped.registration,'Original interrupted approval and stop retained');
     console.log('PASS: actual owned worker SIGKILL → unchanged readback → skip deferred writes → approved subset rollback.');
+
+    // Repeat at the other boundary: native field/audit/item SQL has run, but
+    // the first item's COMMIT has not. Process death must roll all three back.
+    const beforeTransaction=inspect();
+    const uncommitted=(await call('plan_changes',{client_request_id:'native-worker-before-commit-plan',
+      origin:{kind:'user_request',reference:'owned-fixture',summary:'Synthetic in-transaction interruption'},items:[
+        {operation:'meta.update',target:{post_id:f.posts.publish},fields:{meta_title:{mode:'set',value:'Uncommitted synthetic title'}}},
+        {operation:'social.update',target:{post_id:f.posts.bulk[0]},fields:{social_title:{mode:'set',value:'Never attempted social title'}}},
+        {operation:'image_alt.update',target:{attachment_id:f.posts.image},fields:{alt_text:{mode:'set',value:'Never attempted alt'}}},
+      ]})).record;
+    const uncommittedId=uncommitted.envelope.plan.change_set_id,uncommittedArgs=confirmation(uncommitted);
+    equal(inspect(),beforeTransaction,'Second proposal still has no field/audit effect');
+    worker.arm(uncommittedId,'before_commit');
+    const interrupted=raw('execute_change_set',uncommittedArgs);
+    await worker.interrupt();
+    const interruptedReply=await interrupted,interruptedData=JSON.parse(interruptedReply.content[0].text);
+    ok(interruptedReply.isError&&['network_error','invalid_response'].includes(interruptedData.code)&&interruptedData.automatic_retry===false,'Uncommitted worker death is uncertain to the client');
+    equal(inspect(),beforeTransaction,'Process death rolls back uncommitted native fields AND audit');
+    await worker.restart();
+    const pendingRecord=(await call('get_changes',{change_set_id:uncommittedId,kind:'execution'})).record;
+    equal(pendingRecord.state,'running');
+    equal(pendingRecord.item_results.map(r=>r.state),['pending','pending','pending'],'Uncommitted applied receipt also rolled back');
+    equal(pendingRecord.item_results.map(r=>r.attempts),[0,0,0],'No committed attempts were invented');
+    equal(pendingRecord.registration.budget.operation_count,3,'Committed admission is retained despite rolled-back first item');
+    ok(pendingRecord.registration.lease_until>Math.floor(Date.now()/1000),'Recovery still occurs inside original lease');
+    equal(inspect(),beforeTransaction,'Readback never resumes the uncommitted write');
+    const failed=(await call('execute_change_set',uncommittedArgs)).record;
+    equal(failed.state,'failed');equal(failed.item_results.map(r=>r.state),['skipped','skipped','skipped']);
+    equal(failed.item_results.map(r=>r.attempts),[0,0,0]);
+    equal(failed.registration.stop.reason,'interrupted');
+    equal(failed.registration.stop.item_id,uncommitted.envelope.plan.items[0].item_id);
+    equal(failed.registration,{...pendingRecord.registration,state:'failed',stop:failed.registration.stop},'Recovery retains exact original consent, reservation and lease');
+    equal(inspect(),beforeTransaction,'Explicit recovery does not retry the rolled-back mutation');
+    equal((await call('execute_change_set',uncommittedArgs)).record,failed,'Exact failure replay is stable');
+    equal(inspect(),beforeTransaction,'Failure replay has no field/audit effect');
+    const refusedRollback=await raw('rollback_change_set',{change_set_id:uncommittedId,client_request_id:'native-worker-uncommitted-rollback',
+      item_ids:[uncommitted.envelope.plan.items[0].item_id]});
+    ok(refusedRollback.isError&&JSON.parse(refusedRollback.content[0].text).code==='rollback_unavailable','Uncommitted item cannot create a reversal proposal');
+    equal(inspect(),beforeTransaction,'Rejected rollback cannot write a field or reversal audit');
+    equal((await call('get_changes',{change_set_id:uncommittedId,kind:'execution'})).record,failed,'Rejected rollback preserves failure history');
+    console.log('PASS: owned worker SIGKILL before COMMIT → native atomic rollback → no deferred execution or false reversal.');
   }finally{await client.close();}
   return checks;
 }
