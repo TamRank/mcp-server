@@ -65,7 +65,9 @@ export class WorkflowClient {
     // escaping. Exact private-draft/native-preview routes get a 1-MiB wire cap.
     // Ordinary analytics/scan responses retain their existing 512-KiB limit.
     const fieldDraft=(method==='POST'&&['/changes/proposals','/schema/preview'].includes(path))||(method==='GET'&&/^\/changes\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(path));
-    const responseLimit=fieldDraft?1048576:524288;
+    const fieldExecution=(method==='POST'&&/^\/changes\/executions(?:\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}\/(?:execute|rollback-proposals))?$/.test(path))
+      ||(method==='GET'&&/^\/changes\/executions\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(path));
+    const responseLimit=fieldDraft||fieldExecution?1048576:524288;
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
       const response = await fetch(url, { method, redirect: 'manual', signal: controller.signal,
@@ -112,7 +114,9 @@ export class WorkflowClient {
         const advice=response.status===429?rateLimitAdvice(data.data):undefined;
         throw new ApiError(response.status, code, message, retained ? { receipt_reference: retained.receipt_reference, receipt_retained: true } : advice);
       }
-      if (data.contract_version !== 2) throw new ApiError(409, 'workflow_upgrade_required', 'Workflow contract 2 is required. There is no fallback to legacy writers.');
+      // Native execution has its own versioned policy/envelope. Accept v1 only
+      // on these exact method/route pairs; every older read/draft remains v2.
+      if (data.contract_version !== (fieldExecution ? 1 : 2)) throw new ApiError(409, 'workflow_upgrade_required', 'Incompatible workflow contract. There is no fallback to legacy writers.');
       return scrubResponse(data, requestPat);
     } catch (error) {
       if (error instanceof ApiError) throw error;
