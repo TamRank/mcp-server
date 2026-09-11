@@ -116,8 +116,21 @@ export async function runFieldExecutionClient({origin,fixture:f,tlsRoot,inspect,
     ok(refused.isError&&JSON.parse(refused.content[0].text).code==='agent_token_revoked','Old token cannot reconcile by replaying execution');
     const nativeRecovery=recovery(revokedId);checks+=nativeRecovery.checks;
     equal(nativeRecovery.proposal.plan.items.map(i=>i.disposition),['retain_applied','skip_pending','skip_pending']);
-    equal(inspect(),afterRevocation,'Native recovery proposal changes neither applied nor pending fields');
-    console.log('PASS: revoked interrupted execution → separately signed native replacement-token recovery proposal; no recovery execution yet.');
+    const auditReader=new Client({name:'Owned recovery audit reader',version:'1'});
+    try{
+      await auditReader.connect(new StdioClientTransport({command:process.execPath,args:['--import',path.join(cwd,'test/owned-schema-dns.mjs'),path.join(cwd,'index-workflow.js')],cwd,stderr:'pipe',
+        env:{PATH:process.env.PATH,NODE_EXTRA_CA_CERTS:tlsRoot+'/ca.pem',TAMRANK_SCHEMA_FIXTURE_ROOT:tlsRoot,
+          TAMRANK_PAT:f.tokens.reader.token,TAMRANK_SITE_URL:origin,TAMRANK_TOOL_PROFILE:'core',TAMRANK_REST_STYLE:'query',TAMRANK_WORKFLOW_PREVIEW:'1'}}));
+      const readBack=await auditReader.callTool({name:'get_changes',arguments:{change_set_id:revokedId,kind:'execution'}});
+      ok(!readBack.isError,'MCP audit-only reader can read recovered execution');
+      const recovered=JSON.parse(readBack.content[0].text).record;
+      equal(recovered.state,'partial');equal(recovered.item_results.map(i=>i.state),['applied','skipped','skipped']);
+      equal(recovered.registration.attestation.attested_by_token_id,f.tokens.execution.id,'Original attribution remains tied to revoked token');
+      equal(recovered.registration.recovery.attestation.attested_by_token_id,f.tokens.replacement.id,'New recovery attribution is separate');
+      equal(recovered.registration.recovery.attestation.human_verified,false);
+    }finally{await auditReader.close();}
+    equal(inspect(),afterRevocation,'Native recovery and MCP readback change neither applied nor pending fields');
+    console.log('PASS: revoked interrupted execution → separately approved native recovery; atomic stop, no field writes, stable replay.');
   }finally{await client.close();}
   return checks;
 }

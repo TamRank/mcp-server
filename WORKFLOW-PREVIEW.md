@@ -137,6 +137,15 @@ journal, with zero website writes. This `trfr1` proposal is not an execute token
 not stored approval and not yet a connected recovery tool. Atomic recovery,
 new attestation and privacy/retention integration remain open.
 
+The extended worker suite now passes 471 checks per PHP 8.2/8.5: native, separately
+approved recovery stops pending items atomically without field/audit writes and
+preserves the original admission. Busy independent execution locks, three-table
+faults, late native token revocation, lost COMMIT replies and exact/conflicting
+replays are covered. Actual stdio/HTTPS `get_changes` with an audit-only token
+reads both original and recovery attestations. The recovery mutation itself is
+still native-only/default-off, not a public MCP operation. Recovery erasure,
+post-commit delivery, retention integration and public wiring remain open.
+
 ## Entry and profiles
 
 Run `node index-workflow.js` explicitly with site-local `TAMRANK_PAT` and
