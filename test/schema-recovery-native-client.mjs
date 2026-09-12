@@ -23,6 +23,7 @@ try{
   await client.connect(transport);const list=await client.listTools();check(list.tools.length===(f.profile==='core'?12:20)&&JSON.stringify(list).length<16000,'Bounded existing tools');
   const c=decode(await call('get_capabilities',{}),'Capabilities').schema_execution;
   check(c.recovery_available&&c.read_available&&c.recovery_contract==='schema_journal_recovery_v1','Separate actual recovery capability');
+  check(!c.available&&!c.rollback_available,'Recovery enabled with forward/inverse website writers still disabled');
   const before=decode(await call('get_changes',{kind:'execution',change_set_id:f.id}),'Interrupted journal').record;
   check(before.state==='running','Only an actual running journal enters recovery');
   const proposal=decode(await call('get_changes',{kind:'recovery',change_set_id:f.id}),'Read-only recovery proposal').recovery_proposal;
