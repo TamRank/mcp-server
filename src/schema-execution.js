@@ -10,7 +10,7 @@ export const schemaForwardExecutionSchema={...executionSchema,change_token:z.str
   confirmation:executionSchema.confirmation.extend({acknowledgements:z.array(z.enum(['redirect_deletion','replace_manual_schema','site_wide_identity'])).max(3)
     .refine(v=>new Set(v).size===v.length)})};
 export const schemaInverseExecutionSchema={...schemaForwardExecutionSchema,change_token:z.string().regex(/^trsr1\.[a-f0-9]{64}$/)};
-export const schemaMixedExecutionSchema={...mixedExecutionSchema,change_token:z.string().regex(/^(?:trce1|trcr1|trcx1|trxr1|trfr1|trrr1|trse1|trsr1)\.[a-f0-9]{64}$/),
+export const schemaMixedExecutionSchema={...mixedExecutionSchema,change_token:z.string().regex(/^(?:trce1|trcr1|trcx1|trxr1|trfr1|trrr1|trse1|trsr1|trscr1)\.[a-f0-9]{64}$/),
   confirmation:executionSchema.confirmation.extend({acknowledgements:z.array(z.string()).max(3).optional()})};
 export const schemaConfirmationBody=redirectConfirmationBody;
 export function isSchemaExecutionPlan(input,support){

@@ -14,6 +14,7 @@ import {validSchemaExecutionResponse,schemaForwardToken,schemaInverseToken,schem
   schemaConfirmationBody,isSchemaExecutionPlan,matchesSchemaExecutionRequest} from './schema-execution.js';
 import {schemaRollbackShape,isSchemaRollback,isSchemaRollbackPreview,validSchemaRollbackInput,
   validSchemaRollbackPreview,matchesSchemaRollbackRequest} from './schema-rollback.js';
+import {schemaRecoveryToken,validSchemaRecoveryProposal,validSchemaRecoveryInput,validSchemaRecoveryResult} from './schema-recovery.js';
 import {recoveryExecutionSchema,recoveryInput,validRecoveryProposal,validRecoveryInput,recoveryBody,validRecoveryResult} from './field-recovery.js';
 import {capability,redirectToken,redirectRecoveryToken,redirectExecutionSchema,mixedExecutionSchema,isRedirectExecutionPlan,
   redirectConfirmationBody,validRedirectExecutionResponse,validRedirectRecoveryProposal,validRedirectRecoveryInput,validRedirectRecoveryResult} from './redirect-execution.js';
@@ -141,6 +142,8 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
     &&schemaExecution.private_proofs_omitted===true;
   const fieldRecovery=capability(execution,'recovery_available')&&capability(execution,'read_available');
   const redirectRecovery=capability(redirects,'recovery_available')&&capability(redirects,'read_available');
+  const schemaRecovery=schemaExecutionRead&&capability(schemaExecution,'recovery_available')
+    &&schemaExecution.recovery_contract==='schema_journal_recovery_v1';
   if(!maintenanceOnly&&schemaExecutionRead)defs.get_changes={...defs.get_changes,
     description:'kind=execution: reconcile; else draft.',schema:{...defs.get_changes.schema,kind:z.enum(['draft','execution']).optional()}};
   if(!maintenanceOnly&&execution?.contract_version===1){
@@ -189,15 +192,18 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       validate:a=>isSchemaRollback(a)?validSchemaRollbackInput(a)
         :Boolean(previous.fieldExecution)&&z.object(previous.schema).strict().safeParse(a).success&&(!previous.validate||previous.validate(a))};
   }
-  if(!maintenanceOnly&&(schemaExecutionWrite||schemaExecutionRollback)){
+  if(!maintenanceOnly&&(schemaExecutionWrite||schemaExecutionRollback||schemaRecovery)){
     if(schemaExecutionWrite&&!defs.plan_changes.schema.schema_preview)defs.plan_changes={...defs.plan_changes,schema:proposalSchema,validate:validFieldProposal};
     const previous=defs.execute_change_set;
     defs.execute_change_set={description:'Exact chat approval; copy acknowledgements.',schema:schemaMixedExecutionSchema,
       path:a=>'/changes/executions/'+a.change_set_id+(a.recovery_plan!==undefined?'/recover':'/execute'),fieldExecution:'execute',
-      validate:a=>schemaForwardToken(a.change_token)?schemaExecutionWrite&&z.object(schemaForwardExecutionSchema).strict().safeParse(a).success
+      validate:a=>schemaRecoveryToken(a.change_token)?schemaRecovery&&a.recovery_plan?.change_set_id===a.change_set_id&&validSchemaRecoveryInput(recoveryInput(a))
+        :schemaForwardToken(a.change_token)?schemaExecutionWrite&&z.object(schemaForwardExecutionSchema).strict().safeParse(a).success
         :schemaInverseToken(a.change_token)?schemaExecutionRollback&&z.object(schemaInverseExecutionSchema).strict().safeParse(a).success
         :Boolean(previous.fieldExecution)&&z.object(previous.schema).strict().safeParse(a).success&&(!previous.validate||previous.validate(a))};
   }
+  if(!maintenanceOnly&&schemaRecovery)defs.get_changes={...defs.get_changes,description:'Status/recovery preview.',
+    schema:{...defs.get_changes.schema,kind:z.enum(['draft','execution','recovery']).optional()}};
   if(maintenanceOnly) defs.get_capabilities.path=()=>'/scans/maintenance/capabilities';
   const register = (name, def, canonical = name, deprecated = false) => {
     const schema = z.object(def.schema).strict();
@@ -232,15 +238,17 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       const recoveryRead=canonical==='get_changes'&&parsed.data.kind==='recovery';
       if(recoveryRead||(def.fieldExecution==='execute'&&parsed.data.recovery_plan!==undefined)){
         const redirectConfirm=!recoveryRead&&redirectRecoveryToken(parsed.data.change_token);
-        if(recoveryRead?!(fieldRecovery||redirectRecovery):!(redirectConfirm?redirectRecovery:fieldRecovery))
+        const schemaConfirm=!recoveryRead&&schemaRecoveryToken(parsed.data.change_token);
+        if(recoveryRead?!(fieldRecovery||redirectRecovery||schemaRecovery):!(schemaConfirm?schemaRecovery:redirectConfirm?redirectRecovery:fieldRecovery))
           return failure('workflow_operation_unavailable','Recovery is unavailable. Nothing was sent.');
         try{
           const a=parsed.data,setId=a.change_set_id,recovery=recoveryRead?null:recoveryInput(a);
           const data=await client.post('/changes/executions/'+setId+(recoveryRead?'/recovery-proposals':'/recover'),
             recoveryRead?{change_set_id:setId}:recoveryBody(recovery,clientInfo()));
-          const valid=recoveryRead?data?.contract_version===1&&(redirectRecoveryToken(data.recovery_proposal?.recovery_token)
-            ?redirectRecovery&&validRedirectRecoveryProposal(data.recovery_proposal,setId):fieldRecovery&&validRecoveryProposal(data.recovery_proposal,setId))
-            :redirectConfirm?validRedirectRecoveryResult(data,recovery.proposal):validRecoveryResult(data,recovery.proposal);
+          const valid=recoveryRead?data?.contract_version===1&&(schemaRecoveryToken(data.recovery_proposal?.recovery_token)
+            ?schemaRecovery&&validSchemaRecoveryProposal(data.recovery_proposal,setId):redirectRecoveryToken(data.recovery_proposal?.recovery_token)
+              ?redirectRecovery&&validRedirectRecoveryProposal(data.recovery_proposal,setId):fieldRecovery&&validRecoveryProposal(data.recovery_proposal,setId))
+            :schemaConfirm?validSchemaRecoveryResult(data,recovery.proposal):redirectConfirm?validRedirectRecoveryResult(data,recovery.proposal):validRecoveryResult(data,recovery.proposal);
           if(!valid)
             return failure('field_recovery_incompatible_response','Read this set with kind=execution. Do not repeat changes automatically.');
           return result(data);

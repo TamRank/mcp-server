@@ -102,7 +102,7 @@ for(const f of cases){
 }
 check(tools.get('get_changes').c.annotations.readOnlyHint,'Recovery proposal has no mutation hint');
 for(const edit of [a=>a.confirmation.confirmed=false,a=>a.confirmation.acknowledgements=[],a=>a.confirmation.acknowledgements.reverse(),
-  a=>a.confirmation.plan_hash=original,a=>a.confirmation.transcript='private',a=>a.confirmation.client={name:'spoof'},
+  a=>a.confirmation.plan_hash='invalid',a=>a.confirmation.transcript='private',a=>a.confirmation.client={name:'spoof'},
   a=>a.change_set_id=installation,a=>a.change_token='trse1.'+hash,a=>delete a.recovery_plan]){
   const bad=structuredClone(f.input);edit(bad);check((await tools.get('execute_change_set').h(bad)).isError,'No implicit or mismatched approval');equal(calls,[]);
 }
