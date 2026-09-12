@@ -17,9 +17,22 @@ const npm=resolve(dirname(process.execPath),'../lib/node_modules/npm/bin/npm-cli
 const pkg=JSON.parse(await readFile(join(root,'package.json'),'utf8'));
 const online=process.argv.includes('--allow-network');
 const nativeFields=process.argv.includes('--native-fields');
-assert.ok(process.argv.slice(2).every(arg=>['--allow-network','--native-fields'].includes(arg)),'Unknown installation-test argument');
+const nativeRedirects=process.argv.includes('--native-redirects'),nativeSchema=process.argv.includes('--native-schema');
+const nativeCases=[
+  ...(nativeFields?[['field-execution-tls','native field execution MCP/WordPress TLS/lost-response checks']]:[]),
+  ...(nativeRedirects?[
+    ['redirect-execution-mcp','native redirect/mixed MCP/WordPress TLS, rollback and worker-recovery checks'],
+    ['redirect-recovery-mcp','native redirect/mixed MCP/TLS inverse-worker and all-applied recovery checks'],
+    ['redirect-batch-mcp','native redirect/mixed MCP/TLS full-batch and Action-origin checks']]:[]),
+  ...(nativeSchema?[
+    ['schema-rollback-mcp','native schema forward and inverse comparison/proposal/approval/execution over MCP/TLS'],
+    ['schema-recovery-mcp','native schema worker interruption and fresh journal recovery over MCP/TLS'],
+    ['schema-recovery-mixed-mcp','native schema worker interruption and fresh journal recovery over MCP/TLS'],
+    ['schema-recovery-authority-mcp','native schema recovery checks with token/scope/membership/entitlement changed after preview on the same MCP session']]:[])
+];
+assert.ok(process.argv.slice(2).every(arg=>['--allow-network','--native-fields','--native-redirects','--native-schema'].includes(arg)),'Unknown installation-test argument');
 let nativePro;
-if(nativeFields){
+if(nativeCases.length){
   for(const key of ['TAMRANK_MAINT_PRO','TAMRANK_MAINT_CORE','TAMRANK_MAINT_FREE','TAMRANK_SCAN_TEST_SOCKET'])assert.ok(process.env[key],`Explicit owned native setting required: ${key}`);
   nativePro=await realpath(process.env.TAMRANK_MAINT_PRO);
   assert.match(process.env.TAMRANK_SCAN_TEST_SOCKET,/^\/private\/tmp\/tr-scan-mysql\.[A-Za-z0-9]{6}\/mysql.sock$/);
@@ -131,22 +144,26 @@ try {
   }
   for(const profile of ['core','specialist','legacy'])for(const style of ['pretty','query'])await session(profile,style);
   await session('core','pretty',false);
-  if(nativeFields){
+  if(nativeCases.length){
     await writeFile(join(scratch,'owned-native-package.json'),JSON.stringify({source_root:await realpath(root),package_root:installed,
       package_version:pkg.version,entry_sha256:createHash('sha256').update(await readFile(join(installed,'index-workflow.js'))).digest('hex')}),{mode:0o600});
     assert.equal(ownedInstalledRuntime(root,installed),installed,'Native transport selects the extracted package');
     assert.throws(()=>ownedInstalledRuntime(root,''),'Empty package override cannot fall back to source');
     assert.throws(()=>ownedInstalledRuntime(root,root),'Checkout cannot masquerade as installed package');
-    console.log('RUN: extracted package → verified TLS → owned WordPress fields, audit, lost response and approved rollback.');
-    const nativeRun=run(process.execPath,[join(nativePro,'docs/mcp-phase4c-change-store-wordpress.mjs'),'--field-execution-tls'],
-      {cwd:nativePro,env:{...process.env,TAMRANK_MAINT_MCP:root,TAMRANK_TEST_PACKED_ROOT:installed},timeout:900000,maxBuffer:2097152});
-    nativeRun.child.stdout.pipe(process.stdout,{end:false});
-    const native=await nativeRun;
-    assert.match(native.stdout,/PASS: \d+ native field execution MCP\/WordPress TLS\/lost-response checks; owned synthetic fields only; owned databases removed\./);
-    console.log('NATIVE PACKAGE OK: actual extracted entry and separately installed dependencies completed the field workflow; no checkout-runtime fallback.');
+    for(const [mode,expected] of nativeCases){
+      console.log('RUN INSTALLED: '+mode+' → extracted entry → verified TLS → owned WordPress.');
+      const nativeRun=run(process.execPath,[join(nativePro,'docs/mcp-phase4c-change-store-wordpress.mjs'),'--'+mode],
+        {cwd:nativePro,env:{...process.env,TAMRANK_MAINT_MCP:root,TAMRANK_TEST_PACKED_ROOT:installed},timeout:1800000,maxBuffer:2097152});
+      nativeRun.child.stdout.pipe(process.stdout,{end:false});
+      const native=await nativeRun;
+      assert.ok(native.stdout.split('\n').some(line=>/^PASS: \d+ /.test(line)&&line.includes(expected)&&line.endsWith('owned databases removed.')),
+        'Full native matrix must complete with owned cleanup: '+mode);
+      console.log('PASS INSTALLED: '+mode+'; extracted entry and separately installed dependencies; no checkout-runtime fallback.');
+    }
+    console.log('NATIVE PACKAGE OK: '+nativeCases.map(([mode])=>mode).join(', '));
   }
   assert.deepEqual(await Promise.all(['package.json','package-lock.json','index.js'].map(p=>readFile(join(root,p),'utf8'))),before,'Packaging must not modify source manifest, lock or shipped entry');
-  console.log(`WORKFLOW PACKAGE OK: extracted tarball with ${online?'clean-cache':'offline'} npm ci using repository lock; installed entry, 12/20/42 profiles, both REST forms, scan preview/private draft mapping; baseline writers disabled${nativeFields?'; separately approved native field execution/rollback passed':''}. Source and active installation untouched; unconstrained registry resolution untested.`);
+  console.log(`WORKFLOW PACKAGE OK: extracted tarball with ${online?'clean-cache':'offline'} npm ci using repository lock; installed entry, 12/20/42 profiles, both REST forms, scan preview/private draft mapping; baseline writers disabled${nativeCases.length?'; selected native matrices passed':''}. Source and active installation untouched; unconstrained registry resolution untested.`);
 } finally {
   if(server)await new Promise(resolve=>server.close(resolve));
   // Only the exact directory created by this test; never a supplied path or a parent.
