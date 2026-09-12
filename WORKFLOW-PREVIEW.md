@@ -4,6 +4,45 @@ Branch `feat/mcp-workflows` prepares MCP `0.4.0-preview` in package
 `@tam-rank/mcp-server`. The shipped entry, npm bin and package version remain
 unchanged. This is not a release or a replacement of the active MCP connection.
 
+## Native forward schema workflow (development opt-in)
+
+The separate server flag `TAMRANK_WORKFLOW_SCHEMA_EXECUTION_REST_ENABLED`
+connects typed schema proposals and immediate, explicitly approved execution.
+It requires installed native source/execution storage, the schema runner and
+item/delivery gates, ordinary execution readiness and Action convergence.
+Do not enable it on customer sites while acceptance remains open.
+
+When `schema_execution.available:true` advertises an operation, use the native
+preview's complete typed item (including `source_job` and `expected_revision`)
+in `plan_changes({client_request_id,origin,items})`. Schema selection/detection
+can be combined with separately authorized metadata/social/alt and redirects,
+up to 25 distinct targets. Site identity is always one standalone user request,
+with confirmed facts. No raw JSON-LD, database rows or callbacks are accepted.
+
+Show all changes and warnings, obtain explicit chat approval, and pass the exact
+`change_set_id`, `change_token` and `confirmation:{plan_hash,confirmed:true,
+acknowledgements}` to `execute_change_set`. Copy acknowledgements from the plan;
+do not infer approval. The MCP handshake supplies the client label, the server
+timestamps the attestation, and `human_verified` stays false. Read the same set
+after uncertainty; there is no automatic retry, legacy writer fallback or
+silent conversion to a private draft. Responses retain all targets and semantic
+schema samples but omit private execution proofs.
+
+No new tool was added. Schema support must not activate an unrelated field,
+redirect, rollback or recovery token. Public schema rollback/recovery are still
+unavailable. Source acquisition remains the separate approved specialist scan
+workflow described below; this execution call never silently starts a scan.
+
+`test/workflow-schema-execution.mjs` passes 192 mapping, approval, exact-response,
+capability and SDK checks. The full catalog matrix passes 61,785 equivalence
+checks; the fully combined specialist surface is 15,976 characters (limit
+16,000). Native WordPress/MCP forward acceptance passes 2,343 combined checks
+on each of PHP 8.2 and PHP 8.5 across single-site and two-client multisite.
+Native inverse cleanup is not
+public schema rollback acceptance. See PRO
+`docs/mcp-phase4d-execution.md`, section "Public forward schema proposals and
+execution — 12 September 2026" for current evidence and remaining gates.
+
 ## Native schema history reads (development opt-in)
 
 With `schema_execution.contract_version:1`, `read_available:true`,
@@ -16,8 +55,8 @@ The original hash/token cover the full stored plan, including omitted proofs;
 do not hash the displayed subset or submit it as a native execution envelope.
 Stored approval remains an agent assertion, not verified human identity.
 
-This capability permits reads ONLY: schema plan execution, rollback and recovery
-are still unavailable over MCP. No extra tool, source scan or automatic retry.
+This read capability alone permits reads ONLY; it does not activate the separate
+forward writer above, rollback or recovery. No extra tool, source scan or automatic retry.
 The server requires `TAMRANK_WORKFLOW_SCHEMA_EXECUTION_READ_ENABLED`, existing
 read-route readiness/storage, current audit-read rights and the same owner/site.
 A same-owner read-only PAT can inspect history without gaining schema-write
