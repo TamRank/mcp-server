@@ -4,6 +4,38 @@ Branch `feat/mcp-workflows` prepares MCP `0.4.0-preview` in package
 `@tam-rank/mcp-server`. The shipped entry, npm bin and package version remain
 unchanged. This is not a release or a replacement of the active MCP connection.
 
+## Current schema rollback development
+
+The public inverse lane is implemented behind the additional server flag
+`TAMRANK_WORKFLOW_SCHEMA_ROLLBACK_REST_ENABLED`; full native acceptance is still
+running. The earlier accepted baselines below predate this implementation.
+Do not activate customer writes. Public journal recovery remains unavailable.
+
+When the site advertises `schema_execution.rollback_available:true` and
+`rollback_preview_contract: schema_rollback_preview_v1`:
+
+1. Select original execution item IDs. Obtain fresh approved source jobs only
+   for the schema items to restore; no implicit scan or expired capture reuse.
+2. `rollback_change_set({change_set_id,item_ids,source_jobs})` compares current
+   values with the original audit. `source_jobs` maps ORIGINAL item IDs to
+   `{job_id,revision}`; use `{}` for a field-/redirect-only subset of schema history.
+3. Copy the returned `proposal_input` and add a stable `client_request_id` to
+   request a stored inverse proposal. Its `expected_revision` binds the complete
+   native comparison. Selected IDs are canonicalized, but actual restoration
+   remains in reverse original order. No automatic replanning on conflict.
+4. Show all changes/warnings, obtain NEW chat approval, then execute the new
+   inverse set/token/hash and copied acknowledgements with `execute_change_set`.
+5. Read inverse and original history with `get_changes(kind:execution)`.
+   Never reuse forward approval, replay writes automatically or overwrite later edits.
+
+346 targeted inverse bridge/SDK checks pass. The expanded catalog matrix passes
+74,189 equivalence checks; largest tested specialist profile is 15,646 of 16,000
+characters. It omits only the SDK-documented forbidden task-support default;
+actual handlers, schemas, constraints and 12/20/42 tool counts are preserved.
+The full MCP regression suite passes. The complete native single-site inverse
+matrix passes on PHP 8.5; its multisite checks and PHP 8.2 matrix are still
+running. These partial native results do not close full acceptance.
+
 ## Native forward schema workflow (development opt-in)
 
 The separate server flag `TAMRANK_WORKFLOW_SCHEMA_EXECUTION_REST_ENABLED`
