@@ -5,8 +5,10 @@ import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {existsSync} from 'node:fs';
+import {ownedInstalledRuntime} from './owned-installed-entry.mjs';
 const cwd=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 export async function runFieldExecutionClient({origin,fixture:f,inspect,tlsRoot=null,faults=null}){
+  const runtime=ownedInstalledRuntime(cwd);
   if(tlsRoot){assert.match(tlsRoot,/^\/private\/tmp\/tr-maint-wp-[A-Za-z0-9]{6}$/);assert.ok(existsSync(tlsRoot+'/owned-fixture'));
     assert.match(origin,/^https:\/\/schema-source\.example\.org:\d{4,5}(?:\/client-two)?$/);
   }else assert.match(origin,/^http:\/\/127\.0\.0\.1:\d{4,5}(?:\/client-two)?$/);
@@ -14,7 +16,7 @@ export async function runFieldExecutionClient({origin,fixture:f,inspect,tlsRoot=
   const equal=(a,b,label)=>{assert.deepEqual(a,b,label);checks++;};
   const ok=(v,label)=>{assert.ok(v,label);checks++;};
   const transport=(profile,style,trusted=true)=>new StdioClientTransport({command:process.execPath,
-    args:tlsRoot?['--import',path.join(cwd,'test/owned-schema-dns.mjs'),path.join(cwd,'index-workflow.js')]:['index-workflow.js'],cwd,stderr:'pipe',
+    args:tlsRoot?['--import',path.join(cwd,'test/owned-schema-dns.mjs'),path.join(runtime,'index-workflow.js')]:[path.join(runtime,'index-workflow.js')],cwd:runtime,stderr:'pipe',
     env:{PATH:process.env.PATH,...(tlsRoot?{TAMRANK_SCHEMA_FIXTURE_ROOT:tlsRoot,...trusted?{NODE_EXTRA_CA_CERTS:tlsRoot+'/ca.pem'}:{}}:{}),
       TAMRANK_PAT:f.tokens.execution.token,TAMRANK_SITE_URL:origin,TAMRANK_TOOL_PROFILE:profile,TAMRANK_REST_STYLE:style,TAMRANK_WORKFLOW_PREVIEW:'1'}});
   if(tlsRoot){

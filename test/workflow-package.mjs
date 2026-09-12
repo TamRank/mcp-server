@@ -8,19 +8,28 @@ import { tmpdir, homedir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
+import { ownedInstalledRuntime } from './owned-installed-entry.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-const run=promisify(execFile), scratch=await mkdtemp(join(tmpdir(),'tamrank-package-'));
+const run=promisify(execFile);
 const npm=resolve(dirname(process.execPath),'../lib/node_modules/npm/bin/npm-cli.js');
 const pkg=JSON.parse(await readFile(join(root,'package.json'),'utf8'));
 const online=process.argv.includes('--allow-network');
-assert.ok(process.argv.slice(2).every(arg=>arg==='--allow-network'),'Unknown installation-test argument');
+const nativeFields=process.argv.includes('--native-fields');
+assert.ok(process.argv.slice(2).every(arg=>['--allow-network','--native-fields'].includes(arg)),'Unknown installation-test argument');
+let nativePro;
+if(nativeFields){
+  for(const key of ['TAMRANK_MAINT_PRO','TAMRANK_MAINT_CORE','TAMRANK_MAINT_FREE','TAMRANK_SCAN_TEST_SOCKET'])assert.ok(process.env[key],`Explicit owned native setting required: ${key}`);
+  nativePro=await realpath(process.env.TAMRANK_MAINT_PRO);
+  assert.match(process.env.TAMRANK_SCAN_TEST_SOCKET,/^\/private\/tmp\/tr-scan-mysql\.[A-Za-z0-9]{6}\/mysql.sock$/);
+}
 const lock=JSON.parse(await readFile(join(root,'package-lock.json'),'utf8'));
 assert.ok(Object.values(lock.packages).every(entry=>!entry.resolved || new URL(entry.resolved).origin==='https://registry.npmjs.org'),'Only the official package registry is permitted');
 const before=await Promise.all(['package.json','package-lock.json','index.js'].map(p=>readFile(join(root,p),'utf8')));
 const pat='tamrank_pat_fixture_'+randomBytes(16).toString('hex');
 const requests=[];let server;
+const scratch=await mkdtemp(join(tmpdir(),'tamrank-package-'));
 const environment={PATH:process.env.PATH,HOME:homedir(),npm_config_offline:online?'false':'true',npm_config_ignore_scripts:'true',
   npm_config_userconfig:join(scratch,'empty.npmrc'),npm_config_globalconfig:join(scratch,'empty-global.npmrc'),
   npm_config_logs_dir:join(scratch,'npm-logs')};
@@ -39,7 +48,7 @@ try {
   for(const p of ['index.js','index-workflow.js','receipt-storage.js','src/workflow-tools.js','src/workflow-rest.js','src/scan-maintenance.js','src/scan-recovery-chat.js','src/scan-receipt-store.js','SCAN-RECEIPTS.md','WORKFLOW-PREVIEW.md','package.json'])assert.ok(paths.includes(p),`Missing packed ${p}`);
   assert.ok(paths.every(p=>!p.split('/').some(s=>s==='..' || s.startsWith('.')) && !/^(?:test|node_modules|docs)\//.test(p)), 'No test fixtures, credentials or hidden configuration in package');
   await run('tar',['-xzf',join(scratch,packed.filename),'-C',scratch],{timeout:10000});
-  const installed=join(scratch,'package');
+  const installed=await realpath(join(scratch,'package'));
   const privateDirectory=join(await realpath(scratch),'receipt-storage');
   const setup=await run(process.execPath,[join(installed,'receipt-storage.js'),'init','--directory',privateDirectory],{env:environment});
   assert.equal(JSON.parse(setup.stdout).created,true);
@@ -122,8 +131,22 @@ try {
   }
   for(const profile of ['core','specialist','legacy'])for(const style of ['pretty','query'])await session(profile,style);
   await session('core','pretty',false);
+  if(nativeFields){
+    await writeFile(join(scratch,'owned-native-package.json'),JSON.stringify({source_root:await realpath(root),package_root:installed,
+      package_version:pkg.version,entry_sha256:createHash('sha256').update(await readFile(join(installed,'index-workflow.js'))).digest('hex')}),{mode:0o600});
+    assert.equal(ownedInstalledRuntime(root,installed),installed,'Native transport selects the extracted package');
+    assert.throws(()=>ownedInstalledRuntime(root,''),'Empty package override cannot fall back to source');
+    assert.throws(()=>ownedInstalledRuntime(root,root),'Checkout cannot masquerade as installed package');
+    console.log('RUN: extracted package → verified TLS → owned WordPress fields, audit, lost response and approved rollback.');
+    const nativeRun=run(process.execPath,[join(nativePro,'docs/mcp-phase4c-change-store-wordpress.mjs'),'--field-execution-tls'],
+      {cwd:nativePro,env:{...process.env,TAMRANK_MAINT_MCP:root,TAMRANK_TEST_PACKED_ROOT:installed},timeout:900000,maxBuffer:2097152});
+    nativeRun.child.stdout.pipe(process.stdout,{end:false});
+    const native=await nativeRun;
+    assert.match(native.stdout,/PASS: \d+ native field execution MCP\/WordPress TLS\/lost-response checks; owned synthetic fields only; owned databases removed\./);
+    console.log('NATIVE PACKAGE OK: actual extracted entry and separately installed dependencies completed the field workflow; no checkout-runtime fallback.');
+  }
   assert.deepEqual(await Promise.all(['package.json','package-lock.json','index.js'].map(p=>readFile(join(root,p),'utf8'))),before,'Packaging must not modify source manifest, lock or shipped entry');
-  console.log(`WORKFLOW PACKAGE OK: extracted tarball with ${online?'clean-cache':'offline'} npm ci using repository lock; installed entry, 12/20/42 profiles, both REST forms, scan preview/private draft mapping; website writes and scan execution unavailable. Source and active installation untouched; unconstrained registry resolution untested.`);
+  console.log(`WORKFLOW PACKAGE OK: extracted tarball with ${online?'clean-cache':'offline'} npm ci using repository lock; installed entry, 12/20/42 profiles, both REST forms, scan preview/private draft mapping; baseline writers disabled${nativeFields?'; separately approved native field execution/rollback passed':''}. Source and active installation untouched; unconstrained registry resolution untested.`);
 } finally {
   if(server)await new Promise(resolve=>server.close(resolve));
   // Only the exact directory created by this test; never a supplied path or a parent.
