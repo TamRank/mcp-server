@@ -32,9 +32,24 @@ When the site advertises `schema_execution.rollback_available:true` and
 74,189 equivalence checks; largest tested specialist profile is 15,646 of 16,000
 characters. It omits only the SDK-documented forbidden task-support default;
 actual handlers, schemas, constraints and 12/20/42 tool counts are preserved.
-The full MCP regression suite passes. The complete native single-site inverse
-matrix passes on PHP 8.5; its multisite checks and PHP 8.2 matrix are still
-running. These partial native results do not close full acceptance.
+The full MCP regression suite passes. The complete PHP 8.5 native matrix passes
+4,203 checks across single-site and two-client multisite. PHP 8.2 has passed
+single-site; its multisite run is still active. Journal recovery and wider
+acceptance remain separate open gates.
+
+## Schema journal recovery contract (not connected yet)
+
+`src/schema-recovery.js` defines the closed `workflow-schema-recovery-1`
+proposal, new chat confirmation and result checks. It retains all 25 possible
+participants, distinguishes stop-pending from delivery-only, validates the
+replacement actor and original execution, and rejects any repeated website
+write. `node test/workflow-schema-recovery.mjs` passes 189 semantic checks.
+
+The existing `get_changes(kind:recovery)` and `execute_change_set` routes are
+**not connected to schema recovery yet**. The test's `--bridge` mode intentionally
+remains red until that integration. `test/schema-recovery-native-client.mjs`
+is a prepared real SDK/TLS worker-journal test, syntax checked only; it is not
+evidence of native public recovery. No capability is enabled by these files.
 
 ## Native forward schema workflow (development opt-in)
 
