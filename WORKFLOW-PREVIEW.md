@@ -7,9 +7,9 @@ unchanged. This is not a release or a replacement of the active MCP connection.
 ## Current schema rollback development
 
 The public inverse lane is implemented behind the additional server flag
-`TAMRANK_WORKFLOW_SCHEMA_ROLLBACK_REST_ENABLED`; full native acceptance is still
-running. The earlier accepted baselines below predate this implementation.
-Do not activate customer writes. Public journal recovery remains unavailable.
+`TAMRANK_WORKFLOW_SCHEMA_ROLLBACK_REST_ENABLED`; its targeted native matrix
+passes on PHP 8.2/8.5. The earlier baselines below predate this implementation.
+Do not activate customer writes. Journal recovery has a separate opt-in below.
 
 When the site advertises `schema_execution.rollback_available:true` and
 `rollback_preview_contract: schema_rollback_preview_v1`:
@@ -29,27 +29,51 @@ When the site advertises `schema_execution.rollback_available:true` and
    Never reuse forward approval, replay writes automatically or overwrite later edits.
 
 346 targeted inverse bridge/SDK checks pass. The expanded catalog matrix passes
-74,189 equivalence checks; largest tested specialist profile is 15,646 of 16,000
+85,623 equivalence checks; largest tested specialist profile is 15,653 of 16,000
 characters. It omits only the SDK-documented forbidden task-support default;
 actual handlers, schemas, constraints and 12/20/42 tool counts are preserved.
-The full MCP regression suite passes. The complete PHP 8.5 native matrix passes
-4,203 checks across single-site and two-client multisite. PHP 8.2 has passed
-single-site; its multisite run is still active. Journal recovery and wider
-acceptance remain separate open gates.
+The full MCP regression suite passes. The complete native matrix passes
+4,203 checks per PHP 8.2/8.5 across single-site and two-client multisite.
+Journal recovery and wider acceptance remain separate gates.
 
-## Schema journal recovery contract (not connected yet)
+## Schema journal recovery (development opt-in)
 
 `src/schema-recovery.js` defines the closed `workflow-schema-recovery-1`
 proposal, new chat confirmation and result checks. It retains all 25 possible
 participants, distinguishes stop-pending from delivery-only, validates the
 replacement actor and original execution, and rejects any repeated website
-write. `node test/workflow-schema-recovery.mjs` passes 189 semantic checks.
+write. `node test/workflow-schema-recovery.mjs --bridge` passes 561 semantic,
+bridge and SDK checks and is part of the full green workflow suite.
 
-The existing `get_changes(kind:recovery)` and `execute_change_set` routes are
-**not connected to schema recovery yet**. The test's `--bridge` mode intentionally
-remains red until that integration. `test/schema-recovery-native-client.mjs`
-is a prepared real SDK/TLS worker-journal test, syntax checked only; it is not
-evidence of native public recovery. No capability is enabled by these files.
+The existing tools connect this policy only when the site advertises
+`schema_execution.recovery_available:true` with
+`recovery_contract:schema_journal_recovery_v1`. WordPress additionally requires
+its default-off `TAMRANK_WORKFLOW_SCHEMA_RECOVERY_REST_ENABLED` flag. This can
+be enabled while new forward/inverse writers and source capture remain off.
+
+1. Read the original set with `get_changes(kind:execution)`, then request
+   `get_changes(kind:recovery)` for its exact ID.
+2. Show every retained/skipped item and the required acknowledgements.
+   Obtain NEW explicit chat approval; the original website approval is not enough.
+3. Call `execute_change_set` with the copied `recovery_plan`, set ID,
+   `trscr1` token and `confirmation:{plan_hash,confirmed:true,acknowledgements}`.
+4. Read back the same execution. An active worker refuses recovery; committed
+   writes/audits remain intact, unstarted work is skipped and missing cache work
+   may be retried without repeating website changes. Never retry automatically.
+
+`test/schema-recovery-native-client.mjs` now exercises actual killed-worker
+journals over SDK/TLS/WordPress. The full targeted matrix passes 1,260 native
+checks per PHP 8.2/8.5 across single-site and two-client multisite.
+An additional native matrix covers the maximum 25-item reservation and mixed
+schema/redirect-create recovery, including inverse partial results in both
+operation orders: 1,194 checks pass per PHP 8.2/8.5 over single-site/multisite.
+Other mixed/native, privacy, hosting and full Phase 4 acceptance remain open.
+No customer capability has been activated.
+
+The extracted archive also passes clean-cache installation with the repository
+lock, installed 12/20/42 profiles and both REST forms. The package test explicitly
+checks schema contract files and keeps website/scan writers unavailable; it is
+not an installed-package native-write or unconstrained registry-resolution test.
 
 ## Native forward schema workflow (development opt-in)
 
@@ -76,8 +100,8 @@ silent conversion to a private draft. Responses retain all targets and semantic
 schema samples but omit private execution proofs.
 
 No new tool was added. Schema support must not activate an unrelated field,
-redirect, rollback or recovery token. Public schema rollback/recovery are still
-unavailable. Source acquisition remains the separate approved specialist scan
+redirect, rollback or recovery token. Rollback/recovery require the additional
+opt-ins described above. Source acquisition remains the separate approved specialist scan
 workflow described below; this execution call never silently starts a scan.
 
 `test/workflow-schema-execution.mjs` passes 192 mapping, approval, exact-response,
