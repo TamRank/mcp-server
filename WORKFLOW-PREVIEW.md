@@ -24,10 +24,16 @@ and newly approved rollback are checked against native rows. Real request limits
 are retained. Both runs remove their own databases/package/cache and the full
 workflow regression suite passes.
 
-The separate stored-read acceptance below now covers installed full target reads.
-Installed redirect/schema/recovery and scan-dispatch flows, other platforms, unconstrained dependency resolution,
+The separate stored-read acceptance below covers installed full target reads.
+On 12 September, `test/workflow-package.mjs --allow-network --native-redirects --native-schema`
+also completed on PHP 8.2/8.5: all seven installed redirect execution/recovery/batch
+and schema rollback/recovery/mixed/late-authority modes passed through verified TLS
+and owned single-/multisite WordPress. The original audit/approval and exact-target
+assertions remain intact; the runners removed their own databases/package/cache.
+These matrices used PRO `d175587`, not the subsequent PageSpeed-worker increment.
+Installed scan flows, other platforms, unconstrained dependency resolution,
 privacy, hosting, upgrades, onboarding and release activation remain open.
-Full evidence: `samkl8/tamrank-pro`, `feat/mcp-workflows`,
+Full updated evidence: `samkl8/tamrank-pro`, `feat/mcp-scan-dispatch`,
 `docs/mcp-phase4e-installed-workflow.md`.
 
 ## Installed stored-read acceptance
