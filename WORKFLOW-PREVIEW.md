@@ -4,6 +4,32 @@ Branch `feat/mcp-workflows` prepares MCP `0.4.0-preview` in package
 `@tam-rank/mcp-server`. The shipped entry, npm bin and package version remain
 unchanged. This is not a release or a replacement of the active MCP connection.
 
+## Installed field workflow acceptance
+
+`test/workflow-package.mjs --allow-network --native-fields` now runs the extracted
+development entry against actual owned WordPress, not only the synthetic package
+server. Supply `TAMRANK_MAINT_PRO`, `TAMRANK_MAINT_CORE`, `TAMRANK_MAINT_FREE`
+and the guarded own `TAMRANK_SCAN_TEST_SOCKET`; optionally select
+`TAMRANK_TEST_PHP`. No customer database or live plugin configuration is used.
+
+The extracted entry has a separate install with a clean npm cache and repository
+lock. A test-only selector verifies the owned install, matching entry hash and
+real directories; an explicit invalid package path never falls back to checkout
+code. The normal npm bin/version remain unchanged and install scripts are disabled.
+
+582 native checks pass per PHP 8.2/8.5 on macOS/Node 22, over core/specialist,
+both REST forms, single-site and two-client multisite. Metadata/social/alt
+proposal, approval, writes, audit, lost committed response, readback, exact retry
+and newly approved rollback are checked against native rows. Real request limits
+are retained. Both runs remove their own databases/package/cache and the full
+workflow regression suite passes.
+
+This is the installed **field** workflow only: installed redirect/schema/recovery
+and scan/target flows, other platforms, unconstrained dependency resolution,
+privacy, hosting, upgrades, onboarding and release activation remain open.
+Full evidence: `samkl8/tamrank-pro`, `feat/mcp-workflows`,
+`docs/mcp-phase4e-installed-workflow.md`.
+
 ## Current schema rollback development
 
 The public inverse lane is implemented behind the additional server flag
@@ -86,7 +112,8 @@ acceptance; no product writer or permission gate was relaxed.
 The extracted archive also passes clean-cache installation with the repository
 lock, installed 12/20/42 profiles and both REST forms. The package test explicitly
 checks schema contract files and keeps website/scan writers unavailable; it is
-not an installed-package native-write or unconstrained registry-resolution test.
+not itself an installed-package native-write or unconstrained registry-resolution
+test. The separately invoked native-field extension above adds field writes only.
 
 ## Native forward schema workflow (development opt-in)
 
