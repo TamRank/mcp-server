@@ -31,10 +31,42 @@ and schema rollback/recovery/mixed/late-authority modes passed through verified 
 and owned single-/multisite WordPress. The original audit/approval and exact-target
 assertions remain intact; the runners removed their own databases/package/cache.
 These matrices used PRO `d175587`, not the subsequent PageSpeed-worker increment.
-Installed scan flows, other platforms, unconstrained dependency resolution,
+Other platforms, unconstrained dependency resolution,
 privacy, hosting, upgrades, onboarding and release activation remain open.
 Full updated evidence: `samkl8/tamrank-pro`, `feat/mcp-scan-dispatch`,
 `docs/mcp-phase4e-installed-workflow.md`.
+
+## Approved PageSpeed jobs through the existing specialist tools
+
+The separate `pagespeed_execution` capability enables `start_scan` preview →
+plan → explicit chat approval → run. Copy the frozen `proposal_id`, hash and all
+acknowledgements; keep the same execution request ID after an uncertain reply.
+Show **all** selected URLs, both device strategies and warnings before approval.
+MCP re-reads the exact proposal before transmitting consent. No automatic retry,
+replacement scan, schema-source consent crossover or legacy execution fallback.
+
+Use `get_scan_status({type:'pagespeed', execution_id:...})` for private progress,
+or `proposal_id` for the original proposal. All 25 URLs and 50 device outcomes
+are retained. Untyped execution IDs keep their existing administrative route.
+Queued does not prove worker liveness. Uncertain attempts retain their reservation;
+reads never schedule or measure. Results are private, not copied to legacy caches
+and not presented as an SEO outcome. Client provenance comes from the MCP handshake;
+the agent label is unknown. Current site rights remain authoritative.
+
+`test/workflow-package.mjs --allow-network --native-scans` passes 261 native MCP
+checks per PHP 8.2/8.5 from the extracted package with separate dependencies.
+Owned WordPress single-/multisite, both REST forms, full batches, lost admission
+reply, exact replay, foreign actor, revoked original key, duplicate event and
+unknown provider result are covered. DNS/Google responses are fictitious; the
+MCP→WordPress path is loopback HTTP. Real cron hooks are delivered by an owned
+CLI control plane, not by a newly exposed product endpoint. Host cron delivery,
+provider/cache integration and wider privacy/upgrade/platform acceptance remain
+open. All own databases/package/cache were removed. No normal-entry activation.
+
+PRO source/contract: `samkl8/tamrank-pro`, `feat/mcp-scan-dispatch`,
+`docs/mcp-phase4b-pagespeed-worker.md`. Bridge regression: `npm run test:workflow-scans`.
+The full workflow regression passes; the largest tested specialist catalog is
+15,786 of 16,000 characters, with 12/20/42 tool counts unchanged.
 
 ## Installed stored-read acceptance
 
@@ -55,7 +87,7 @@ dispatch, background jobs or new approval. Missing evidence is not made up.
 PRO `docs/mcp-phase4e-read-wordpress.mjs` creates the owned fixture with root/DB/
 socket/bootstrap checks; no old fixed clone or customer configuration is loaded.
 The package and native fixtures clean up on completion, and the full MCP
-workflow regression suite passes. Normal entry activation, scan dispatch,
+workflow regression suite passes. Normal entry activation, scan host/provider acceptance,
 multisite reads and the remaining privacy/hosting/release gates stay open.
 
 ## Current schema rollback development
@@ -83,7 +115,7 @@ When the site advertises `schema_execution.rollback_available:true` and
    Never reuse forward approval, replay writes automatically or overwrite later edits.
 
 346 targeted inverse bridge/SDK checks pass. The expanded catalog matrix passes
-85,623 equivalence checks; largest tested specialist profile is 15,653 of 16,000
+85,848 equivalence checks; largest tested specialist profile is 15,786 of 16,000
 characters. It omits only the SDK-documented forbidden task-support default;
 actual handlers, schemas, constraints and 12/20/42 tool counts are preserved.
 The full MCP regression suite passes. The complete native matrix passes
