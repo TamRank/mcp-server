@@ -99,6 +99,7 @@ test('Actual stdio -> HTTP: both URL styles, bound client identity and no uncert
     const send=v=>res.end(JSON.stringify({contract_version:2,...v}));
     if(path==='/tamrank/v2/capabilities')return send({});
     if(path==='/tamrank/v2/scans/sources/capabilities')return send({schema_source_jobs:nativeSupport});
+    if(path==='/tamrank/v2/scans/executions/capabilities'){res.statusCode=404;return send({code:'rest_no_route'});}
     if(path==='/tamrank/v2/scans/maintenance/capabilities'){res.statusCode=403;return send({code:'scope'});}
     if(path==='/tamrank/v2/scans/sources/preview'){assert.equal(req.method,'GET');assert.equal(u.searchParams.get('post_id'),'123');
       assert.equal(u.searchParams.get('capture_mode'),expectedPreview.capture_mode??null);assert.equal(u.searchParams.get('probe_content'),null);

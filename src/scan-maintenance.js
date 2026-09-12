@@ -45,7 +45,10 @@ export async function discoverWorkflows(client,{preview=false,profile='core'}={}
         preflight={ok:false,code:'scan_maintenance_rate_limit',message:'Administrative maintenance is rate-limited. Wait before restarting; no automatic retry.',...rateLimitAdvice(err.data)};
     }
   }
-  if(preview && profile==='specialist' && preflight.ok && !maintenanceOnly)
-    capabilities={...capabilities,schema_source_jobs:await discoverSourceScans(client)};
+  if(preview && profile==='specialist' && preflight.ok && !maintenanceOnly){
+    // Load after this module's shared schemas initialize (source confirmations reuse them).
+    const {discoverPageSpeedScans}=await import('./pagespeed-scans.js');
+    capabilities={...capabilities,schema_source_jobs:await discoverSourceScans(client),pagespeed_execution:await discoverPageSpeedScans(client)};
+  }
   return {capabilities,preflight,maintenanceOnly};
 }

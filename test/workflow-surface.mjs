@@ -89,7 +89,7 @@ const scanPreview={mode:'preview',type:'pagespeed',post_ids:[205,1],expected_rev
 await specialist.get('start_scan').h(scanPreview);
 assert.deepEqual(calls.pop(),{path:'/scans/preview',query:{type:'pagespeed',post_ids:'205,1',expected_revision:scanPreview.expected_revision}});
 assert.equal(specialist.get('start_scan').c.annotations.readOnlyHint,false); // Mixed tool can persist an explicit draft.
-assert.equal(specialist.get('start_scan').c.annotations.destructiveHint,false);
+assert.equal(specialist.get('start_scan').c.annotations.destructiveHint,true); // May authorize non-reversible external provider requests.
 for(const args of [{...scanPreview,mode:'execute'},{...scanPreview,type:'index'},{...scanPreview,force:true},
   {...scanPreview,post_ids:[]},{...scanPreview,post_ids:[1,1]},{...scanPreview,post_ids:'1,2'},
   {...scanPreview,post_ids:[0]},{...scanPreview,post_ids:[Number.MAX_SAFE_INTEGER+1]},

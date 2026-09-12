@@ -9,6 +9,8 @@ import {fieldProposalSchema,fieldProposalItem,validFieldProposal} from './field-
 import {schemaPreviewItem,validSchemaPreviewResponse} from './schema-preview.js';
 import {workflowCatalog} from './workflow-catalog.js';
 import {sourceConfirmation,validSourceStart,sourcePath,sourceArgs} from './source-scans.js';
+import {scanConfirmation,pagespeedRoute,pagespeedSupport,discoverPageSpeedScans,validPageSpeedStart,
+  validPageSpeedProposal,validPageSpeedProgress,pageSpeedStartBody,pageSpeedProgress} from './pagespeed-scans.js';
 import {executionSchema,rollbackSchema,confirmationBody,isFieldExecutionPlan,validExecutionResponse} from './field-execution.js';
 import {validSchemaExecutionResponse,schemaForwardToken,schemaInverseToken,schemaForwardExecutionSchema,schemaInverseExecutionSchema,schemaMixedExecutionSchema,
   schemaConfirmationBody,isSchemaExecutionPlan,matchesSchemaExecutionRequest} from './schema-execution.js';
@@ -210,7 +212,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
     const readOnly=Boolean(def.path)&&!def.write&&!def.scanPlan&&!def.maintenanceWrite&&!def.fieldPlan&&!def.fieldExecution;
     server.registerTool(name, { description: def.description, inputSchema: schema,
       // Read-only already implies idempotence. Omitted open-world hint stays conservative.
-      annotations: { readOnlyHint:readOnly, ...(!readOnly?{destructiveHint:Boolean(def.write || def.maintenanceWrite || def.fieldExecution==='execute')||!def.path}:{}),
+      annotations: { readOnlyHint:readOnly, ...(!readOnly?{destructiveHint:Boolean(def.write || def.scanPlan || def.maintenanceWrite || def.fieldExecution==='execute')||!def.path}:{}),
         ...(!readOnly&&def.path?{idempotentHint:true}:{}) } }, async input => {
       if (!preflight.ok) return failure(preflight.code || 'workflow_unavailable', preflight.message || 'Workflow startup refused; restart after correcting the configuration.',rateLimitAdvice(preflight));
       const parsed = schema.safeParse(input || {});
@@ -228,13 +230,39 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       const sourceMaintenance=parsed.data.source_job_id!==undefined && (canonical==='get_scan_status'||canonical==='close_scan');
       const sourceStart=canonical==='start_scan' && parsed.data.type==='schema_source';
       const sourceRead=canonical==='get_scan_status' && parsed.data.type==='schema_source';
-      const maintenanceRead=canonical==='get_scan_status' && (parsed.data.execution_id!==undefined || sourceMaintenance);
+      const pagespeedRead=canonical==='get_scan_status' && parsed.data.type==='pagespeed'
+        && (parsed.data.proposal_id!==undefined || parsed.data.execution_id!==undefined);
+      const pagespeedStart=canonical==='start_scan' && parsed.data.type==='pagespeed'
+        && (parsed.data.mode==='run'||(parsed.data.mode==='plan'&&pagespeedSupport(capabilities?.pagespeed_execution)));
+      const maintenanceRead=canonical==='get_scan_status' && !pagespeedRead && (parsed.data.execution_id!==undefined || sourceMaintenance);
       if(maintenanceOnly && canonical!=='get_capabilities' && !maintenanceRead && !def.maintenanceWrite)
         return failure('workflow_operation_unavailable','Only administrative scan review/closure is available without PRO access. Nothing was sent.');
       const maintenanceCapabilities=sourceMaintenance?capabilities?.scan_maintenance?.schema_source:capabilities?.scan_maintenance;
       if((maintenanceRead || def.maintenanceWrite) && maintenanceCapabilities?.[def.maintenanceWrite?'available':'read_available']!==true)
         return failure('workflow_operation_unavailable','Administrative scan maintenance requires explicit site support and scans:maintain. Nothing was sent.');
       if (!def.path) return failure('workflow_operation_unavailable',`${canonical} has no verified implementation in this preview. No request or mutation was sent.`);
+      if(pagespeedStart || pagespeedRead){
+        const a=parsed.data,support=capabilities?.pagespeed_execution,run=pagespeedStart&&a.mode==='run';
+        const grant=run?'available':a.execution_id?'read_available':'plan_available';
+        if(!pagespeedSupport(support)||(!(pagespeedRead&&a.proposal_id)&&support[grant]!==true))
+          return failure('workflow_operation_unavailable','Approved PageSpeed jobs require explicit site support and current scan rights. Nothing was sent.');
+        try{
+          if(run){
+            // Re-read the exact frozen proposal before transmitting its approval. Never invent a replacement.
+            const draft=await client.get(pagespeedRoute+'/proposals/'+a.proposal_id);
+            if(!validPageSpeedProposal(draft,a)||draft.proposal_hash!==a.confirmation.plan_hash)
+              return failure('pagespeed_proposal_mismatch','The exact approved proposal could not be verified. No start was sent.');
+          }
+          const data=pagespeedRead?await client.get(pagespeedRoute+(a.execution_id?'/'+a.execution_id:'/proposals/'+a.proposal_id))
+            :await client.post(pagespeedRoute+(run?'':'/proposals'),run?pageSpeedStartBody(a,clientInfo()):strip(a,['mode']));
+          const progress=run||a.execution_id!==undefined;
+          if(!(progress?validPageSpeedProgress(data,{execution_id:a.execution_id??null,proposal_id:a.proposal_id??null,plan_hash:a.confirmation?.plan_hash??null})
+            :validPageSpeedProposal(data,a)))return failure('pagespeed_incompatible_response','Read the same proposal or execution. Do not start a replacement scan or retry automatically.',
+              {automatic_retry:false,proposal_id:a.proposal_id,execution_id:a.execution_id,client_request_id:a.client_request_id});
+          return result(progress?pageSpeedProgress(data):data);
+        }catch(err){return failure(err.code||'pagespeed_request_uncertain','Read stored progress. A lost start response is not proof of failure; only explicitly repeat the identical proposal, approval and request ID. No automatic retry.',
+          {automatic_retry:false,proposal_id:a.proposal_id,execution_id:a.execution_id,client_request_id:a.client_request_id,...(err.status===429?rateLimitAdvice(err.data):{})});}
+      }
       const recoveryRead=canonical==='get_changes'&&parsed.data.kind==='recovery';
       if(recoveryRead||(def.fieldExecution==='execute'&&parsed.data.recovery_plan!==undefined)){
         const redirectConfirm=!recoveryRead&&redirectRecoveryToken(parsed.data.change_token);
@@ -361,6 +389,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         const data = def.write || scanPlan || def.maintenanceWrite || def.fieldPlan ? await client.post(path,args) : await client.get(path, strip(args, def.omit || []));
         if(canonical==='get_capabilities' && profile==='specialist' && !maintenanceOnly) {
           data.schema_source_jobs=await discoverSourceScans(client);
+          data.pagespeed_execution=await discoverPageSpeedScans(client);
           try { data.scan_maintenance=(await client.get('/scans/maintenance/capabilities')).scan_maintenance || {available:false,read_available:false}; }
           catch { data.scan_maintenance={available:false,read_available:false}; }
           if(recovery){try{data.scan_recovery=(await client.get('/scans/recovery/capabilities')).scan_recovery || {receipt_review_available:false,settlement_available:false};}
@@ -424,16 +453,18 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       specialist:true,path:a=>a.source_job_id?'/scans/maintenance/sources/'+a.source_job_id:a.execution_id?'/scans/maintenance/'+a.execution_id:a.proposal_id?'/scans/proposals/'+a.proposal_id:'/scans/status',omit:['proposal_id','execution_id','source_job_id'],
       schema:{type:z.enum(['index','pagespeed','schema_source']).optional(),expected_ref:z.string().regex(/^stored:[a-f0-9]{32}$/).optional(),
         proposal_id:scanId.optional(),execution_id:scanId.optional(),source_job_id:scanId.optional(),receipt_reference:receiptReference.optional()},
-      validate:a=>a.type==='schema_source'?a.proposal_id!==undefined && Object.keys(a).length===2:a.receipt_reference!==undefined?a.execution_id!==undefined && Object.keys(a).length===2:a.proposal_id!==undefined || a.execution_id!==undefined || a.source_job_id!==undefined?Object.keys(a).length===1:a.type!==undefined,
+      validate:a=>a.type==='schema_source'?a.proposal_id!==undefined && Object.keys(a).length===2
+        :a.type==='pagespeed'&&(a.proposal_id!==undefined||a.execution_id!==undefined)?Object.keys(a).length===2
+        :a.receipt_reference!==undefined?a.execution_id!==undefined && Object.keys(a).length===2:a.proposal_id!==undefined || a.execution_id!==undefined || a.source_job_id!==undefined?Object.keys(a).length===1:a.type!==undefined,
     }:{
-      description:'Source: exact chat. No PageSpeed run/retry.',
+      description:'Preview→plan→show all URLs/warnings→chat→run. No auto-retry. PageSpeed: proposal_id; source: source_job_id.',
       specialist:true,scanPlan:true,path:a=>a.mode==='plan'?'/scans/proposals':'/scans/preview',schema:{mode:z.enum(['preview','plan','run']),type:z.enum(['pagespeed','schema_source']),
         post_ids:z.array(pageId).min(1).max(25).refine(ids=>new Set(ids).size===ids.length).optional(),expected_revision:z.string().regex(/^[a-f0-9]{64}$/).optional(),
-        source_job_id:scanId.optional(),confirmation:sourceConfirmation.optional(),
+        source_job_id:scanId.optional(),proposal_id:scanId.optional(),confirmation:scanConfirmation.optional(),
         capture_mode:z.literal('native_render').optional(),probe_content:z.literal(true).optional(),
         client_request_id:z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/).optional()},
-      validate:a=>a.type==='schema_source'?validSourceStart(a):a.post_ids!==undefined && a.source_job_id===undefined && a.confirmation===undefined&&a.capture_mode===undefined&&a.probe_content===undefined
-        &&(a.mode==='plan'?a.expected_revision!==undefined && a.client_request_id!==undefined:a.mode==='preview' && a.client_request_id===undefined),
+      validate:a=>a.type==='schema_source'?a.proposal_id===undefined&&validSourceStart(a)
+        &&(a.confirmation===undefined||sourceConfirmation.safeParse(a.confirmation).success):validPageSpeedStart(a),
       query:a=>a.mode==='plan'?strip(a,['mode']):({...strip(a,['mode']),post_ids:a.post_ids.join(',')}),
     });
   }
