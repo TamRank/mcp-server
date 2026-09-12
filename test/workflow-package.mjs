@@ -18,8 +18,10 @@ const pkg=JSON.parse(await readFile(join(root,'package.json'),'utf8'));
 const online=process.argv.includes('--allow-network');
 const nativeFields=process.argv.includes('--native-fields');
 const nativeReads=process.argv.includes('--native-reads');
+const nativeScans=process.argv.includes('--native-scans');
 const nativeRedirects=process.argv.includes('--native-redirects'),nativeSchema=process.argv.includes('--native-schema');
 const nativeCases=[
+  ...(nativeScans?[['pagespeed-scans','native PageSpeed MCP checks']]:[]),
   ...(nativeReads?[['stored-reads','full stored-read native WordPress/PAT/MCP matrix']]:[]),
   ...(nativeFields?[['field-execution-tls','native field execution MCP/WordPress TLS/lost-response checks']]:[]),
   ...(nativeRedirects?[
@@ -32,7 +34,7 @@ const nativeCases=[
     ['schema-recovery-mixed-mcp','native schema worker interruption and fresh journal recovery over MCP/TLS'],
     ['schema-recovery-authority-mcp','native schema recovery checks with token/scope/membership/entitlement changed after preview on the same MCP session']]:[])
 ];
-assert.ok(process.argv.slice(2).every(arg=>['--allow-network','--native-reads','--native-fields','--native-redirects','--native-schema'].includes(arg)),'Unknown installation-test argument');
+assert.ok(process.argv.slice(2).every(arg=>['--allow-network','--native-reads','--native-scans','--native-fields','--native-redirects','--native-schema'].includes(arg)),'Unknown installation-test argument');
 let nativePro;
 if(nativeCases.length){
   for(const key of ['TAMRANK_MAINT_PRO','TAMRANK_MAINT_CORE','TAMRANK_MAINT_FREE','TAMRANK_SCAN_TEST_SOCKET'])assert.ok(process.env[key],`Explicit owned native setting required: ${key}`);
@@ -55,7 +57,7 @@ try {
   assert.equal(packed.name,pkg.name);assert.equal(packed.version,pkg.version);
   assert.equal(packed.filename,packed.filename.split('/').pop());
   const paths=packed.files.map(f=>f.path);
-  for(const p of ['src/source-scans.js','src/workflow-identity.js'])assert.ok(paths.includes(p),`Missing packed ${p}`);
+  for(const p of ['src/source-scans.js','src/pagespeed-scans.js','src/workflow-identity.js'])assert.ok(paths.includes(p),`Missing packed ${p}`);
   assert.ok(paths.includes('src/field-proposals.js'),'Typed field proposal contract is packaged');
   for(const p of ['src/field-execution.js','src/field-recovery.js','src/redirect-execution.js'])assert.ok(paths.includes(p),`Missing typed execution contract ${p}`);
   for(const p of ['src/schema-preview.js','src/schema-execution.js','src/schema-rollback.js','src/schema-recovery.js'])
@@ -96,7 +98,7 @@ try {
     const route=url.searchParams.get('rest_route') || url.pathname.replace('/wp-json','');
     assert.ok(['/tamrank/v2/capabilities','/tamrank/v2/site/context','/tamrank/v2/site/diagnostics','/tamrank/v2/scans/status','/tamrank/v2/scans/preview',
       '/tamrank/v2/scans/proposals','/tamrank/v2/scans/proposals/'+proposalId,'/tamrank/v2/scans/maintenance/capabilities','/tamrank/v2/scans/sources/capabilities',
-      '/tamrank/v2/changes/proposals','/tamrank/v2/changes/'+proposalId].includes(route),'No legacy REST fallback');
+      '/tamrank/v2/scans/executions/capabilities','/tamrank/v2/changes/proposals','/tamrank/v2/changes/'+proposalId].includes(route),'No legacy REST fallback');
     if(route==='/tamrank/v2/changes/proposals'){
       assert.equal(req.method,'POST');let body='';for await(const chunk of req)body+=chunk;assert.deepEqual(JSON.parse(body),fieldRequest);
     }else if(route==='/tamrank/v2/scans/proposals') {
@@ -153,14 +155,15 @@ try {
     assert.throws(()=>ownedInstalledRuntime(root,''),'Empty package override cannot fall back to source');
     assert.throws(()=>ownedInstalledRuntime(root,root),'Checkout cannot masquerade as installed package');
     for(const [mode,expected] of nativeCases){
-      const reads=mode==='stored-reads';
-      console.log('RUN INSTALLED: '+mode+' → extracted entry → '+(reads?'owned HTTP':'verified TLS')+' → owned WordPress.');
-      const nativeArgs=reads?[join(nativePro,'docs/mcp-phase4e-read-wordpress.mjs')]:[join(nativePro,'docs/mcp-phase4c-change-store-wordpress.mjs'),'--'+mode];
+      const reads=mode==='stored-reads',scans=mode==='pagespeed-scans';
+      console.log('RUN INSTALLED: '+mode+' → extracted entry → '+(reads||scans?'owned HTTP':'verified TLS')+' → owned WordPress.');
+      const nativeArgs=scans?[join(root,'test/workflow-pagespeed-native.mjs')]:reads?[join(nativePro,'docs/mcp-phase4e-read-wordpress.mjs')]:[join(nativePro,'docs/mcp-phase4c-change-store-wordpress.mjs'),'--'+mode];
       const nativeRun=run(process.execPath,nativeArgs,
         {cwd:nativePro,env:{...process.env,TAMRANK_MAINT_MCP:root,TAMRANK_TEST_PACKED_ROOT:installed},timeout:1800000,maxBuffer:2097152});
       nativeRun.child.stdout.pipe(process.stdout,{end:false});
       const native=await nativeRun;
-      assert.ok(reads?native.stdout.includes('PASS: '+expected+'; owned database removed.'):
+      assert.ok(scans?native.stdout.split('\n').some(line=>/^PASS: \d+ /.test(line)&&line.includes(expected+'; installed entry;')&&line.endsWith('owned databases removed.')):
+        reads?native.stdout.includes('PASS: '+expected+'; owned database removed.'):
         native.stdout.split('\n').some(line=>/^PASS: \d+ /.test(line)&&line.includes(expected)&&line.endsWith('owned databases removed.')),
         'Full native matrix must complete with owned cleanup: '+mode);
       console.log('PASS INSTALLED: '+mode+'; extracted entry and separately installed dependencies; no checkout-runtime fallback.');
