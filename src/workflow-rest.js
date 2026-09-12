@@ -10,13 +10,15 @@ export function rateLimitAdvice(data) {
 
 // Results can embed a settlement receipt in saved history as well as error data.
 // Preserve ordinary analytics, but never expose the private recovery packet.
-function scrubResponse(value, pat) {
-  const scrub = text => (pat ? text.split(pat).join('[redacted]') : text)
+function scrubResponse(value, pat, schemaEnvelope = null) {
+  const scrubPat = text => pat ? text.split(pat).join('[redacted]') : text;
+  const scrub = text => scrubPat(text)
     .replace(/trsr1\.[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]*)?/g, '[private receipt redacted]');
   if (typeof value === 'string') return scrub(value);
-  if (Array.isArray(value)) return value.map(item => scrubResponse(item, pat));
+  if (Array.isArray(value)) return value.map(item => scrubResponse(item, pat, schemaEnvelope));
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value)
-    .map(([key, item]) => [scrub(key), key === 'result_receipt' ? '[private receipt redacted]' : scrubResponse(item, pat)]));
+    .map(([key, item]) => [scrub(key), key === 'result_receipt' ? '[private receipt redacted]'
+      : value === schemaEnvelope && key === 'change_token' ? scrubPat(item) : scrubResponse(item, pat, schemaEnvelope)]));
   return value;
 }
 
@@ -117,7 +119,14 @@ export class WorkflowClient {
       // Native execution has its own versioned policy/envelope. Accept v1 only
       // on these exact method/route pairs; every older read/draft remains v2.
       if (data.contract_version !== (fieldExecution ? 1 : 2)) throw new ApiError(409, 'workflow_upgrade_required', 'Incompatible workflow contract. There is no fallback to legacy writers.');
-      return scrubResponse(data, requestPat);
+      // Native schema rollback IDs share a prefix with private scan receipts.
+      // Exempt only the exact envelope field after validating the whole closed
+      // semantic response on an execution route, never error data or metadata.
+      // Load at request time: schema contracts also use this transport's advice.
+      const readId=method==='GET'&&fieldExecution?path.slice(path.lastIndexOf('/')+1):null;
+      const schemaEnvelope=fieldExecution&&data.record?.envelope?.plan?.policy_version==='workflow-schema-rollback-1'
+        &&(await import('./schema-execution.js')).validSchemaExecutionResponse(data,readId)?data.record.envelope:null;
+      return scrubResponse(data, requestPat, schemaEnvelope);
     } catch (error) {
       if (error instanceof ApiError) throw error;
       // Network messages can contain URLs/proxy details. Never echo raw exceptions or PATs.
