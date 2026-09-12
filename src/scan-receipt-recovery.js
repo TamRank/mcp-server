@@ -4,19 +4,22 @@ import {z} from 'zod';
 import {WorkflowClient} from './workflow-rest.js';
 import {ApiError} from './rest.js';
 import {isScanReceipt, receiptSite} from './scan-receipt-store.js';
-import {recoveryConfirmation,recoveryAcks} from './scan-recovery-chat.js';
+import {recoveryConfirmation,recoveryAcks,receiptReference} from './scan-recovery-chat.js';
 
 const uuid=z.string().regex(/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/);
 const hash=z.string().regex(/^[a-f0-9]{64}$/);
 const request=z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/);
-const context=z.object({execution_id:uuid,receipt_reference:z.string().regex(/^receipt_[a-f0-9]{64}$/)}).strict();
+const context=z.object({execution_id:uuid,receipt_reference:receiptReference}).strict();
 const settlement=context.extend({client_request_id:request,expected_review_hash:hash,confirmed:z.literal(true),
   expected_runtime_hash:hash.optional(),confirmation:recoveryConfirmation.optional()}).strict();
 const attemptSchema=z.object({execution_id:uuid,measurement_id:hash,client_request_id:request,expected_runtime_hash:hash}).strict();
 const metric=z.number().finite().min(0).max(86400000).nullable();
+const fetchTime=z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/).refine(v=>{
+  const at=Date.parse(v.slice(0,19)+'Z');return Number.isFinite(at)&&at>0&&new Date(at).toISOString().slice(0,19)===v.slice(0,19);
+});
 const result=z.object({performance_score:z.number().finite().min(0).max(100),fcp_ms:metric,lcp_ms:metric,tbt_ms:metric,
   cls:z.number().finite().min(0).max(100).nullable(),provenance:z.object({provider:z.literal('google_pagespeed_insights'),
-    request_hash:hash,fetch_time:z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/),lighthouse_version:z.string().min(1).max(32)}).strict().optional()}).strict();
+    request_hash:hash,fetch_time:fetchTime,lighthouse_version:z.string().min(1).max(32)}).strict().optional()}).strict();
 const outcome=z.discriminatedUnion('outcome',[
   z.object({outcome:z.literal('succeeded'),request_hash:hash,result,error_code:z.null()}).strict(),
   z.object({outcome:z.literal('failed'),request_hash:hash,result:z.null(),error_code:z.literal('provider_rejected')}).strict()
@@ -43,14 +46,18 @@ const error=code=>new ApiError(409,code,'Receipt reconciliation was refused. Rea
 function parse(schema,input){const parsed=schema.safeParse(input);if(!parsed.success)throw error('scan_receipt_input_invalid');return parsed.data;}
 
 export class ScanReceiptRecovery {
-  #client; #store; #site;
-  constructor({siteUrl,pat,receiptStore,timeoutMs=30000,routeStyle='pretty'}){
-    if(!receiptStore || typeof receiptStore.load!=='function')throw error('scan_receipt_configuration_invalid');
+  #client; #store; #site; #server;
+  constructor({siteUrl,pat,receiptStore,allowServerReceipts=false,timeoutMs=30000,routeStyle='pretty'}){
+    if((!receiptStore || typeof receiptStore.load!=='function')&&allowServerReceipts!==true)throw error('scan_receipt_configuration_invalid');
+    this.#server=allowServerReceipts===true;
     this.#site=receiptSite(siteUrl);this.#store=receiptStore;
     // Configuration is private and fixed for this driver; callers cannot switch sites during a load.
     this.#client=new WorkflowClient({siteUrl:this.#site,pat,timeoutMs,routeStyle});
   }
   async #load(input){
+    if(input.receipt_reference.startsWith('server_')){
+      if(!this.#server)throw error('scan_receipt_configuration_invalid');return null;
+    }
     try {
       const record=await this.#store.load(input.receipt_reference,{site_url:this.#site,execution_id:input.execution_id});
       const saved=record.receipt;
@@ -60,12 +67,16 @@ export class ScanReceiptRecovery {
       return {attempt_input:attempt,result_receipt:saved.result_receipt};
     } catch {throw error('scan_receipt_load_failed');}
   }
-  async #review(input,body){
-    const raw=await this.#client.post('/scans/recovery/'+input.execution_id+'/receipt-review',body);
+  async #review(input,body,received){
+    const server=body===null;
+    let raw=received??(server?await this.#client.get('/scans/recovery/'+input.execution_id+'/retained-result')
+      :await this.#client.post('/scans/recovery/'+input.execution_id+'/receipt-review',body));
+    if(server){if(!this.#server||raw.receipt_reference!==input.receipt_reference)throw error('scan_receipt_review_invalid');
+      const {receipt_reference,...review}=raw;raw=review;}
     const checked=reviewSchema.safeParse(raw);if(!checked.success)throw error('scan_receipt_review_invalid');
     const review=checked.data,canSettle=review.action==='settle_and_stop';
-    if(review.execution_id!==input.execution_id || review.measurement_id!==body.attempt_input.measurement_id
-      || review.attempt_input_hash!==digest(body.attempt_input) || review.can_settle!==canSettle
+    if(review.execution_id!==input.execution_id || (!server&&(review.measurement_id!==body.attempt_input.measurement_id
+      || review.attempt_input_hash!==digest(body.attempt_input))) || review.can_settle!==canSettle
       || review.observed_at<review.received_at || (!canSettle && review.cancel_remaining!==0)
       || (canSettle && review.current_runtime_hash!==review.expected_runtime_hash))throw error('scan_receipt_review_invalid');
     if(review.proposal || review.proposal_hash || review.proposal_json){
@@ -94,18 +105,29 @@ export class ScanReceiptRecovery {
   /** Tool-facing review requires the full server proposal, not the earlier count-only format. */
   async reviewChat(input){const prepared=await this.review(input);
     if(!prepared.review.proposal || !prepared.review.proposal_hash)throw error('scan_receipt_review_upgrade_required');return prepared;}
+  /** Discover only the configured site's stored evidence; no client directory or packet transfer. */
+  async reviewServer(executionId){
+    if(!this.#server)throw error('scan_receipt_configuration_invalid');parse(uuid,executionId);
+    const raw=await this.#client.get('/scans/recovery/'+executionId+'/retained-result');
+    const input=parse(context,{execution_id:executionId,receipt_reference:raw.receipt_reference});
+    if(!input.receipt_reference.startsWith('server_'))throw error('scan_receipt_review_invalid');
+    const prepared=await this.#review(input,null,raw);
+    if(!prepared.review.proposal || !prepared.review.proposal_hash)throw error('scan_receipt_review_upgrade_required');return prepared;
+  }
   /** Explicit internal call only, after showing the exact review. confirmed is a client assertion, not human proof. */
   async settle(input){
-    const parsed=parse(settlement,input),body=await this.#load(parsed),prepared=await this.#review(parsed,body);
+    const parsed=parse(settlement,input),server=parsed.receipt_reference.startsWith('server_');
+    if(server&&(!parsed.confirmation||!parsed.expected_runtime_hash))throw error('scan_receipt_input_invalid');
+    const body=await this.#load(parsed),prepared=await this.#review(parsed,body);
     if(prepared.review_hash!==parsed.expected_review_hash)throw error('scan_receipt_review_changed');
     if(parsed.confirmation && (!prepared.review.proposal_hash || parsed.confirmation.review_hash!==prepared.review_hash
       || parsed.expected_runtime_hash!==prepared.review.expected_runtime_hash))throw error('scan_receipt_review_changed');
     if(!prepared.review.can_settle)return {contract_version:2,view:'result_settlement_not_needed',review:prepared.review,
       provider_requested_this_call:false,automatic_retry_allowed:false};
     // The WordPress transaction verifies this exact signed start again. Never use the local pre-start hash here.
-    const response=await this.#client.post('/scans/recovery/'+parsed.execution_id+'/settle',{
+    const response=await this.#client.post('/scans/recovery/'+parsed.execution_id+(server?'/settle-retained':'/settle'),{
       execution_id:parsed.execution_id,client_request_id:parsed.client_request_id,
-      expected_runtime_hash:prepared.review.expected_runtime_hash,result_receipt:body.result_receipt,
+      expected_runtime_hash:prepared.review.expected_runtime_hash,...(server?{receipt_reference:parsed.receipt_reference}:{result_receipt:body.result_receipt}),
       ...(parsed.confirmation?{confirmation:{...parsed.confirmation,review_hash:prepared.review.proposal_hash}}:{})});
     if(response.view!=='result_settlement' || response.execution_enabled!==false || response.provider_requested_this_call!==false
       || response.progress?.execution_id!==parsed.execution_id || typeof response.replayed!=='boolean'

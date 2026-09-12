@@ -19,18 +19,21 @@ try {
 const profile = process.env.TAMRANK_TOOL_PROFILE || 'core';
 if (!['core','legacy','specialist'].includes(profile)) { console.error('Use core, legacy or specialist for TAMRANK_TOOL_PROFILE.'); process.exit(1); }
 const {capabilities,preflight,maintenanceOnly}=await discoverWorkflows(client,{profile,preview:process.env.TAMRANK_WORKFLOW_PREVIEW==='1'});
-let recovery=null;
+let recovery=null,receiptStore=null;
 if(process.env.TAMRANK_SCAN_RECEIPT_DIR){
   if(profile!=='specialist' || process.env.TAMRANK_WORKFLOW_PREVIEW!=='1'){
     console.error('Private recovery storage requires explicit specialist preview configuration.');process.exit(1);
   }
   try {
-    const receiptStore=new ScanReceiptStore({directory:process.env.TAMRANK_SCAN_RECEIPT_DIR});
+    receiptStore=new ScanReceiptStore({directory:process.env.TAMRANK_SCAN_RECEIPT_DIR});
     await receiptStore.checkReadable();
-    const support=await discoverRecovery(client,{profile,preview:true,preflight,maintenanceOnly});
-    if(support && capabilities){capabilities.scan_recovery=support;recovery=new ScanReceiptRecovery({siteUrl:process.env.TAMRANK_SITE_URL,
-      pat:process.env.TAMRANK_PAT,receiptStore,timeoutMs:Number(process.env.TAMRANK_TIMEOUT || 30000),routeStyle:process.env.TAMRANK_REST_STYLE || 'pretty'});}
   } catch {console.error('Private recovery storage is unavailable. Check the configured private directory; no files were created or changed.');process.exit(1);}
+}
+const support=await discoverRecovery(client,{profile,preview:process.env.TAMRANK_WORKFLOW_PREVIEW==='1',preflight,maintenanceOnly});
+if(support&&capabilities&&(receiptStore||support.retained_receipt_review_available===true)){
+  capabilities.scan_recovery=support;recovery=new ScanReceiptRecovery({siteUrl:process.env.TAMRANK_SITE_URL,
+    pat:process.env.TAMRANK_PAT,receiptStore,allowServerReceipts:support.retained_receipt_review_available===true,
+    timeoutMs:Number(process.env.TAMRANK_TIMEOUT||30000),routeStyle:process.env.TAMRANK_REST_STYLE||'pretty'});
 }
 const server = new McpServer(workflowIdentity,
   { instructions: WORKFLOW_INSTRUCTIONS + (preflight.ok ? '' : '\nStartup: ' + preflight.message) });

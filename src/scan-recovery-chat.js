@@ -1,6 +1,6 @@
 /** Same-user received-result closure; distinct from administrative unknown closure. */
 import {z} from 'zod';
-export const receiptReference=z.string().regex(/^receipt_[a-f0-9]{64}$/);
+export const receiptReference=z.string().regex(/^(?:server_)?receipt_[a-f0-9]{64}$/);
 export const recoveryAcks=['record_only_the_received_result','stop_all_unstarted_measurements',
   'no_remeasurement_or_website_change','preserve_original_results_and_approval'];
 const text=bytes=>z.string().min(1).max(bytes).refine(v=>v.trim().length>0 && Buffer.byteLength(v,'utf8')<=bytes && !/[\x00-\x1f\x7f<>]/.test(v));

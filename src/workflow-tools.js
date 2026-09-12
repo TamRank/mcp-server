@@ -218,9 +218,10 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       const parsed = schema.safeParse(input || {});
       if (!parsed.success || (def.validate && !def.validate(parsed.data))) return failure('invalid_request','Invalid or unknown tool arguments; nothing was sent.');
       if((canonical==='get_scan_status' || canonical==='close_scan') && parsed.data.receipt_reference!==undefined){
-        const write=canonical==='close_scan',grant=write?'settlement_available':'receipt_review_available';
+        const write=canonical==='close_scan',serverReceipt=parsed.data.receipt_reference.startsWith('server_'),
+          grant=serverReceipt?(write?'retained_settlement_available':'retained_receipt_review_available'):(write?'settlement_available':'receipt_review_available');
         if(maintenanceOnly || !recovery || capabilities?.scan_recovery?.chat_review_contract!==1 || capabilities.scan_recovery[grant]!==true)
-          return failure('workflow_operation_unavailable','Same-user receipt recovery requires private local storage, PRO and explicit recovery rights. Nothing was sent.');
+          return failure('workflow_operation_unavailable','Receipt recovery requires its configured evidence source, PRO and explicit same-user recovery rights. Nothing was sent.');
         try {
           const a=parsed.data,ctx={execution_id:a.execution_id,receipt_reference:a.receipt_reference};
           return result(write?await recovery.settle({...ctx,client_request_id:a.client_request_id,expected_runtime_hash:a.expected_runtime_hash,
@@ -259,8 +260,23 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
           if(!(progress?validPageSpeedProgress(data,{execution_id:a.execution_id??null,proposal_id:a.proposal_id??null,plan_hash:a.confirmation?.plan_hash??null})
             :validPageSpeedProposal(data,a)))return failure('pagespeed_incompatible_response','Read the same proposal or execution. Do not start a replacement scan or retry automatically.',
               {automatic_retry:false,proposal_id:a.proposal_id,execution_id:a.execution_id,client_request_id:a.client_request_id});
-          return result(progress?pageSpeedProgress(data):data);
-        }catch(err){return failure(err.code||'pagespeed_request_uncertain','Read stored progress. A lost start response is not proof of failure; only explicitly repeat the identical proposal, approval and request ID. No automatic retry.',
+          const display=progress?pageSpeedProgress(data):data;
+          if(pagespeedRead&&a.execution_id&&data.dispatch_state==='reconciliation_required'&&recovery
+            &&capabilities?.scan_recovery?.retained_receipt_review_available===true){
+            try{display.retained_result_review=await recovery.reviewServer(a.execution_id);}
+            catch(err){display.retained_result_state=err.status===404&&err.code==='scan_result_not_retained'?'not_retained':'unavailable';
+              display.retained_result_error=/^[a-z0-9_]{1,80}$/.test(err.code||'')?err.code:'scan_receipt_review_unavailable';}
+          }
+          return result(display);
+        }catch(err){
+          // A replacement PAT may recover the same user's retained response, but
+          // cannot impersonate the original execution token or resume its work.
+          if(pagespeedRead&&a.execution_id&&[401,403,404].includes(err.status)&&recovery
+            &&capabilities?.scan_recovery?.retained_receipt_review_available===true){
+            try{return result({view:'pagespeed_result_recovery',execution_id:a.execution_id,
+              retained_result_review:await recovery.reviewServer(a.execution_id),execution_enabled:false});}catch{}
+          }
+          return failure(err.code||'pagespeed_request_uncertain','Read stored progress. A lost start response is not proof of failure; only explicitly repeat the identical proposal, approval and request ID. No automatic retry.',
           {automatic_retry:false,proposal_id:a.proposal_id,execution_id:a.execution_id,client_request_id:a.client_request_id,...(err.status===429?rateLimitAdvice(err.data):{})});}
       }
       const recoveryRead=canonical==='get_changes'&&parsed.data.kind==='recovery';
