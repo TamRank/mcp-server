@@ -829,7 +829,8 @@ the request PAT from returned errors and saved-history responses. An internal,
 explicitly configured capture hook can retain an opaque response in a bounded
 private local store before reporting an uncertain result-storage error. It never
 retries a measurement or grants settlement authority. Existing entry points do
-not create this store; no tool accepts the capture option or executes a scan.
+not create this store; no tool accepts the local capture option. Approved
+PageSpeed execution is a separate gated workflow, described below.
 An internal recovery bridge now loads a retained reference, obtains the verified
 server review and explicitly returns the packet for exact settlement. It never
 guesses the signed started hash or repeats a measurement. Besides the original
@@ -838,7 +839,7 @@ WordPress recovery REST routes in PRO's 728-check HTTP suite, now via actual MCP
 stdio. Configure `TAMRANK_SCAN_RECEIPT_DIR` only in specialist preview. Existing
 `get_scan_status`/`close_scan` accept `receipt_reference` for full-target review and
 explicit attested settlement. No packet/path tool inputs; server flags remain
-off by default. Execution capture remains unconnected. See `SCAN-RECEIPTS.md`.
+off by default. Client-file execution capture remains unconnected. See `SCAN-RECEIPTS.md`.
 
 The MCP repository document `SCAN-RECEIPTS.md` (branch `feat/mcp-workflows`) records
 the exact storage boundary, permissions, failure handling and activation gates.
@@ -848,6 +849,28 @@ permissions and provider/privacy gates remain open. Explicit POSIX setup, inspec
 export and exact-record erasure are now implemented via `receipt-storage.js`;
 see `SCAN-RECEIPTS.md` for exact commands and limits. The separately gated
 administrative closure is already tested; it does not replace same-user recovery.
+
+### Server-held evidence without a local directory
+
+The separately enabled WordPress journal preserves one bounded signed receipt
+before the normal result transaction. Specialist preview discovers its native
+recovery capabilities even without `TAMRANK_SCAN_RECEIPT_DIR`; core/legacy and
+non-preview startup do not enable this route. No file is created automatically.
+
+`get_scan_status({type: "pagespeed", execution_id})` can include
+`retained_result_review` when normal result storage failed. Its
+`server_receipt_<sha256>` reference may be used with the existing
+`get_scan_status`/`close_scan` recovery inputs. The latter requires the exact
+complete chat review, runtime hash and acknowledgements; it never starts another
+measurement. A replacement PAT can recover only for the same original user under
+current administrator/PRO/four-scope checks, not act as the original worker.
+
+No raw packet is sent to the model. All 50 targets and exact numeric/timestamp
+bytes remain in the validated proposal. The installed native receipt matrix
+passes 186 checks per PHP 8.2/8.5; core/specialist/legacy counts remain 12/20/42
+and the largest tested specialist catalog is 15,810/16,000 characters.
+See `SCAN-RECEIPTS.md` and PRO `docs/mcp-phase4b-result-journal.md` for failure,
+privacy and activation boundaries. This is not a live-customer setup instruction.
 
 ## Stored PageSpeed diagnosis
 

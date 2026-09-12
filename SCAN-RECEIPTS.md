@@ -13,6 +13,35 @@ Source: MCP repository, branch `feat/mcp-workflows`,
 Server contract: PRO repository, same branch,
 `docs/mcp-phase4b-scan-settlement.md`.
 
+## Server-held receipts — separate path, 12 September 2026
+
+For a WordPress cron worker, a waiting local client cannot retain the response.
+PRO now has a separate default-off server receipt journal: one signed packet of
+at most 8 KiB on the existing runtime row, committed before normal result storage.
+Its contract is in `samkl8/tamrank-pro`, branch `feat/mcp-workflows`,
+`docs/mcp-phase4b-result-journal.md`. Privacy/retention/upgrade gates remain open.
+
+Specialist preview discovers `retained_receipt_review_available` and
+`retained_settlement_available`. These capabilities do not require
+`TAMRANK_SCAN_RECEIPT_DIR`; no local directory/files are created. References start
+with `server_receipt_`, not the local `receipt_` prefix. The existing recovery
+driver fetches the complete native review, validates its canonical proposal and
+uses the existing chat-approved settlement mechanism. The private packet stays
+on WordPress and never becomes an MCP input/output.
+
+`get_scan_status` includes the retained-result review for an uncertain PageSpeed
+execution. The same original user can use a replacement PAT with current local
+administrator, PRO and all four recovery scopes; it cannot resume under the
+original execution token. `close_scan` requires the exact full chat review and
+runtime hash, preserves the known result and stops only the unstarted remainder.
+No provider call, automatic retry or new tool. Fractional UTC provider timestamps
+are accepted without changing their signed bytes; invalid dates are refused.
+
+The native source chain passes 186 MCP checks; extracted-package runs pass 186
+per PHP 8.2/8.5 on single-/multisite and both REST forms. All provider responses
+are fictional. The server journal neither enables the local capture hook below
+nor removes its separate platform/ACL/interrupted-write acceptance requirements.
+
 ## What is retained
 
 A trusted future driver can explicitly construct a `ScanReceiptStore` with an
