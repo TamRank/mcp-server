@@ -43,6 +43,19 @@ public schema rollback acceptance. See PRO
 `docs/mcp-phase4d-execution.md`, section "Public forward schema proposals and
 execution — 12 September 2026" for current evidence and remaining gates.
 
+## Schema inverse transport correction
+
+Native inverse IDs survive the transport only in the exact envelope field of a
+fully validated semantic schema-rollback response on an execution route. Private
+scan receipts sharing the prefix remain redacted everywhere else, including
+metadata and errors. The correction adds 67 real transport checks to the normal
+workflow suite. The extended native read matrix passes 5,058 combined checks on
+PHP 8.5; the PHP 8.2 matrix is still running. It now includes actual MCP reads of
+planned/completed/partial inverse records, field-only inverse subsets and mixed
+schema/redirect restoration, plus reciprocal audit links and other-owner refusal.
+Public schema rollback/recovery remain unavailable. See PRO
+`docs/mcp-phase4d-execution.md`, "Schema inverse read transport — 12 September 2026".
+
 ## Native schema history reads (development opt-in)
 
 With `schema_execution.contract_version:1`, `read_available:true`,
