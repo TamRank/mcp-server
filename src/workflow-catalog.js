@@ -119,6 +119,12 @@ export function compactWorkflowSchema(root){
   }catch{return root;}
 }
 
+// The installed SDK's ToolExecutionSchema documents absent taskSupport as
+// forbidden. Omit only that exact default; handlers keep their registration.
+// Optional/required task support and unknown execution metadata stay intact.
+export function compactWorkflowExecution(value){
+  return value&&Object.keys(value).length===1&&value.taskSupport==='forbidden'?undefined:value;
+}
 export function workflowCatalog(server){
   if(!server.server?.setRequestHandler)return {server,publish(){}};
   const entries=[];
@@ -128,7 +134,7 @@ export function workflowCatalog(server){
       const input=normalizeObjectSchema(tool.inputSchema);
       const result={name,title:tool.title,description:tool.description,
         inputSchema:input?compactWorkflowSchema(toJsonSchemaCompat(input,{strictUnions:true,pipeStrategy:'input'})):{type:'object'},
-        annotations:tool.annotations,execution:tool.execution,_meta:tool._meta};
+        annotations:tool.annotations,execution:compactWorkflowExecution(tool.execution),_meta:tool._meta};
       if(tool.outputSchema)result.outputSchema=toJsonSchemaCompat(normalizeObjectSchema(tool.outputSchema),{strictUnions:true,pipeStrategy:'output'});
       return result;
     })}));},

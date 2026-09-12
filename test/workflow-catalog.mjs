@@ -9,7 +9,7 @@ import {AjvJsonSchemaValidator} from '@modelcontextprotocol/sdk/validation/ajv';
 import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import {registerWorkflowTools} from '../src/workflow-tools.js';
-import {compactWorkflowSchema,expandLocalSchema,simplifyWorkflowSchema} from '../src/workflow-catalog.js';
+import {compactWorkflowSchema,expandLocalSchema,simplifyWorkflowSchema,compactWorkflowExecution} from '../src/workflow-catalog.js';
 let checks=0;const equal=(a,b,label)=>{checks++;assert.deepEqual(a,b,label);};
 const ajv2020=new Ajv2020({strict:false});addFormats(ajv2020);
 const oldValidator=new AjvJsonSchemaValidator(),newValidator=new AjvJsonSchemaValidator(ajv2020);
@@ -24,18 +24,19 @@ function sample(s){
   if(s.type==='boolean')return true;
   return 'fixture';
 }
-for(const profile of ['core','specialist','legacy'])for(const enabled of [false,true,'storage','execution','recovery','redirect','redirect_recovery','schema_read','schema_mixed_read','schema_execution','schema_mixed_execution']){
+for(const profile of ['core','specialist','legacy'])for(const enabled of [false,true,'storage','execution','recovery','redirect','redirect_recovery','schema_read','schema_mixed_read','schema_execution','schema_mixed_execution','schema_rollback','schema_mixed_rollback']){
   const server=new McpServer({name:'catalog-fixture',version:'1'}),client=new Client({name:'catalog-client',version:'1'}),handles=new Map();
   const nativeRegister=server.registerTool.bind(server);server.registerTool=(name,config,handler)=>{
     const handle=nativeRegister(name,config,handler);handles.set(name,handle);return handle;
   };
-  const storage=['storage','execution','recovery','redirect','redirect_recovery','schema_mixed_read','schema_mixed_execution'].includes(enabled);
-  const redirect=['redirect','redirect_recovery','schema_mixed_read','schema_mixed_execution'].includes(enabled),recovery=['recovery','redirect_recovery','schema_mixed_read','schema_mixed_execution'].includes(enabled);
-  const schemaWrite=['schema_execution','schema_mixed_execution'].includes(enabled);
+  const storage=['storage','execution','recovery','redirect','redirect_recovery','schema_mixed_read','schema_mixed_execution','schema_mixed_rollback'].includes(enabled);
+  const redirect=['redirect','redirect_recovery','schema_mixed_read','schema_mixed_execution','schema_mixed_rollback'].includes(enabled),recovery=['recovery','redirect_recovery','schema_mixed_read','schema_mixed_execution','schema_mixed_rollback'].includes(enabled);
+  const schemaWrite=['schema_execution','schema_mixed_execution','schema_mixed_rollback'].includes(enabled),schemaRollback=['schema_rollback','schema_mixed_rollback'].includes(enabled);
   registerWorkflowTools(server,{}, {profile,capabilities:enabled?{schema_preview:{contract_version:2,available:true,operations:['schema.detect'],schema_proposals_available:storage},
     ...(storage?{field_proposals:{contract_version:2,available:true,operations:['schema.detect']}}:{}),
-    ...(['execution','recovery','redirect','redirect_recovery','schema_mixed_read','schema_mixed_execution'].includes(enabled)?{field_execution:{contract_version:1,available:true,read_available:true,rollback_available:true,recovery_available:recovery,operations:['meta.update','social.update','image_alt.update']}}:{}),
-    ...(['schema_read','schema_mixed_read'].includes(enabled)||schemaWrite?{schema_execution:{contract_version:1,available:schemaWrite,read_available:true,rollback_available:false,
+    ...(['execution','recovery','redirect','redirect_recovery','schema_mixed_read','schema_mixed_execution','schema_mixed_rollback'].includes(enabled)?{field_execution:{contract_version:1,available:true,read_available:true,rollback_available:true,recovery_available:recovery,operations:['meta.update','social.update','image_alt.update']}}:{}),
+    ...(['schema_read','schema_mixed_read'].includes(enabled)||schemaWrite||schemaRollback?{schema_execution:{contract_version:1,available:schemaWrite,read_available:true,rollback_available:schemaRollback,
+      rollback_preview_available:schemaRollback,rollback_preview_contract:'schema_rollback_preview_v1',
       recovery_available:false,operations:schemaWrite?['schema.select','schema.detect','schema_settings.update','meta.update','social.update','image_alt.update','redirect.create','redirect.update','redirect.delete']:[],record_contract:'schema_execution_view_v1',private_proofs_omitted:true}}:{}),
     ...(redirect?{redirect_execution:{contract_version:1,available:true,mixed_available:true,read_available:true,rollback_available:true,recovery_available:recovery,
       operations:['meta.update','social.update','image_alt.update','redirect.create','redirect.update','redirect.delete']}}:{})}:null});
@@ -47,6 +48,7 @@ for(const profile of ['core','specialist','legacy'])for(const enabled of [false,
     for(const tool of listing.tools){
       const handle=handles.get(tool.name),raw=toJsonSchemaCompat(normalizeObjectSchema(handle.inputSchema),{strictUnions:true,pipeStrategy:'input'});
       equal(tool.annotations,handle.annotations,'Safety annotations preserved');
+      equal(tool.execution?.taskSupport??'forbidden',handle.execution?.taskSupport??'forbidden','Absent task support keeps forbidden default');
       let expected=expandLocalSchema(raw);if(!tool.inputSchema.$schema){delete expected.$schema;expected=simplifyWorkflowSchema(expected);}
       equal(expandLocalSchema(tool.inputSchema),expected,'All properties/constraints survive reference compaction');
       const before=oldValidator.getValidator(raw),after=(tool.inputSchema.$schema?oldValidator:newValidator).getValidator(tool.inputSchema);
@@ -62,6 +64,9 @@ for(const profile of ['core','specialist','legacy'])for(const enabled of [false,
     }
   }finally{await client.close();await server.close();}
 }
+equal(compactWorkflowExecution({taskSupport:'forbidden'}),undefined,'Omit only the documented no-task default');
+for(const execution of [undefined,{}, {taskSupport:'optional'},{taskSupport:'required'},{taskSupport:'forbidden',future_policy:true}])
+  equal(compactWorkflowExecution(execution),execution,'Task capability and unknown metadata preserved');
 for(const unsafe of [{$schema:'https://other.invalid/dialect',type:'object'},
   {$schema:'http://json-schema.org/draft-07/schema#',type:'object',dependencies:{x:['y']}},
   {$schema:'http://json-schema.org/draft-07/schema#',type:'array',items:[{type:'string'}]},
