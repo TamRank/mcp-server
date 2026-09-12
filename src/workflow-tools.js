@@ -10,7 +10,8 @@ import {schemaPreviewItem,validSchemaPreviewResponse} from './schema-preview.js'
 import {workflowCatalog} from './workflow-catalog.js';
 import {sourceConfirmation,validSourceStart,sourcePath,sourceArgs} from './source-scans.js';
 import {executionSchema,rollbackSchema,confirmationBody,isFieldExecutionPlan,validExecutionResponse} from './field-execution.js';
-import {validSchemaExecutionResponse} from './schema-execution.js';
+import {validSchemaExecutionResponse,schemaForwardToken,schemaForwardExecutionSchema,schemaMixedExecutionSchema,
+  schemaConfirmationBody,isSchemaExecutionPlan,matchesSchemaExecutionRequest} from './schema-execution.js';
 import {recoveryExecutionSchema,recoveryInput,validRecoveryProposal,validRecoveryInput,recoveryBody,validRecoveryResult} from './field-recovery.js';
 import {capability,redirectToken,redirectRecoveryToken,redirectExecutionSchema,mixedExecutionSchema,isRedirectExecutionPlan,
   redirectConfirmationBody,validRedirectExecutionResponse,validRedirectRecoveryProposal,validRedirectRecoveryInput,validRedirectRecoveryResult} from './redirect-execution.js';
@@ -112,9 +113,12 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   const clientInfo=()=>serverOriginal.server?.getClientVersion?.();
   const catalog=workflowCatalog(server);server=catalog.server;
   const defs = workflowDefinitions();
+  const schemaExecution=capabilities?.schema_execution;
+  const schemaExecutionWrite=capability(schemaExecution,'available')&&schemaExecution.record_contract==='schema_execution_view_v1'
+    &&schemaExecution.private_proofs_omitted===true;
   const schemaStorage=capabilities?.schema_preview?.schema_proposals_available===true
     &&capabilities?.field_proposals?.contract_version===2&&capabilities.field_proposals.available===true;
-  const proposalSchema=schemaStorage?{...fieldProposalSchema,items:z.array(z.union([
+  const proposalSchema=schemaStorage||schemaExecutionWrite?{...fieldProposalSchema,items:z.array(z.union([
     fieldProposalItem,schemaPreviewItem.refine(v=>v.fields.expected_revision!==undefined),
   ])).min(1).max(25)}:fieldProposalSchema;
   // Do not spend the context budget describing an absent development feature.
@@ -128,7 +132,6 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   }
   const execution=capabilities?.field_execution;
   const redirects=capabilities?.redirect_execution;
-  const schemaExecution=capabilities?.schema_execution;
   const schemaExecutionRead=capability(schemaExecution,'read_available')&&schemaExecution.record_contract==='schema_execution_view_v1'
     &&schemaExecution.private_proofs_omitted===true;
   const fieldRecovery=capability(execution,'recovery_available')&&capability(execution,'read_available');
@@ -172,6 +175,14 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
             :capability(execution,'available')&&z.object(executionSchema).strict().safeParse(a).success;
         }};
     }
+  }
+  if(!maintenanceOnly&&schemaExecutionWrite){
+    if(!defs.plan_changes.schema.schema_preview)defs.plan_changes={...defs.plan_changes,schema:proposalSchema,validate:validFieldProposal};
+    const previous=defs.execute_change_set;
+    defs.execute_change_set={description:'Exact chat approval; copy acknowledgements.',schema:schemaMixedExecutionSchema,
+      path:a=>'/changes/executions/'+a.change_set_id+(a.recovery_plan!==undefined?'/recover':'/execute'),fieldExecution:'execute',
+      validate:a=>schemaForwardToken(a.change_token)?z.object(schemaForwardExecutionSchema).strict().safeParse(a).success
+        :Boolean(previous.fieldExecution)&&z.object(previous.schema).strict().safeParse(a).success&&(!previous.validate||previous.validate(a))};
   }
   if(maintenanceOnly) defs.get_capabilities.path=()=>'/scans/maintenance/capabilities';
   const register = (name, def, canonical = name, deprecated = false) => {
@@ -236,28 +247,36 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
           ?'Source result is refused or uncertain. Read this proposal_id with type=schema_source; never start a replacement job automatically.'
           :'Source request failed; no schema change was requested.',err.status===429?rateLimitAdvice(err.data):undefined);}
       }
+      const schemaPlan=def.fieldPlan&&isSchemaExecutionPlan(parsed.data,schemaExecution);
+      if(def.fieldPlan&&schemaExecutionWrite&&parsed.data.items?.some(i=>['schema.select','schema.detect','schema_settings.update'].includes(i.operation))&&!schemaPlan)
+        return failure('workflow_operation_unavailable','This complete schema set is not supported. No request or draft fallback was sent.');
       const redirectPlan=def.fieldPlan&&isRedirectExecutionPlan(parsed.data,redirects);
-      const nativePlan=redirectPlan||(def.fieldPlan&&isFieldExecutionPlan(parsed.data,execution));
+      const nativePlan=schemaPlan||redirectPlan||(def.fieldPlan&&isFieldExecutionPlan(parsed.data,execution));
       const nativeRead=def.fieldRead&&parsed.data.kind==='execution';
       if(def.fieldExecution||nativePlan||nativeRead){
         const rollback=def.fieldExecution==='rollback',redirectExecute=def.fieldExecution==='execute'&&redirectToken(parsed.data.change_token);
+        const schemaExecute=def.fieldExecution==='execute'&&schemaForwardToken(parsed.data.change_token);
         const grant=nativeRead?'read_available':rollback?'rollback_available':'available';
         const fieldAllowed=capability(execution,grant),redirectAllowed=capability(redirects,grant);
-        if(nativeRead||rollback?!(fieldAllowed||redirectAllowed||(nativeRead&&schemaExecutionRead)):!(redirectPlan||redirectExecute?redirectAllowed:fieldAllowed))
+        if(nativeRead||rollback?!(fieldAllowed||redirectAllowed||(nativeRead&&schemaExecutionRead)):
+          !(schemaPlan||schemaExecute?schemaExecutionWrite:redirectPlan||redirectExecute?redirectAllowed:fieldAllowed))
           return failure('workflow_operation_unavailable','This exact operation is unavailable. Nothing was sent.');
         try{
           const a=parsed.data,path=nativePlan?'/changes/executions':nativeRead?'/changes/executions/'+a.change_set_id:def.path(a);
           const data=nativeRead?await client.get(path):await client.post(path,def.fieldExecution==='execute'
-            ?(redirectExecute?redirectConfirmationBody(a,clientInfo()):confirmationBody(a,clientInfo())):a);
+            ?(schemaExecute?schemaConfirmationBody(a,clientInfo()):redirectExecute?redirectConfirmationBody(a,clientInfo()):confirmationBody(a,clientInfo())):a);
           const id=nativePlan||rollback?null:a.change_set_id,hash=def.fieldExecution==='execute'?a.confirmation.plan_hash:null;
           const policy=data?.record?.envelope?.plan?.policy_version??(data?.record?.history??data?.record?.history_record?.record?.history)?.source_policy;
           const isRedirect=typeof policy==='string'&&policy.startsWith('workflow-redirect-');
           const isSchema=typeof policy==='string'&&policy.startsWith('workflow-schema-');
           const expected=redirectPlan?'workflow-redirect-execution-1':redirectExecute?(a.change_token.startsWith('trxr1.')?'workflow-redirect-rollback-1':'workflow-redirect-execution-1'):
             rollback?'workflow-redirect-rollback-1':null;
-          const valid=isSchema?nativeRead&&schemaExecutionRead&&validSchemaExecutionResponse(data,id,hash)
+          const valid=isSchema?(nativeRead?schemaExecutionRead:schemaExecutionWrite&&(schemaPlan||schemaExecute)&&policy==='workflow-schema-execution-1')
+              &&validSchemaExecutionResponse(data,id,hash)&&(!schemaPlan||matchesSchemaExecutionRequest(data,a))
+              &&(!schemaExecute||(data.record.approval_recorded===true&&data.record.envelope.change_token===a.change_token
+                &&JSON.stringify(data.record.envelope.plan.required_acknowledgements)===JSON.stringify(a.confirmation.acknowledgements)))
             :isRedirect?redirectAllowed&&(nativeRead||rollback||redirectPlan||redirectExecute)&&validRedirectExecutionResponse(data,id,hash,expected)
-            :fieldAllowed&&!redirectPlan&&!redirectExecute&&validExecutionResponse(data,id,hash);
+            :fieldAllowed&&!redirectPlan&&!redirectExecute&&!schemaPlan&&!schemaExecute&&validExecutionResponse(data,id,hash);
           if(!valid)
             return failure('field_execution_incompatible_response','Result could not be verified. Reconcile this set with get_changes(kind=execution); do not repeat writes automatically.');
           return result(data);

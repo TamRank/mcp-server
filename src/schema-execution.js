@@ -1,8 +1,27 @@
 /** Read-only semantic schema records. Raw native envelopes are never tool output. */
-import {validExecutionResponse,fieldOperations} from './field-execution.js';
-import {redirectOperations} from './redirect-execution.js';
+import {z} from 'zod';
+import {validExecutionResponse,fieldOperations,executionSchema} from './field-execution.js';
+import {redirectOperations,capability,redirectConfirmationBody,mixedExecutionSchema} from './redirect-execution.js';
 export const schemaExecutionPolicies=['workflow-schema-execution-1','workflow-schema-rollback-1'];
 export const schemaOperations=['schema.select','schema.detect','schema_settings.update'];
+export const schemaForwardToken=v=>typeof v==='string'&&v.startsWith('trse1.');
+export const schemaForwardExecutionSchema={...executionSchema,change_token:z.string().regex(/^trse1\.[a-f0-9]{64}$/),
+  confirmation:executionSchema.confirmation.extend({acknowledgements:z.array(z.enum(['redirect_deletion','replace_manual_schema','site_wide_identity'])).max(3)
+    .refine(v=>new Set(v).size===v.length)})};
+export const schemaMixedExecutionSchema={...mixedExecutionSchema,change_token:z.string().regex(/^(?:trce1|trcr1|trcx1|trxr1|trfr1|trrr1|trse1)\.[a-f0-9]{64}$/),
+  confirmation:executionSchema.confirmation.extend({acknowledgements:z.array(z.string()).max(3).optional()})};
+export const schemaConfirmationBody=redirectConfirmationBody;
+export function isSchemaExecutionPlan(input,support){
+  return capability(support,'available')&&support.record_contract==='schema_execution_view_v1'&&support.private_proofs_omitted===true
+    &&Array.isArray(input.items)&&input.items.some(i=>schemaOperations.includes(i.operation))
+    &&input.items.every(i=>[...schemaOperations,...fieldOperations,...redirectOperations].includes(i.operation)&&support.operations?.includes(i.operation));
+}
+const stable=v=>JSON.stringify(v,(_,x)=>object(x)?Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b))):x);
+export function matchesSchemaExecutionRequest(data,input){
+  const p=data?.record?.envelope?.plan;
+  return p?.kind==='forward'&&stable(p.origin)===stable(input.origin)&&p.client_request_id===input.client_request_id
+    &&Array.isArray(p.items)&&p.items.length===input.items.length&&p.items.every((i,n)=>stable({operation:i.operation,target:i.target,fields:i.fields})===stable(input.items[n]));
+}
 const object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
 const keys=(v,allowed,required=[])=>object(v)&&Object.keys(v).every(k=>allowed.includes(k))&&required.every(k=>Object.hasOwn(v,k));
 const uuid=v=>typeof v==='string'&&/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(v);
