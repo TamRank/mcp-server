@@ -3,15 +3,19 @@ import assert from 'node:assert/strict';
 import {existsSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {createInterface} from 'node:readline';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {validSchemaRecoveryProposal,validSchemaRecoveryResult} from '../src/schema-recovery.js';
-let raw='';for await(const chunk of process.stdin)raw+=chunk;
-const f=JSON.parse(raw),root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const input=createInterface({input:process.stdin,crlfDelay:Infinity})[Symbol.asyncIterator]();
+const first=await input.next();assert.ok(!first.done&&first.value.length<16384,'Bounded owned fixture input');
+const f=JSON.parse(first.value),root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 assert.match(f.root||'',/^\/private\/tmp\/tr-maint-wp-[A-Za-z0-9]{6}$/);assert.ok(existsSync(f.root+'/owned-fixture'));
 assert.match(f.site_url||'',/^https:\/\/schema-source\.example\.org:\d{4,5}(?:\/client-two)?$/);
 assert.ok(f.token?.startsWith('tamrank_pat_')&&['core','specialist'].includes(f.profile)&&['pretty','query'].includes(f.style));
 assert.equal(typeof f.busy,'boolean');
+const authorityErrors={token:'agent_token_revoked',scope:'agent_scope_insufficient',membership:'workflow_operator_unavailable',entitlement:'pro_required'};
+assert.ok(f.authority_fault===undefined||(!f.busy&&Object.hasOwn(authorityErrors,f.authority_fault)));
 let checks=0;const check=(v,label)=>{checks++;assert.ok(v,label);},equal=(a,b,label)=>{checks++;assert.deepEqual(a,b,label);};
 const client=new Client({name:'Owned schema recovery client',version:'1'});
 const transport=new StdioClientTransport({command:process.execPath,args:['--import',path.join(root,'test/owned-schema-dns.mjs'),path.join(root,'index-workflow.js')],
@@ -36,8 +40,20 @@ try{
   check((await call('execute_change_set',{...args,confirmation:{...args.confirmation,confirmed:false}})).isError,'New explicit consent required');
   const stale=structuredClone(args);stale.recovery_plan.expected_state_hash='0'.repeat(64);
   check((await call('execute_change_set',stale)).isError,'Native signed journal binding cannot be forged');
+  if(f.authority_fault){
+    // Keep this already-authorized client/transport alive. The parent changes
+    // real owned SQL authority only after our valid proposal has been received.
+    process.stdout.write('OWNED_SCHEMA_RECOVERY_PREVIEW\n');
+    const resume=await input.next();equal(resume.value,'continue','Parent applied the native authority change');
+  }
   const response=await call('execute_change_set',args);
-  if(f.busy){
+  if(f.authority_fault){
+    check(response.isError,'A previously valid proposal cannot survive revoked authority');
+    const error=JSON.parse(response.content[0].text);
+    equal(error.code,authorityErrors[f.authority_fault],'Actual request rejects the specific changed authority');
+    check(!JSON.stringify(response).includes(f.token)&&!error.record&&!error.recovery_proposal,'Refusal contains no token or private journal');
+    process.stdout.write(JSON.stringify({ok:true,checks,refused:f.authority_fault}));
+  }else if(f.busy){
     check(response.isError&&JSON.parse(response.content[0].text).code==='change_execution_busy','Active actual worker retains mutex');
     equal(decode(await call('get_changes',{kind:'execution',change_set_id:f.id}),'Busy journal').record,before,'Busy recovery changes no approval or execution');
     process.stdout.write(JSON.stringify({ok:true,checks,busy:true}));
