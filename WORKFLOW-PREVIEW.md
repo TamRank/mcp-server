@@ -70,6 +70,19 @@ operation orders: 1,194 checks pass per PHP 8.2/8.5 over single-site/multisite.
 Other mixed/native, privacy, hosting and full Phase 4 acceptance remain open.
 No customer capability has been activated.
 
+The native `--schema-recovery-authority-mcp` matrix now keeps the same MCP
+session open after a valid recovery preview while the parent changes the exact
+owned replacement token, management scope, local admin membership or stored
+PRO entitlement. All four faults refuse execution before changing the journal,
+original approval/reservation, audits or website values. Exact fixture rights
+are restored and a newly approved recovery succeeds. Both forward/inverse
+interruption cases pass over single-site/two-client multisite on PHP 8.2/8.5:
+1,236 native checks per version, including shared setup. Core/pretty and
+specialist/query are exercised, not every Cartesian combination. The full
+workflow regression suite also passes. This does not close later transactional
+authority changes, unreadable history, privacy, hosting or installed-package
+acceptance; no product writer or permission gate was relaxed.
+
 The extracted archive also passes clean-cache installation with the repository
 lock, installed 12/20/42 profiles and both REST forms. The package test explicitly
 checks schema contract files and keeps website/scan writers unavailable; it is
