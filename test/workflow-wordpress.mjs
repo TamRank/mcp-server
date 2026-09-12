@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { ownedInstalledRuntime } from './owned-installed-entry.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url));
+const runtime=ownedInstalledRuntime(root);
 let input=''; for await(const chunk of process.stdin) input+=chunk;
 const config=JSON.parse(input);
 assert.match(config.site_url,/^http:\/\/127\.0\.0\.1:[0-9]+$/);
@@ -11,7 +14,7 @@ const clients=[];
 async function connect(profile='core',token=config.token,preview='1',style='pretty') {
   const client=new Client({name:'tamrank-disposable-workflow-test',version:'1.0.0'});
   clients.push(client);
-  await client.connect(new StdioClientTransport({command:process.execPath,args:[root+'index-workflow.js'],cwd:root,
+  await client.connect(new StdioClientTransport({command:process.execPath,args:[join(runtime,'index-workflow.js')],cwd:runtime,
     env:{PATH:process.env.PATH,TAMRANK_PAT:token,TAMRANK_SITE_URL:config.site_url,TAMRANK_WORKFLOW_PREVIEW:preview,
       TAMRANK_TOOL_PROFILE:profile,TAMRANK_REST_STYLE:style},stderr:'pipe'}));
   return client;

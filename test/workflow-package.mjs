@@ -17,8 +17,10 @@ const npm=resolve(dirname(process.execPath),'../lib/node_modules/npm/bin/npm-cli
 const pkg=JSON.parse(await readFile(join(root,'package.json'),'utf8'));
 const online=process.argv.includes('--allow-network');
 const nativeFields=process.argv.includes('--native-fields');
+const nativeReads=process.argv.includes('--native-reads');
 const nativeRedirects=process.argv.includes('--native-redirects'),nativeSchema=process.argv.includes('--native-schema');
 const nativeCases=[
+  ...(nativeReads?[['stored-reads','full stored-read native WordPress/PAT/MCP matrix']]:[]),
   ...(nativeFields?[['field-execution-tls','native field execution MCP/WordPress TLS/lost-response checks']]:[]),
   ...(nativeRedirects?[
     ['redirect-execution-mcp','native redirect/mixed MCP/WordPress TLS, rollback and worker-recovery checks'],
@@ -30,7 +32,7 @@ const nativeCases=[
     ['schema-recovery-mixed-mcp','native schema worker interruption and fresh journal recovery over MCP/TLS'],
     ['schema-recovery-authority-mcp','native schema recovery checks with token/scope/membership/entitlement changed after preview on the same MCP session']]:[])
 ];
-assert.ok(process.argv.slice(2).every(arg=>['--allow-network','--native-fields','--native-redirects','--native-schema'].includes(arg)),'Unknown installation-test argument');
+assert.ok(process.argv.slice(2).every(arg=>['--allow-network','--native-reads','--native-fields','--native-redirects','--native-schema'].includes(arg)),'Unknown installation-test argument');
 let nativePro;
 if(nativeCases.length){
   for(const key of ['TAMRANK_MAINT_PRO','TAMRANK_MAINT_CORE','TAMRANK_MAINT_FREE','TAMRANK_SCAN_TEST_SOCKET'])assert.ok(process.env[key],`Explicit owned native setting required: ${key}`);
@@ -151,12 +153,15 @@ try {
     assert.throws(()=>ownedInstalledRuntime(root,''),'Empty package override cannot fall back to source');
     assert.throws(()=>ownedInstalledRuntime(root,root),'Checkout cannot masquerade as installed package');
     for(const [mode,expected] of nativeCases){
-      console.log('RUN INSTALLED: '+mode+' → extracted entry → verified TLS → owned WordPress.');
-      const nativeRun=run(process.execPath,[join(nativePro,'docs/mcp-phase4c-change-store-wordpress.mjs'),'--'+mode],
+      const reads=mode==='stored-reads';
+      console.log('RUN INSTALLED: '+mode+' → extracted entry → '+(reads?'owned HTTP':'verified TLS')+' → owned WordPress.');
+      const nativeArgs=reads?[join(nativePro,'docs/mcp-phase4e-read-wordpress.mjs')]:[join(nativePro,'docs/mcp-phase4c-change-store-wordpress.mjs'),'--'+mode];
+      const nativeRun=run(process.execPath,nativeArgs,
         {cwd:nativePro,env:{...process.env,TAMRANK_MAINT_MCP:root,TAMRANK_TEST_PACKED_ROOT:installed},timeout:1800000,maxBuffer:2097152});
       nativeRun.child.stdout.pipe(process.stdout,{end:false});
       const native=await nativeRun;
-      assert.ok(native.stdout.split('\n').some(line=>/^PASS: \d+ /.test(line)&&line.includes(expected)&&line.endsWith('owned databases removed.')),
+      assert.ok(reads?native.stdout.includes('PASS: '+expected+'; owned database removed.'):
+        native.stdout.split('\n').some(line=>/^PASS: \d+ /.test(line)&&line.includes(expected)&&line.endsWith('owned databases removed.')),
         'Full native matrix must complete with owned cleanup: '+mode);
       console.log('PASS INSTALLED: '+mode+'; extracted entry and separately installed dependencies; no checkout-runtime fallback.');
     }
