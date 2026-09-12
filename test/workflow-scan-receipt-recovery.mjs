@@ -107,6 +107,16 @@ await test('Internal recovery bridge: explicit exact review, no private leakage 
       }
       review=fresh();
     });
+    await t.test('Native PageSpeed fractional timestamps preserve exact bytes and reject invalid dates',async()=>{
+      for(const time of ['2026-09-12T12:34:56Z','2026-09-12T12:34:56.123Z','2026-09-12T12:34:56.123456789Z',
+        '2026-02-31T12:34:56.123Z','2026-09-12T25:34:56.123Z','2026-09-12T12:34:56.1234567890Z','2026-09-12T12:34:56+00:00']){
+        review=fresh();review.received_outcome.result.provenance={provider:'google_pagespeed_insights',request_hash:'a'.repeat(64),fetch_time:time,lighthouse_version:'13.0.0'};
+        if(time.startsWith('2026-09-12T12:34:56')&&time.endsWith('Z')&&!time.includes('7890')){
+          const r=await driver.review(ctx);assert.equal(r.review.received_outcome.result.provenance.fetch_time,time);
+        }else await assert.rejects(driver.review(ctx),{code:'scan_receipt_review_invalid'});
+      }
+      review=fresh();
+    });
     await t.test('Lost/failed review transport never submits settlement or invents a receipt',async()=>{
       const valid=await input();
       for(const factory of [()=>new Response('{bad',{status:500}),()=>new Response('',{status:302}),()=>{throw Error(packet+' '+pat);},

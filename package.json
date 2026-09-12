@@ -25,7 +25,7 @@
     "test:surface": "node test/surface.mjs",
     "test:workflow": "node test/workflow-surface.mjs && node test/workflow-field-proposals.mjs && node test/workflow-field-execution.mjs && node test/workflow-field-recovery.mjs && node test/workflow-redirect-execution.mjs && node test/workflow-schema-preview.mjs && node test/workflow-schema-proposals.mjs && node test/workflow-schema-execution-read.mjs && node test/workflow-schema-execution.mjs && node test/workflow-schema-rollback.mjs && node test/workflow-schema-recovery.mjs --bridge && node test/workflow-schema-token-transport.mjs && node test/workflow-catalog.mjs",
     "test:workflow-package": "node test/workflow-package.mjs",
-    "test:workflow-scans": "node test/workflow-pagespeed-scans.mjs && node test/workflow-source-scans.mjs",
+    "test:workflow-scans": "node test/workflow-pagespeed-scans.mjs && node test/workflow-source-scans.mjs && node --test test/workflow-scan-receipt-recovery.mjs",
     "test:integration": "node test/phase0-integration.mjs",
     "test:all": "npm test && npm run test:integration",
     "scan": "gitleaks detect --config .gitleaks.toml --no-banner --redact",

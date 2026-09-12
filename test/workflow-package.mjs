@@ -19,9 +19,11 @@ const online=process.argv.includes('--allow-network');
 const nativeFields=process.argv.includes('--native-fields');
 const nativeReads=process.argv.includes('--native-reads');
 const nativeScans=process.argv.includes('--native-scans');
+const nativeScanReceipts=process.argv.includes('--native-scan-receipts');
 const nativeRedirects=process.argv.includes('--native-redirects'),nativeSchema=process.argv.includes('--native-schema');
 const nativeCases=[
   ...(nativeScans?[['pagespeed-scans','native PageSpeed MCP checks']]:[]),
+  ...(nativeScanReceipts?[['pagespeed-receipts','native retained-result MCP checks']]:[]),
   ...(nativeReads?[['stored-reads','full stored-read native WordPress/PAT/MCP matrix']]:[]),
   ...(nativeFields?[['field-execution-tls','native field execution MCP/WordPress TLS/lost-response checks']]:[]),
   ...(nativeRedirects?[
@@ -34,7 +36,7 @@ const nativeCases=[
     ['schema-recovery-mixed-mcp','native schema worker interruption and fresh journal recovery over MCP/TLS'],
     ['schema-recovery-authority-mcp','native schema recovery checks with token/scope/membership/entitlement changed after preview on the same MCP session']]:[])
 ];
-assert.ok(process.argv.slice(2).every(arg=>['--allow-network','--native-reads','--native-scans','--native-fields','--native-redirects','--native-schema'].includes(arg)),'Unknown installation-test argument');
+assert.ok(process.argv.slice(2).every(arg=>['--allow-network','--native-reads','--native-scans','--native-scan-receipts','--native-fields','--native-redirects','--native-schema'].includes(arg)),'Unknown installation-test argument');
 let nativePro;
 if(nativeCases.length){
   for(const key of ['TAMRANK_MAINT_PRO','TAMRANK_MAINT_CORE','TAMRANK_MAINT_FREE','TAMRANK_SCAN_TEST_SOCKET'])assert.ok(process.env[key],`Explicit owned native setting required: ${key}`);
@@ -98,7 +100,7 @@ try {
     const route=url.searchParams.get('rest_route') || url.pathname.replace('/wp-json','');
     assert.ok(['/tamrank/v2/capabilities','/tamrank/v2/site/context','/tamrank/v2/site/diagnostics','/tamrank/v2/scans/status','/tamrank/v2/scans/preview',
       '/tamrank/v2/scans/proposals','/tamrank/v2/scans/proposals/'+proposalId,'/tamrank/v2/scans/maintenance/capabilities','/tamrank/v2/scans/sources/capabilities',
-      '/tamrank/v2/scans/executions/capabilities','/tamrank/v2/changes/proposals','/tamrank/v2/changes/'+proposalId].includes(route),'No legacy REST fallback');
+      '/tamrank/v2/scans/executions/capabilities','/tamrank/v2/scans/recovery/capabilities','/tamrank/v2/changes/proposals','/tamrank/v2/changes/'+proposalId].includes(route),'No legacy REST fallback');
     if(route==='/tamrank/v2/changes/proposals'){
       assert.equal(req.method,'POST');let body='';for await(const chunk of req)body+=chunk;assert.deepEqual(JSON.parse(body),fieldRequest);
     }else if(route==='/tamrank/v2/scans/proposals') {
@@ -155,9 +157,9 @@ try {
     assert.throws(()=>ownedInstalledRuntime(root,''),'Empty package override cannot fall back to source');
     assert.throws(()=>ownedInstalledRuntime(root,root),'Checkout cannot masquerade as installed package');
     for(const [mode,expected] of nativeCases){
-      const reads=mode==='stored-reads',scans=mode==='pagespeed-scans';
+      const reads=mode==='stored-reads',scans=mode==='pagespeed-scans'||mode==='pagespeed-receipts';
       console.log('RUN INSTALLED: '+mode+' → extracted entry → '+(reads||scans?'owned HTTP':'verified TLS')+' → owned WordPress.');
-      const nativeArgs=scans?[join(root,'test/workflow-pagespeed-native.mjs')]:reads?[join(nativePro,'docs/mcp-phase4e-read-wordpress.mjs')]:[join(nativePro,'docs/mcp-phase4c-change-store-wordpress.mjs'),'--'+mode];
+      const nativeArgs=scans?[join(root,'test/workflow-pagespeed-native.mjs'),...(mode==='pagespeed-receipts'?['--result-journal']:[])]:reads?[join(nativePro,'docs/mcp-phase4e-read-wordpress.mjs')]:[join(nativePro,'docs/mcp-phase4c-change-store-wordpress.mjs'),'--'+mode];
       const nativeRun=run(process.execPath,nativeArgs,
         {cwd:nativePro,env:{...process.env,TAMRANK_MAINT_MCP:root,TAMRANK_TEST_PACKED_ROOT:installed},timeout:1800000,maxBuffer:2097152});
       nativeRun.child.stdout.pipe(process.stdout,{end:false});
