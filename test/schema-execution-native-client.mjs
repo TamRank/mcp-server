@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {existsSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {ownedInstalledRuntime} from './owned-installed-entry.mjs';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {validSchemaExecutionResponse,matchesSchemaExecutionRequest,isSchemaExecutionPlan} from '../src/schema-execution.js';
@@ -10,14 +11,15 @@ import {validSchemaRollbackPreview,matchesSchemaRollbackRequest} from '../src/sc
 import {verifySchemaAuthority} from './schema-execution-native-authority.mjs';
 let raw='';for await(const chunk of process.stdin)raw+=chunk;
 const f=JSON.parse(raw),root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const runtime=ownedInstalledRuntime(root);
 assert.match(f.root||'',/^\/private\/tmp\/tr-maint-wp-[A-Za-z0-9]{6}$/);assert.ok(existsSync(f.root+'/owned-fixture'));
 assert.match(f.site_url||'',/^https:\/\/schema-source\.example\.org:[0-9]{4,5}(?:\/client-two)?$/);
 for(const t of [f.token,f.other,f.reader])assert.ok(t?.startsWith('tamrank_pat_'));
 assert.ok(['core','specialist'].includes(f.profile)&&['pretty','query'].includes(f.style)&&['plan','execute','rollback_preview','rollback_plan'].includes(f.mode));
 let checks=0;const check=(v,label)=>{checks++;assert.ok(v,label);};
 const client=new Client({name:'Owned schema workflow client',version:'1'});
-const transport=new StdioClientTransport({command:process.execPath,args:['--import',path.join(root,'test/owned-schema-dns.mjs'),path.join(root,'index-workflow.js')],
-  cwd:root,stderr:'pipe',env:{PATH:process.env.PATH,NODE_EXTRA_CA_CERTS:f.root+'/ca.pem',TAMRANK_SCHEMA_FIXTURE_ROOT:f.root,
+const transport=new StdioClientTransport({command:process.execPath,args:['--import',path.join(root,'test/owned-schema-dns.mjs'),path.join(runtime,'index-workflow.js')],
+  cwd:runtime,stderr:'pipe',env:{PATH:process.env.PATH,NODE_EXTRA_CA_CERTS:f.root+'/ca.pem',TAMRANK_SCHEMA_FIXTURE_ROOT:f.root,
     TAMRANK_PAT:f.token,TAMRANK_SITE_URL:f.site_url,TAMRANK_TOOL_PROFILE:f.profile,TAMRANK_REST_STYLE:f.style,TAMRANK_WORKFLOW_PREVIEW:'1'}});
 const call=(name,args)=>client.callTool({name,arguments:args});
 const decode=(r,label)=>{check(!r.isError,label+': '+(r.isError?r.content[0]?.text:''));return JSON.parse(r.content[0].text);};

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {existsSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {ownedInstalledRuntime} from './owned-installed-entry.mjs';
 import {createInterface} from 'node:readline';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -10,6 +11,7 @@ import {validSchemaRecoveryProposal,validSchemaRecoveryResult} from '../src/sche
 const input=createInterface({input:process.stdin,crlfDelay:Infinity})[Symbol.asyncIterator]();
 const first=await input.next();assert.ok(!first.done&&first.value.length<16384,'Bounded owned fixture input');
 const f=JSON.parse(first.value),root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const runtime=ownedInstalledRuntime(root);
 assert.match(f.root||'',/^\/private\/tmp\/tr-maint-wp-[A-Za-z0-9]{6}$/);assert.ok(existsSync(f.root+'/owned-fixture'));
 assert.match(f.site_url||'',/^https:\/\/schema-source\.example\.org:\d{4,5}(?:\/client-two)?$/);
 assert.ok(f.token?.startsWith('tamrank_pat_')&&['core','specialist'].includes(f.profile)&&['pretty','query'].includes(f.style));
@@ -18,8 +20,8 @@ const authorityErrors={token:'agent_token_revoked',scope:'agent_scope_insufficie
 assert.ok(f.authority_fault===undefined||(!f.busy&&Object.hasOwn(authorityErrors,f.authority_fault)));
 let checks=0;const check=(v,label)=>{checks++;assert.ok(v,label);},equal=(a,b,label)=>{checks++;assert.deepEqual(a,b,label);};
 const client=new Client({name:'Owned schema recovery client',version:'1'});
-const transport=new StdioClientTransport({command:process.execPath,args:['--import',path.join(root,'test/owned-schema-dns.mjs'),path.join(root,'index-workflow.js')],
-  cwd:root,stderr:'pipe',env:{PATH:process.env.PATH,NODE_EXTRA_CA_CERTS:f.root+'/ca.pem',TAMRANK_SCHEMA_FIXTURE_ROOT:f.root,
+const transport=new StdioClientTransport({command:process.execPath,args:['--import',path.join(root,'test/owned-schema-dns.mjs'),path.join(runtime,'index-workflow.js')],
+  cwd:runtime,stderr:'pipe',env:{PATH:process.env.PATH,NODE_EXTRA_CA_CERTS:f.root+'/ca.pem',TAMRANK_SCHEMA_FIXTURE_ROOT:f.root,
     TAMRANK_PAT:f.token,TAMRANK_SITE_URL:f.site_url,TAMRANK_TOOL_PROFILE:f.profile,TAMRANK_REST_STYLE:f.style,TAMRANK_WORKFLOW_PREVIEW:'1'}});
 const call=(name,args)=>client.callTool({name,arguments:args});
 const decode=(r,label)=>{check(!r.isError,label+': '+(r.isError?JSON.parse(r.content[0].text).code:''));return JSON.parse(r.content[0].text);};

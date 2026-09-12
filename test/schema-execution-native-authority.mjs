@@ -2,14 +2,16 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {ownedInstalledRuntime} from './owned-installed-entry.mjs';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 export async function verifySchemaAuthority(f,original,check){
   const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'),id=original.record.envelope.plan.change_set_id;
+  const runtime=ownedInstalledRuntime(root);
   for(const [actor,token] of [['reader',f.reader],['other',f.other]]){
     const client=new Client({name:'Owned schema authority client',version:'1'});
-    const transport=new StdioClientTransport({command:process.execPath,args:['--import',path.join(root,'test/owned-schema-dns.mjs'),path.join(root,'index-workflow.js')],
-      cwd:root,stderr:'pipe',env:{PATH:process.env.PATH,NODE_EXTRA_CA_CERTS:f.root+'/ca.pem',TAMRANK_SCHEMA_FIXTURE_ROOT:f.root,
+    const transport=new StdioClientTransport({command:process.execPath,args:['--import',path.join(root,'test/owned-schema-dns.mjs'),path.join(runtime,'index-workflow.js')],
+      cwd:runtime,stderr:'pipe',env:{PATH:process.env.PATH,NODE_EXTRA_CA_CERTS:f.root+'/ca.pem',TAMRANK_SCHEMA_FIXTURE_ROOT:f.root,
         TAMRANK_PAT:token,TAMRANK_SITE_URL:f.site_url,TAMRANK_TOOL_PROFILE:f.profile,TAMRANK_REST_STYLE:f.style,TAMRANK_WORKFLOW_PREVIEW:'1'}});
     try{
       await client.connect(transport);
