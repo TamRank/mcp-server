@@ -67,7 +67,7 @@ export class WorkflowClient {
     // escaping. Exact private-draft/native-preview routes get a 1-MiB wire cap.
     // Ordinary analytics/scan responses retain their existing 512-KiB limit.
     const fieldDraft=(method==='POST'&&['/changes/proposals','/schema/preview'].includes(path))||(method==='GET'&&/^\/changes\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(path));
-    const fieldExecution=(method==='POST'&&/^\/changes\/executions(?:\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}\/(?:execute|rollback-proposals|recovery-proposals|recover))?$/.test(path))
+    const fieldExecution=(method==='POST'&&/^\/changes\/executions(?:\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}\/(?:execute|rollback-preview|rollback-proposals|recovery-proposals|recover))?$/.test(path))
       ||(method==='GET'&&/^\/changes\/executions\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(path));
     const responseLimit=fieldDraft||fieldExecution?1048576:524288;
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);

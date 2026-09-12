@@ -5,10 +5,12 @@ import {redirectOperations,capability,redirectConfirmationBody,mixedExecutionSch
 export const schemaExecutionPolicies=['workflow-schema-execution-1','workflow-schema-rollback-1'];
 export const schemaOperations=['schema.select','schema.detect','schema_settings.update'];
 export const schemaForwardToken=v=>typeof v==='string'&&v.startsWith('trse1.');
+export const schemaInverseToken=v=>typeof v==='string'&&v.startsWith('trsr1.');
 export const schemaForwardExecutionSchema={...executionSchema,change_token:z.string().regex(/^trse1\.[a-f0-9]{64}$/),
   confirmation:executionSchema.confirmation.extend({acknowledgements:z.array(z.enum(['redirect_deletion','replace_manual_schema','site_wide_identity'])).max(3)
     .refine(v=>new Set(v).size===v.length)})};
-export const schemaMixedExecutionSchema={...mixedExecutionSchema,change_token:z.string().regex(/^(?:trce1|trcr1|trcx1|trxr1|trfr1|trrr1|trse1)\.[a-f0-9]{64}$/),
+export const schemaInverseExecutionSchema={...schemaForwardExecutionSchema,change_token:z.string().regex(/^trsr1\.[a-f0-9]{64}$/)};
+export const schemaMixedExecutionSchema={...mixedExecutionSchema,change_token:z.string().regex(/^(?:trce1|trcr1|trcx1|trxr1|trfr1|trrr1|trse1|trsr1)\.[a-f0-9]{64}$/),
   confirmation:executionSchema.confirmation.extend({acknowledgements:z.array(z.string()).max(3).optional()})};
 export const schemaConfirmationBody=redirectConfirmationBody;
 export function isSchemaExecutionPlan(input,support){
@@ -51,7 +53,7 @@ export function validSchemaExecutionResponse(data,id=null,planHash=null){
     ||r.projection.contract!=='schema_execution_view_v1'||r.projection.private_proofs_omitted!==true||r.projection.plan_hash_scope!=='complete_stored_plan'
     ||!keys(r.envelope,['plan','plan_hash','change_token'])||r.plan_persisted!==true||typeof r.approval_recorded!=='boolean'
     ||!keys(p,['contract_version','change_set_id','kind','revision','client_request_id','risk','warning_codes','required_scopes',
-      'policy_version','created_at','expires_at','result_semantics','frontend_verification','execution_available','required_acknowledgements','binding','origin','reverses','items'],
+      'policy_version','created_at','expires_at','result_semantics','frontend_verification','execution_available','required_acknowledgements','binding','origin','reverses','items','comparison_revision'],
       ['contract_version','change_set_id','kind','revision','client_request_id','risk','warning_codes','required_scopes','policy_version',
         'created_at','expires_at','result_semantics','frontend_verification','execution_available','required_acknowledgements','binding','items'])
     ||p.contract_version!==2||p.kind!==(inverse?'rollback':'forward')||p.revision!==1||p.execution_available!==true
@@ -67,6 +69,7 @@ export function validSchemaExecutionResponse(data,id=null,planHash=null){
     ||typeof p.binding.site_origin!=='string')return false;
   if(inverse?!keys(p.reverses,['change_set_id','plan_hash','execution_id','action_id'])||p.origin!==undefined
     :!keys(p.origin,['kind','reference','summary','action_id','revision','snapshot_hash'])||p.reverses!==undefined)return false;
+  if(p.comparison_revision!==undefined&&(!inverse||!hash(p.comparison_revision)))return false;
   const seen=new Set();
   for(let n=0;n<p.items.length;n++){
     const i=p.items[n],state=r.item_results[n];
