@@ -24,11 +24,33 @@ and newly approved rollback are checked against native rows. Real request limits
 are retained. Both runs remove their own databases/package/cache and the full
 workflow regression suite passes.
 
-This is the installed **field** workflow only: installed redirect/schema/recovery
-and scan/target flows, other platforms, unconstrained dependency resolution,
+The separate stored-read acceptance below now covers installed full target reads.
+Installed redirect/schema/recovery and scan-dispatch flows, other platforms, unconstrained dependency resolution,
 privacy, hosting, upgrades, onboarding and release activation remain open.
 Full evidence: `samkl8/tamrank-pro`, `feat/mcp-workflows`,
 `docs/mcp-phase4e-installed-workflow.md`.
+
+## Installed stored-read acceptance
+
+Use `test/workflow-package.mjs --allow-network --native-reads` with the same
+explicit owned test settings above. The actual extracted development entry,
+separate locked dependency install and new WordPress database pass on PHP 8.2
+and 8.5: 1,224 native WordPress/PAT checks per run plus real MCP assertions.
+This single-site matrix uses loopback HTTP; it is not a TLS or multisite claim.
+
+All 205 task targets are returned through canonical and temporary legacy reads,
+with identical results and no four-item truncation. Search, GSC/keyword periods,
+redirects, images, diagnostics and topical advice retain full pagination. Both
+REST forms, 12/20/42 profiles, invalid cursors, hidden pages and current PAT/PRO
+checks are covered. Full-request snapshots remain unchanged except ordinary
+PAT-use/read quotas. Scan previews expose 25 exact selected targets without
+dispatch, background jobs or new approval. Missing evidence is not made up.
+
+PRO `docs/mcp-phase4e-read-wordpress.mjs` creates the owned fixture with root/DB/
+socket/bootstrap checks; no old fixed clone or customer configuration is loaded.
+The package and native fixtures clean up on completion, and the full MCP
+workflow regression suite passes. Normal entry activation, scan dispatch,
+multisite reads and the remaining privacy/hosting/release gates stay open.
 
 ## Current schema rollback development
 
