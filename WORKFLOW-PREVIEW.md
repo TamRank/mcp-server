@@ -1276,6 +1276,19 @@ The extracted entry uses separate installed dependencies; no checkout fallback,
 normal-entry switch or customer activation. Details, assertions and remaining
 limits are in PRO `docs/mcp-phase4e-installed-workflow.md` on `feat/mcp-workflows`.
 
+For read acceptance after replacing the actual shipped beta, use
+`node test/workflow-package.mjs --allow-network --native-beta-reads` with those
+same native settings and `TAMRANK_TEST_BETA_ZIP`. On 13 September, PHP 8.2/8.5
+each passed 4,262 checks across both FREE/PRO update orders, single-site and two
+existing network clients. This preserves original beta records and adds 205
+fictional pages: complete page/work-queue targets, 200 supported signal members,
+metadata, keyword pagination, stored comparison/PageSpeed evidence and legacy
+aliases are read over verified TLS. The original beta reader keeps its scopes;
+revoked/expired beta tokens remain rejected. Snapshots and a strict SQL guard
+allow only ordinary token-use/read-rate bookkeeping, not product writes.
+Other read sections, task writes and redirect/schema/PageSpeed execution after
+that exact upgrade remain separate; see PRO's installed-workflow document.
+
 For the older focused source fixtures, use PRO repository `samkl8/tamrank-pro`, branch
 `feat/mcp-workflows`, `docs/mcp-phase4b-request-wp-harness.php`. Set
 `TAMRANK_WORK_READ_CLONE` to the prepared disposable WordPress clone's wp-load.php
