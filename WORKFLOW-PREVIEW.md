@@ -1289,6 +1289,21 @@ allow only ordinary token-use/read-rate bookkeeping, not product writes.
 Other read sections, task writes and redirect/schema/PageSpeed execution after
 that exact upgrade remain separate; see PRO's installed-workflow document.
 
+For redirects after the shipped beta upgrade, use
+`node test/workflow-package.mjs --allow-network --native-beta-redirects` with the
+same explicit native settings and beta ZIP. On 13 September, PHP 8.2/8.5 each
+passed 3,380 checks: both FREE/PRO update orders, single-site/two existing network
+clients, core/specialist profiles and both REST forms. This exercises real
+redirect create/update/delete, mixed metadata sets, separately approved rollback,
+lost committed responses and worker termination before/after COMMIT. New
+chat-approved recovery stops pending work; an original revoked PAT cannot resume
+it. Old beta settings, token scopes, audit history and an unselected redirect
+remain intact. Out-of-subsite routing stays refused and native request limits
+remain active. The entry/dependencies come from the extracted package, not the
+checkout. Other post-beta redirect combinations, schema/PageSpeed, privacy,
+hosting and normal activation remain separate acceptance gates; see PRO's
+`docs/mcp-phase4e-installed-workflow.md`.
+
 For the older focused source fixtures, use PRO repository `samkl8/tamrank-pro`, branch
 `feat/mcp-workflows`, `docs/mcp-phase4b-request-wp-harness.php`. Set
 `TAMRANK_WORK_READ_CLONE` to the prepared disposable WordPress clone's wp-load.php
