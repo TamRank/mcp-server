@@ -1316,6 +1316,19 @@ provider responses; this does not prove live Google, a host timer, diagnostic
 cache publication or complete privacy. See PRO's
 `docs/mcp-phase4e-installed-workflow.md` for exact scope and remaining gates.
 
+For schema after the shipped beta upgrade, use
+`node test/workflow-package.mjs --allow-network --native-beta-schema` with the
+same explicit native settings and beta ZIP. On 13 September, PHP 8.2/8.5 each
+passed 7,512 checks: both FREE/PRO replacement orders, single-site/two network
+clients, core/specialist and both REST forms. All three schema operations use
+actual approved source acquisition, passive comparison, exact plan approval,
+execution and separately approved fresh-source rollback. Independent native
+frontend requests match the proposed and restored graphs. Original beta data,
+authority and historical audits remain intact. Native rate limits are honored;
+only confirmed pre-execution refusals wait and retry. This covers the owned
+synthetic theme, not every frontend/filter, batch, recovery or hosting variant.
+See PRO's `docs/mcp-phase4e-installed-workflow.md` for exact scope.
+
 For the older focused source fixtures, use PRO repository `samkl8/tamrank-pro`, branch
 `feat/mcp-workflows`, `docs/mcp-phase4b-request-wp-harness.php`. Set
 `TAMRANK_WORK_READ_CLONE` to the prepared disposable WordPress clone's wp-load.php
