@@ -17,11 +17,13 @@ const npm=resolve(dirname(process.execPath),'../lib/node_modules/npm/bin/npm-cli
 const pkg=JSON.parse(await readFile(join(root,'package.json'),'utf8'));
 const online=process.argv.includes('--allow-network');
 const nativeFields=process.argv.includes('--native-fields');
+const nativeBetaUpgrade=process.argv.includes('--native-beta-upgrade');
 const nativeReads=process.argv.includes('--native-reads');
 const nativeScans=process.argv.includes('--native-scans');
 const nativeScanReceipts=process.argv.includes('--native-scan-receipts');
 const nativeRedirects=process.argv.includes('--native-redirects'),nativeSchema=process.argv.includes('--native-schema');
 const nativeCases=[
+  ...(nativeBetaUpgrade?[['beta-upgrade','shipped beta MCP/TLS paired FREE/PRO upgrade native checks']]:[]),
   ...(nativeScans?[['pagespeed-scans','native PageSpeed MCP checks']]:[]),
   ...(nativeScanReceipts?[['pagespeed-receipts','native retained-result MCP checks']]:[]),
   ...(nativeReads?[
@@ -38,7 +40,8 @@ const nativeCases=[
     ['schema-recovery-mixed-mcp','native schema worker interruption and fresh journal recovery over MCP/TLS'],
     ['schema-recovery-authority-mcp','native schema recovery checks with token/scope/membership/entitlement changed after preview on the same MCP session']]:[])
 ];
-assert.ok(process.argv.slice(2).every(arg=>['--allow-network','--native-reads','--native-scans','--native-scan-receipts','--native-fields','--native-redirects','--native-schema'].includes(arg)),'Unknown installation-test argument');
+assert.ok(process.argv.slice(2).every(arg=>['--allow-network','--native-reads','--native-scans','--native-scan-receipts','--native-fields','--native-redirects','--native-schema','--native-beta-upgrade'].includes(arg)),'Unknown installation-test argument');
+if(nativeBetaUpgrade)assert.ok(process.env.TAMRANK_TEST_BETA_ZIP,'Exact distributed beta path required');
 let nativePro;
 if(nativeCases.length){
   for(const key of ['TAMRANK_MAINT_PRO','TAMRANK_MAINT_CORE','TAMRANK_MAINT_FREE','TAMRANK_SCAN_TEST_SOCKET'])assert.ok(process.env[key],`Explicit owned native setting required: ${key}`);
@@ -159,14 +162,14 @@ try {
     assert.throws(()=>ownedInstalledRuntime(root,''),'Empty package override cannot fall back to source');
     assert.throws(()=>ownedInstalledRuntime(root,root),'Checkout cannot masquerade as installed package');
     for(const [mode,expected] of nativeCases){
-      const reads=mode==='stored-reads'||mode==='stored-reads-multisite',scans=mode==='pagespeed-scans'||mode==='pagespeed-receipts';
+      const reads=mode==='stored-reads'||mode==='stored-reads-multisite',scans=mode==='pagespeed-scans'||mode==='pagespeed-receipts',beta=mode==='beta-upgrade';
       console.log('RUN INSTALLED: '+mode+' → extracted entry → '+(reads||scans?'owned HTTP':'verified TLS')+' → owned WordPress.');
-      const nativeArgs=scans?[join(root,'test/workflow-pagespeed-native.mjs'),...(mode==='pagespeed-receipts'?['--result-journal']:[])]:reads?[join(nativePro,mode==='stored-reads-multisite'?'docs/mcp-phase4e-read-network-wordpress.mjs':'docs/mcp-phase4e-read-wordpress.mjs')]:[join(nativePro,'docs/mcp-phase4c-change-store-wordpress.mjs'),'--'+mode];
+      const nativeArgs=beta?[join(nativePro,'docs/mcp-phase4e-beta-upgrade-wordpress.mjs'),'--installed-mcp']:scans?[join(root,'test/workflow-pagespeed-native.mjs'),...(mode==='pagespeed-receipts'?['--result-journal']:[])]:reads?[join(nativePro,mode==='stored-reads-multisite'?'docs/mcp-phase4e-read-network-wordpress.mjs':'docs/mcp-phase4e-read-wordpress.mjs')]:[join(nativePro,'docs/mcp-phase4c-change-store-wordpress.mjs'),'--'+mode];
       const nativeRun=run(process.execPath,nativeArgs,
         {cwd:nativePro,env:{...process.env,TAMRANK_MAINT_MCP:root,TAMRANK_TEST_PACKED_ROOT:installed},timeout:1800000,maxBuffer:2097152});
       nativeRun.child.stdout.pipe(process.stdout,{end:false});
       const native=await nativeRun;
-      assert.ok(scans?native.stdout.split('\n').some(line=>/^PASS: \d+ /.test(line)&&line.includes(expected+'; installed entry;')&&line.endsWith('owned databases removed.')):
+      assert.ok(scans||beta?native.stdout.split('\n').some(line=>/^PASS: \d+ /.test(line)&&line.includes(expected+'; installed entry;')&&line.endsWith('owned databases removed.')):
         reads?native.stdout.includes('PASS: '+expected+'; owned database removed.'):
         native.stdout.split('\n').some(line=>/^PASS: \d+ /.test(line)&&line.includes(expected)&&line.endsWith('owned databases removed.')),
         'Full native matrix must complete with owned cleanup: '+mode);
