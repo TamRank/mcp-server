@@ -1304,6 +1304,18 @@ checkout. Other post-beta redirect combinations, schema/PageSpeed, privacy,
 hosting and normal activation remain separate acceptance gates; see PRO's
 `docs/mcp-phase4e-installed-workflow.md`.
 
+For PageSpeed after the shipped beta upgrade, use
+`node test/workflow-package.mjs --allow-network --native-beta-pagespeed` with the
+same explicit native settings and beta ZIP. On 13 September, PHP 8.2/8.5 each
+passed 2,670 checks across both replacement orders and single-site/two network
+clients. All 25 pages predate the upgrade. Verified TLS, exact chat approval,
+50-device dispatch, duplicate delivery, lost start response and new approval
+for retained-result recovery with a replacement PAT are covered. Original
+beta data and token authority remain intact. Native hooks use fictitious
+provider responses; this does not prove live Google, a host timer, diagnostic
+cache publication or complete privacy. See PRO's
+`docs/mcp-phase4e-installed-workflow.md` for exact scope and remaining gates.
+
 For the older focused source fixtures, use PRO repository `samkl8/tamrank-pro`, branch
 `feat/mcp-workflows`, `docs/mcp-phase4b-request-wp-harness.php`. Set
 `TAMRANK_WORK_READ_CLONE` to the prepared disposable WordPress clone's wp-load.php
