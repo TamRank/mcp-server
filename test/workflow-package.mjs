@@ -24,7 +24,9 @@ const nativeRedirects=process.argv.includes('--native-redirects'),nativeSchema=p
 const nativeCases=[
   ...(nativeScans?[['pagespeed-scans','native PageSpeed MCP checks']]:[]),
   ...(nativeScanReceipts?[['pagespeed-receipts','native retained-result MCP checks']]:[]),
-  ...(nativeReads?[['stored-reads','full stored-read native WordPress/PAT/MCP matrix']]:[]),
+  ...(nativeReads?[
+    ['stored-reads','full stored-read native WordPress/PAT/MCP matrix'],
+    ['stored-reads-multisite','full multisite stored-read native WordPress/PAT/MCP matrix']]:[]),
   ...(nativeFields?[['field-execution-tls','native field execution MCP/WordPress TLS/lost-response checks']]:[]),
   ...(nativeRedirects?[
     ['redirect-execution-mcp','native redirect/mixed MCP/WordPress TLS, rollback and worker-recovery checks'],
@@ -157,9 +159,9 @@ try {
     assert.throws(()=>ownedInstalledRuntime(root,''),'Empty package override cannot fall back to source');
     assert.throws(()=>ownedInstalledRuntime(root,root),'Checkout cannot masquerade as installed package');
     for(const [mode,expected] of nativeCases){
-      const reads=mode==='stored-reads',scans=mode==='pagespeed-scans'||mode==='pagespeed-receipts';
+      const reads=mode==='stored-reads'||mode==='stored-reads-multisite',scans=mode==='pagespeed-scans'||mode==='pagespeed-receipts';
       console.log('RUN INSTALLED: '+mode+' → extracted entry → '+(reads||scans?'owned HTTP':'verified TLS')+' → owned WordPress.');
-      const nativeArgs=scans?[join(root,'test/workflow-pagespeed-native.mjs'),...(mode==='pagespeed-receipts'?['--result-journal']:[])]:reads?[join(nativePro,'docs/mcp-phase4e-read-wordpress.mjs')]:[join(nativePro,'docs/mcp-phase4c-change-store-wordpress.mjs'),'--'+mode];
+      const nativeArgs=scans?[join(root,'test/workflow-pagespeed-native.mjs'),...(mode==='pagespeed-receipts'?['--result-journal']:[])]:reads?[join(nativePro,mode==='stored-reads-multisite'?'docs/mcp-phase4e-read-network-wordpress.mjs':'docs/mcp-phase4e-read-wordpress.mjs')]:[join(nativePro,'docs/mcp-phase4c-change-store-wordpress.mjs'),'--'+mode];
       const nativeRun=run(process.execPath,nativeArgs,
         {cwd:nativePro,env:{...process.env,TAMRANK_MAINT_MCP:root,TAMRANK_TEST_PACKED_ROOT:installed},timeout:1800000,maxBuffer:2097152});
       nativeRun.child.stdout.pipe(process.stdout,{end:false});

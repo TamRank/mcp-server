@@ -9,7 +9,11 @@ const root=fileURLToPath(new URL('../',import.meta.url));
 const runtime=ownedInstalledRuntime(root);
 let input=''; for await(const chunk of process.stdin) input+=chunk;
 const config=JSON.parse(input);
-assert.match(config.site_url,/^http:\/\/127\.0\.0\.1:[0-9]+$/);
+assert.match(config.site_url,/^http:\/\/127\.0\.0\.1:[0-9]+(?:\/client-two)?$/);
+const pageBase=config.page_base||'http://fixture.invalid';
+assert.match(pageBase,/^(?:http:\/\/fixture\.invalid|https:\/\/client-1\.fixture\.invalid|https:\/\/client-2\.fixture\.invalid\/client-two)$/);
+const archiveUrl=config.archive_url||'https://fixture.invalid/category/panels/?q=%2B&color=blue&color=green';
+assert.equal(archiveUrl,(config.page_base||'https://fixture.invalid')+'/category/panels/?q=%2B&color=blue&color=green');
 const clients=[];
 async function connect(profile='core',token=config.token,preview='1',style='pretty') {
   const client=new Client({name:'tamrank-disposable-workflow-test',version:'1.0.0'});
@@ -79,7 +83,6 @@ try {
   assert.equal((await client.callTool({name:'diagnose_page',arguments:{...dailyArgs,cursor:firstStabilityCursor}})).isError,true);
   assert.equal((await client.callTool({name:'diagnose_page',arguments:{post_id:1,section:'stability',refresh:true}})).isError,true);
   assert.equal((await client.callTool({name:'diagnose_page',arguments:{post_id:1,section:'pagespeed',refresh:true}})).isError,true);
-  const archiveUrl='https://fixture.invalid/category/panels/?q=%2B&color=blue&color=green';
   assert.equal(caps.reads.diagnose_page.url_target.available,true);
   const urlOverview=await call(client,'diagnose_page',{url:archiveUrl});
   assert.equal(urlOverview.page.id,null);assert.equal(urlOverview.page.url,archiveUrl);
@@ -206,7 +209,7 @@ try {
   const previewArgs={mode:'preview',type:'pagespeed',post_ids:[205,1]};
   const preview=await call(diagnosticClient,'start_scan',previewArgs);
   assert.deepEqual(preview.targets.map(t=>t.post_id),[205,1]);
-  assert.equal(preview.targets[0].url,'http://fixture.invalid/?page_id=205');
+  assert.equal(preview.targets[0].url,pageBase+'/?page_id=205');
   assert.equal(preview.execution_enabled,false);assert.equal(preview.plan_persisted,false);assert.equal(preview.backend_requested,false);
   assert.equal(preview.quota_context.device_tests_first_attempt,4);assert.equal(preview.quota_context.legacy_device_test_ceiling,12);
   assert.equal(preview.quota_context.monetary_cost,null);assert.ok(preview.blockers.includes('pagespeed_key_missing'));
