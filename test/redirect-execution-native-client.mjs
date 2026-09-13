@@ -60,6 +60,15 @@ export async function runFieldExecutionClient({origin,fixture:f,inspect,tlsRoot,
       const before=inspect(),original=rowAt(before,'/redirect-old');ok(original,'Owned existing row');
       const input=request(label,[deletion(original.id),create('/redirect-old','/redirect-after',302),
         {operation:'meta.update',target:{post_id:f.posts.publish},fields:{meta_title:{mode:'set',value:'Café – exact mixed redirect'}}}]);
+      if(f.beta_external_probe&&profile==='core'&&style==='pretty'){
+        control('add_unsupported_probe');
+        try{
+          const blocked=inspect();const refused=await raw('plan_changes',request('outside-probe',input.items));
+          ok(refused.isError&&JSON.parse(refused.content[0].text).code==='redirect_proposal_routing_unsupported','An active rule outside the upgraded subsite is refused, never ignored');
+          equal(inspect(),blocked,'Unsupported routing creates no business writes or audit rows');
+        }finally{control('remove_unsupported_probe');}
+        equal(inspect(),before,'Only the newly inserted test probe was removed');
+      }
       const p=(await call('plan_changes',input)).record,id=p.envelope.plan.change_set_id,args=confirmation(p);
       equal(p.envelope.plan.policy_version,'workflow-redirect-execution-1');equal(p.approval_recorded,false);equal(p.state,'planned');
       equal(p.envelope.plan.required_acknowledgements,['redirect_deletion']);equal(inspect(),before,'Proposal is passive for fields/redirects/audits');
