@@ -1329,6 +1329,20 @@ only confirmed pre-execution refusals wait and retry. This covers the owned
 synthetic theme, not every frontend/filter, batch, recovery or hosting variant.
 See PRO's `docs/mcp-phase4e-installed-workflow.md` for exact scope.
 
+For task administration after the shipped beta upgrade, use
+`node test/workflow-package.mjs --allow-network --native-beta-work` with the
+same explicit native settings and beta ZIP. On 13 September, PHP 8.2/8.5 each
+passed 69,408 repeated assertions across 24 profile/REST/site/update-order
+combinations. Original manual tasks, notes, completion/reopening and concurrent
+UI progress use their existing sources. Research pickup/review/notes stay grouped
+and explicitly not measured; all 200 targets can be selected and read back.
+Page importance has its own scope and invalidates the shared queue revision.
+Wrong permissions/revisions and conflicting request reuse are refused; exact
+old retries preserve newer work. The native manual adapter now retains actual
+user attribution for explicit completion, preserving historical migration events.
+Owned fixtures are removed on success. Further authority/fault, privacy, hosting
+and normal activation gates remain separate; see PRO's installed-workflow doc.
+
 For the older focused source fixtures, use PRO repository `samkl8/tamrank-pro`, branch
 `feat/mcp-workflows`, `docs/mcp-phase4b-request-wp-harness.php`. Set
 `TAMRANK_WORK_READ_CLONE` to the prepared disposable WordPress clone's wp-load.php
