@@ -20,6 +20,7 @@ const nativeFields=process.argv.includes('--native-fields');
 const nativeBetaUpgrade=process.argv.includes('--native-beta-upgrade');
 const nativeBetaReads=process.argv.includes('--native-beta-reads');
 const nativeBetaRedirects=process.argv.includes('--native-beta-redirects');
+const nativeBetaSchema=process.argv.includes('--native-beta-schema');
 const nativeReads=process.argv.includes('--native-reads');
 const nativeScans=process.argv.includes('--native-scans');
 const nativeScanReceipts=process.argv.includes('--native-scan-receipts');
@@ -28,6 +29,7 @@ const nativeCases=[
   ...(nativeBetaUpgrade?[['beta-upgrade','shipped beta MCP/TLS paired FREE/PRO upgrade native checks']]:[]),
   ...(nativeBetaReads?[['beta-reads','shipped beta MCP/TLS paired FREE/PRO upgrade stored-read native checks']]:[]),
   ...(nativeBetaRedirects?[['beta-redirects','shipped beta MCP/TLS paired FREE/PRO upgrade redirect/rollback/recovery native checks']]:[]),
+  ...(nativeBetaSchema?[['beta-schema','shipped beta MCP/TLS paired FREE/PRO upgrade schema/source/rollback native checks']]:[]),
   ...(nativeScans?[['pagespeed-scans','native PageSpeed MCP checks']]:[]),
   ...(nativeScanReceipts?[['pagespeed-receipts','native retained-result MCP checks']]:[]),
   ...(nativeReads?[
@@ -44,8 +46,8 @@ const nativeCases=[
     ['schema-recovery-mixed-mcp','native schema worker interruption and fresh journal recovery over MCP/TLS'],
     ['schema-recovery-authority-mcp','native schema recovery checks with token/scope/membership/entitlement changed after preview on the same MCP session']]:[])
 ];
-assert.ok(process.argv.slice(2).every(arg=>['--allow-network','--native-reads','--native-scans','--native-scan-receipts','--native-fields','--native-redirects','--native-schema','--native-beta-upgrade','--native-beta-reads','--native-beta-redirects'].includes(arg)),'Unknown installation-test argument');
-if(nativeBetaUpgrade||nativeBetaReads||nativeBetaRedirects)assert.ok(process.env.TAMRANK_TEST_BETA_ZIP,'Exact distributed beta path required');
+assert.ok(process.argv.slice(2).every(arg=>['--allow-network','--native-reads','--native-scans','--native-scan-receipts','--native-fields','--native-redirects','--native-schema','--native-beta-upgrade','--native-beta-reads','--native-beta-redirects','--native-beta-schema'].includes(arg)),'Unknown installation-test argument');
+if(nativeBetaUpgrade||nativeBetaReads||nativeBetaRedirects||nativeBetaSchema)assert.ok(process.env.TAMRANK_TEST_BETA_ZIP,'Exact distributed beta path required');
 let nativePro;
 if(nativeCases.length){
   for(const key of ['TAMRANK_MAINT_PRO','TAMRANK_MAINT_CORE','TAMRANK_MAINT_FREE','TAMRANK_SCAN_TEST_SOCKET'])assert.ok(process.env[key],`Explicit owned native setting required: ${key}`);
@@ -166,11 +168,13 @@ try {
     assert.throws(()=>ownedInstalledRuntime(root,''),'Empty package override cannot fall back to source');
     assert.throws(()=>ownedInstalledRuntime(root,root),'Checkout cannot masquerade as installed package');
     for(const [mode,expected] of nativeCases){
-      const reads=mode==='stored-reads'||mode==='stored-reads-multisite',scans=mode==='pagespeed-scans'||mode==='pagespeed-receipts',beta=['beta-upgrade','beta-reads','beta-redirects'].includes(mode);
+      const reads=mode==='stored-reads'||mode==='stored-reads-multisite',scans=mode==='pagespeed-scans'||mode==='pagespeed-receipts',beta=['beta-upgrade','beta-reads','beta-redirects','beta-schema'].includes(mode);
       console.log('RUN INSTALLED: '+mode+' → extracted entry → '+(reads||scans?'owned HTTP':'verified TLS')+' → owned WordPress.');
-      const nativeArgs=beta?[join(nativePro,'docs/mcp-phase4e-beta-upgrade-wordpress.mjs'),'--installed-mcp',...(mode==='beta-reads'?['--stored-reads']:mode==='beta-redirects'?['--redirects']:[])]:scans?[join(root,'test/workflow-pagespeed-native.mjs'),...(mode==='pagespeed-receipts'?['--result-journal']:[])]:reads?[join(nativePro,mode==='stored-reads-multisite'?'docs/mcp-phase4e-read-network-wordpress.mjs':'docs/mcp-phase4e-read-wordpress.mjs')]:[join(nativePro,'docs/mcp-phase4c-change-store-wordpress.mjs'),'--'+mode];
+      const nativeArgs=beta?[join(nativePro,'docs/mcp-phase4e-beta-upgrade-wordpress.mjs'),'--installed-mcp',...(mode==='beta-reads'?['--stored-reads']:mode==='beta-redirects'?['--redirects']:mode==='beta-schema'?['--schema']:[])]:scans?[join(root,'test/workflow-pagespeed-native.mjs'),...(mode==='pagespeed-receipts'?['--result-journal']:[])]:reads?[join(nativePro,mode==='stored-reads-multisite'?'docs/mcp-phase4e-read-network-wordpress.mjs':'docs/mcp-phase4e-read-wordpress.mjs')]:[join(nativePro,'docs/mcp-phase4c-change-store-wordpress.mjs'),'--'+mode];
       const nativeRun=run(process.execPath,nativeArgs,
-        {cwd:nativePro,env:{...process.env,TAMRANK_MAINT_MCP:root,TAMRANK_TEST_PACKED_ROOT:installed},timeout:1800000,maxBuffer:2097152});
+        {cwd:nativePro,env:{...process.env,TAMRANK_MAINT_MCP:root,TAMRANK_TEST_PACKED_ROOT:installed},
+          // Full paired schema acquisition/execution matrix honors real request windows.
+          timeout:mode==='beta-schema'?5400000:1800000,maxBuffer:2097152});
       nativeRun.child.stdout.pipe(process.stdout,{end:false});
       const native=await nativeRun;
       assert.ok(scans||beta?native.stdout.split('\n').some(line=>/^PASS: \d+ /.test(line)&&line.includes(expected+'; installed entry;')&&line.endsWith('owned databases removed.')):
