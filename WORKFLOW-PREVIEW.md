@@ -1250,7 +1250,7 @@ versions from the official npm registry into a fresh temporary cache. Install
 scripts, user/global npm configuration, audits and funding requests are disabled;
 the package and cache are removed afterwards. No global install or publication.
 The clean-cache form passed on macOS/Node 22 with installed SDK dependencies,
-12/19/42 profiles, both REST forms, preview refusal and unavailable writers/scans
+12/20/42 profiles, both REST forms, preview refusal and unavailable writers/scans
 against an inert loopback fixture. It does not replace native WordPress tests.
 An unconstrained registry install, other OS/Node versions, client onboarding,
 privacy/export/deletion and active deployment remain separate checks. The normal
@@ -1260,7 +1260,23 @@ privacy/export/deletion and active deployment remain separate checks. The normal
 The original `npm test` needs a separately configured legacy site/PAT; it is not
 an offline workflow regression test and was not completed against a real site.
 
-For full integration use PRO repository `samkl8/tamrank-pro`, branch
+For the full installed stored-read matrix, use
+`node test/workflow-package.mjs --allow-network --native-reads` with explicit
+`TAMRANK_MAINT_PRO`, `TAMRANK_MAINT_CORE`, `TAMRANK_MAINT_FREE` and the guarded
+owned `TAMRANK_SCAN_TEST_SOCKET`; `TAMRANK_TEST_PHP` selects PHP. This creates fresh
+synthetic installations instead of depending on the old fixed temporary clone.
+Both the single-site and real two-client WordPress-network suites must finish.
+On 13 September 2026 PHP 8.2 and 8.5 each passed 1,224 native single-site checks
+plus MCP transport, and the added network suite with 574 actual HTTP requests.
+Each network client exposes all 205 targets and all existing stored-read sections.
+Cross-client cursors/PATs, absent local membership and client-specific entitlement
+are checked; full snapshots preserve both sites and shared users/network data,
+apart from ordinary PAT-use/read-rate accounting. There are no provider requests.
+The extracted entry uses separate installed dependencies; no checkout fallback,
+normal-entry switch or customer activation. Details, assertions and remaining
+limits are in PRO `docs/mcp-phase4e-installed-workflow.md` on `feat/mcp-workflows`.
+
+For the older focused source fixtures, use PRO repository `samkl8/tamrank-pro`, branch
 `feat/mcp-workflows`, `docs/mcp-phase4b-request-wp-harness.php`. Set
 `TAMRANK_WORK_READ_CLONE` to the prepared disposable WordPress clone's wp-load.php
 and `TAMRANK_MCP_WORKFLOW_PATH` to this checkout. That harness validates its clone
@@ -1280,8 +1296,9 @@ and the real research lifecycle, signal-pickup, shared-note, manual-task and imp
 fixtures whitelist only task storage, the journal and the two exact FREE task
 option names, plus the existing business-importance marker and two ranking-cache
 options. Posts/SEO metadata/other settings remain forbidden.
-Multisite, other webservers/plugins/themes and
-external object caches remain separate activation gates.
+That original focused source harness remains single-site. The installed network
+read matrix above covers native multisite reads; other webservers/plugins/themes,
+external object caches and normal activation remain separate gates.
 
 For a native redirect-only iteration, `TAMRANK_REDIRECT_READ_ONLY=1` runs 36
 initial scope checks plus 90 redirect cases (126 total), without MCP transport.
