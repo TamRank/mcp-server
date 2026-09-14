@@ -69,7 +69,8 @@ if(nativeCases.length){
 }
 const lock=JSON.parse(await readFile(join(root,'package-lock.json'),'utf8'));
 assert.ok(Object.values(lock.packages).every(entry=>!entry.resolved || new URL(entry.resolved).origin==='https://registry.npmjs.org'),'Only the official package registry is permitted');
-const sourceFiles=['package.json','package-lock.json','index.js','README.md','WORKFLOW-PREVIEW.md'];
+const guides=['README.md','WORKFLOW-PREVIEW.md','QUICKSTART-NL.md','QUICKSTART-DE.md','QUICKSTART-FR.md'];
+const sourceFiles=['package.json','package-lock.json','index.js',...guides];
 const before=await Promise.all(sourceFiles.map(p=>readFile(join(root,p),'utf8')));
 const pat='tamrank_pat_fixture_'+randomBytes(16).toString('hex');
 const requests=[];let server;
@@ -84,6 +85,7 @@ try {
   assert.equal(packed.name,pkg.name);assert.equal(packed.version,pkg.version);
   assert.equal(packed.filename,packed.filename.split('/').pop());
   const paths=packed.files.map(f=>f.path);
+  for(const guide of guides)assert.ok(paths.includes(guide),'Reviewed guide is packed: '+guide);
   for(const p of ['src/source-scans.js','src/pagespeed-scans.js','src/workflow-identity.js'])assert.ok(paths.includes(p),`Missing packed ${p}`);
   assert.ok(paths.includes('src/field-proposals.js'),'Typed field proposal contract is packaged');
   for(const p of ['src/field-execution.js','src/field-recovery.js','src/redirect-execution.js'])assert.ok(paths.includes(p),`Missing typed execution contract ${p}`);
@@ -93,7 +95,7 @@ try {
   assert.ok(paths.every(p=>!p.split('/').some(s=>s==='..' || s.startsWith('.')) && !/^(?:test|node_modules|docs)\//.test(p)), 'No test fixtures, credentials or hidden configuration in package');
   await run('tar',['-xzf',join(scratch,packed.filename),'-C',scratch],{timeout:10000});
   const installed=await realpath(join(scratch,'package'));
-  for(const file of ['README.md','WORKFLOW-PREVIEW.md'])assert.equal(await readFile(join(installed,file),'utf8'),
+  for(const file of guides)assert.equal(await readFile(join(installed,file),'utf8'),
     before[sourceFiles.indexOf(file)],'Installed guide exactly matches the reviewed source: '+file);
   const privateDirectory=join(await realpath(scratch),'receipt-storage');
   const setup=await run(process.execPath,[join(installed,'receipt-storage.js'),'init','--directory',privateDirectory],{env:environment});

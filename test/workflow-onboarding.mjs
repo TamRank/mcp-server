@@ -106,3 +106,42 @@ test('README references bundled documents rather than temporary worktree paths',
   assert.ok(links.length>0);
   for(const link of links){assert.ok(pkg.files.includes(link),'Document is shipped: '+link);await access(join(root,link));}
 });
+
+const locales=[
+  {file:'QUICKSTART-NL.md',reads:'Eerste aanroepen:',warning:'Activeer deze schrijffuncties nog niet op klantwebsites.',
+    boundaries:['Een opgeslagen voorstel is nog geen toestemming.','niet het chatgesprek.',
+      'niet automatisch opnieuw schrijven','nieuw akkoord','schakel TLS-controle niet uit',
+      'Toestemming voor klant A geldt niet voor klant B.']},
+  {file:'QUICKSTART-DE.md',reads:'Erste Aufrufe:',warning:'Aktiviere diese Schreibfunktionen noch nicht auf Kundenwebsites.',
+    boundaries:['Ein gespeicherter Vorschlag ist noch keine Freigabe.','nicht den Chatverlauf.',
+      'nicht automatisch erneut schreiben','erneuter Zustimmung','deaktiviere die TLS-Prüfung nicht',
+      'Zustimmung für Kunde A gilt nicht für Kunde B.']},
+  {file:'QUICKSTART-FR.md',reads:'Premiers appels :',warning:"N'activez pas encore ces fonctions d'écriture sur les sites de clients.",
+    boundaries:["Une proposition enregistrée n'est pas une autorisation.",'pas la conversation elle-même.',
+      "ne relancez pas automatiquement l'écriture",'nouvel accord','ne désactivez pas la vérification TLS',
+      "L'accord pour le client A ne vaut pas pour le client B."]}
+];
+for(const {file,reads,warning,boundaries} of locales)test('localized first connection preserves the reviewed contract: '+file,async()=>{
+  const guide=await readFile(join(root,file),'utf8'),plain=guide.replace(/\*\*/g,'').replace(/\s+/g,' ');
+  const configs=[...guide.matchAll(/```json\n([\s\S]*?)\n```/g)].map(match=>JSON.parse(match[1]));
+  assert.deepEqual(configs,examples,'Translations use the exact same placeholder configuration, not another entry or wider permissions');
+  for(const value of [pkg.name,pkg.version,workflowIdentity.name,workflowIdentity.version])assert.ok(guide.includes('`'+value+'`'));
+  for(const sentence of [warning,...boundaries])assert.ok(plain.includes(sentence),'Preserve reviewed localized safety statement: '+sentence);
+  assert.equal(guide.includes('NODE_TLS_REJECT_UNAUTHORIZED'),false);
+  assert.equal(/tamrank_pat_[a-zA-Z0-9_-]{20,}/.test(guide),false);
+  assert.equal(guide.includes('/private/tmp'),false);
+  const first=guide.split('\n').find(line=>line.startsWith(reads));
+  assert.deepEqual(inlineNames(first),['get_site_context','get_capabilities','get_work_queue','get_signals']);
+  const {tools,calls}=registry(configs[0].mcpServers['tamrank-test'].env.TAMRANK_TOOL_PROFILE);
+  for(const name of inlineNames(first)){
+    assert.equal(tools.get(name).config.annotations.readOnlyHint,true);
+    assert.notEqual((await tools.get(name).handler({})).isError,true);
+  }
+  assert.deepEqual(calls.map(({method,path})=>[method,path]),[
+    ['GET','/site/context'],['GET','/capabilities'],['GET','/work-queue'],['GET','/signals']]);
+  for(const name of ['plan_changes','execute_change_set','get_changes','rollback_change_set','get_scan_status'])assert.ok(guide.includes('`'+name+'`'));
+  assert.ok(pkg.files.includes(file));assert.ok(readme.includes(']('+file+')'));
+  for(const match of guide.matchAll(/\]\(([^)]+)\)/g)){
+    assert.ok(pkg.files.includes(match[1]),'Linked guide is packaged');await access(join(root,match[1]));
+  }
+});
