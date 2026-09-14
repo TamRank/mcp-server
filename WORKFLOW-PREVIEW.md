@@ -120,6 +120,39 @@ multisite reads and the remaining privacy/hosting/release gates stay open.
 
 ## Current schema rollback development
 
+### Source capacity and waiting
+
+Do not promise immediate schema rollback. It needs fresh, separately approved
+source captures, which share the site's rolling-hour source limits with forward
+work. Explain this limitation before asking for approval of a larger schema set.
+Source acquisition capacity is separate from website-execution capacity; stored
+approval does not reserve later captures or authorize a delayed write.
+
+The PRO `feat/mcp-source-quota` increment exposes
+`schema_source_jobs.hourly_budget` through specialist `get_capabilities`.
+It reports effective `remaining_requests`, `observed_at`, `next_attempt_after`
+and `retry_after_seconds`, with `is_reservation:false` and `automatic_retry:false`.
+This is a current snapshot, not guaranteed capacity. Older sites may omit this
+field: missing information is unknown capacity, not unlimited or zero usage.
+
+On `schema_capture_rate_limit`, the error may supply a bounded `retry_after`
+of 1–3600 seconds. Wait before rechecking; never start a replacement automatically.
+The inclusive rolling-hour boundary can require 3601 seconds, shown by the exact
+capability snapshot. Recheck rights, source revision and proposal validity after
+waiting; obtain a new proposal and new consent when required. Never reuse expired
+source evidence or forward approval for rollback.
+
+`node test/workflow-package.mjs --allow-network --native-schema-sources`
+passes 963 native checks per PHP 8.2/8.5, plus the existing package baseline.
+It selects the independently extracted workflow entry and its own installed
+dependencies, checks both REST styles and single-site/two network clients,
+and verifies source-capacity readback around two genuine native captures.
+PRO source: `samkl8/tamrank-pro`, branch `feat/mcp-source-quota`,
+`docs/mcp-phase4b-source-budget.md`. Integration into the main development branch
+is still pending; this does not activate customer writers or publish a package.
+
+### Inverse workflow
+
 The public inverse lane is implemented behind the additional server flag
 `TAMRANK_WORKFLOW_SCHEMA_ROLLBACK_REST_ENABLED`; its targeted native matrix
 passes on PHP 8.2/8.5. The earlier baselines below predate this implementation.

@@ -7,8 +7,10 @@ import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {sourceAcks,sourceProbeAcks} from '../src/source-scans.js';
 import {workflowIdentity} from '../src/workflow-identity.js';
+import {ownedInstalledRuntime} from './owned-installed-entry.mjs';
 let input='';for await(const chunk of process.stdin)input+=chunk;
 const f=JSON.parse(input),repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const runtime=ownedInstalledRuntime(repo);
 assert.match(f.root||'',/^\/private\/tmp\/tr-maint-wp-[A-Za-z0-9]{6}$/);assert.ok(existsSync(f.root+'/owned-fixture'));
 assert.match(f.site_url||'',/^https:\/\/schema-source\.example\.org:[0-9]{4,5}(?:\/client-two)?$/);
 assert.ok(f.token?.startsWith('tamrank_pat_'));assert.ok(Number.isSafeInteger(f.post_id)&&f.post_id>0);
@@ -17,7 +19,7 @@ const sends=()=>existsSync(f.root+'/native-source-sends')?readFileSync(f.root+'/
 for(const style of ['pretty','query']){
   const client=new Client({name:'Owned native acquisition client',version:'1'});
   const transport=new StdioClientTransport({command:process.execPath,
-    args:['--import',path.join(repo,'test/owned-schema-dns.mjs'),path.join(repo,'index-workflow.js')],cwd:repo,stderr:'pipe',
+    args:['--import',path.join(repo,'test/owned-schema-dns.mjs'),path.join(runtime,'index-workflow.js')],cwd:runtime,stderr:'pipe',
     env:{PATH:process.env.PATH,NODE_EXTRA_CA_CERTS:f.root+'/ca.pem',TAMRANK_SCHEMA_FIXTURE_ROOT:f.root,
       TAMRANK_PAT:f.token,TAMRANK_SITE_URL:f.site_url,TAMRANK_TOOL_PROFILE:'specialist',TAMRANK_REST_STYLE:style,TAMRANK_WORKFLOW_PREVIEW:'1'}});
   let errors='';transport.stderr?.on('data',chunk=>{errors=(errors+chunk.toString()).slice(-2000);});
@@ -66,4 +68,4 @@ for(const style of ['pretty','query']){
     check(!errors.includes(f.token),'No PAT in stderr');
   }finally{await client.close();}
 }
-process.stdout.write(JSON.stringify({ok:true,checks,receipts}));
+process.stdout.write(JSON.stringify({ok:true,checks,receipts,runtime_mode:runtime===repo?'source':'installed'}));
