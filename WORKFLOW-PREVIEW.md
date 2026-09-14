@@ -1403,3 +1403,34 @@ no customer credentials were substituted.
 
 This does not establish complete privacy UI/export/retention acceptance or
 replay of an old separate recovery confirmation. No new tool or activation.
+
+### Historical schema recovery confirmations
+
+The existing `execute_change_set` recovery lane also accepts the closed,
+non-executable historical result after direct attribution has been erased.
+The client compares the retained site, original set/hash, recovery receipt,
+time window, mode and every item/disposition. It does not recreate erased
+actor or request identities. Native WordPress still checks current authority,
+the original recovery PAT and the entire original confirmation payload.
+A different same-owner PAT may read the history, but cannot replay that PAT's
+consent. A changed client, request ID, token, hash or acknowledgement is refused.
+No writer, cache delivery, new grant or audit is dispatched by a historical retry.
+
+`test/workflow-schema-recovery.mjs --bridge` now passes 738 checks, including
+both ordinary and erased records. PRO's `--schema-history-recovery-mcp` tests
+real killed workers before/after commit, actual recovery and subsequent native
+owner erasure. Schema selection and detection cover failed/partial/delivery-only
+states in both directions; site identity remains standalone, as required by
+the native contract. An internal expired-consent retry and changed request ID
+are checked separately from the real-clock HTTP cases.
+
+The full native matrix passes 4,131 checks per PHP 8.2/8.5, including single-site
+and two network clients. The same matrix passes from an extracted package with
+separately installed locked dependencies via `test/workflow-package.mjs
+--allow-network --native-schema-history-recovery`; no checkout fallback.
+The existing full history regression also passes again on PHP 8.5 (4,572 checks).
+These are matrix check counts, not numbers of unique scenarios. All runs report
+cleanup of their owned databases. Additional mixed recovery sets with redirects
+and maximum batches retain their separate acceptance gate.
+This does not close privacy UI/download export, retention, unused proposals,
+other historical execution policies or customer activation.
