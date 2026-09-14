@@ -5,8 +5,10 @@ import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 const cwd=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-export async function runFieldProposalClient({origin,fixture:f}){
+export async function runFieldProposalClient({origin,fixture:f,maximum}){
   assert.match(origin,/^http:\/\/127\.0\.0\.1:\d{4,5}(?:\/client-two)?$/);
+  assert.equal(maximum?.plan_bytes,262144,'The owned native runner must provide an exact-size request');
+  assert.deepEqual(maximum.request.items.map(i=>i.target.post_id),f.posts.bulk);
   let checks=0;
   for(const profile of ['core','specialist'])for(const style of ['pretty','query']){
     const client=new Client({name:'synthetic-field-review',version:'1.0.0'});
@@ -76,12 +78,22 @@ export async function runFieldProposalClient({origin,fixture:f}){
       assert.equal((await raw('plan_changes',unowned)).isError,true);checks++;
       assert.equal((await raw('execute_change_set',{})).isError,true);checks++;
       assert.equal((await raw('plan_changes',{...request,execute:true})).isError,true);checks++;
+      const bulk=maximum.request;
       if(profile==='core'&&style==='pretty'){
-        const bulk={...request,client_request_id:'mcp-field-25-unicode',items:f.posts.bulk.map(post_id=>({operation:'meta.update',target:{post_id},fields:{meta_description:{mode:'set',value:'é'.repeat(2100)}}}))};
-        const large=await call('plan_changes',bulk);assert.equal(large.envelope.plan.items.length,25);checks++;
-        for(const item of large.envelope.plan.items){assert.equal(item.after.meta_description.value,bulk.items[0].fields.meta_description.value);checks++;}
-        assert.deepEqual(await call('get_changes',{change_set_id:large.envelope.plan.change_set_id}),large);checks++;
+        // Refuse before subsequent cases fill the normal active-draft quota.
+        // Other profiles read/replay the same logical maximum proposal, not four new ones.
+        const over=structuredClone(bulk);over.client_request_id='mcp-field-max-limit';over.origin.summary+='.';
+        const refused=await raw('plan_changes',over);
+        assert.equal(refused.isError,true);assert.equal(JSON.parse(refused.content[0].text).code,'change_plan_storage_limit');checks+=2;
       }
+      const large=await call('plan_changes',bulk);assert.equal(large.envelope.plan.items.length,25);checks++;
+      assert.equal(Buffer.byteLength(JSON.stringify(large.envelope.plan),'utf8'),262144);checks++;
+      for(const [n,item] of large.envelope.plan.items.entries()){
+        assert.deepEqual(item.fields,bulk.items[n].fields);assert.equal(item.after.meta_description.value,bulk.items[n].fields.meta_description.value);
+        assert.deepEqual(item.target,bulk.items[n].target);checks+=3;
+      }
+      assert.equal(large.approval_recorded,false);assert.equal(large.execution_available,false);checks+=2;
+      assert.deepEqual(await call('get_changes',{change_set_id:large.envelope.plan.change_set_id}),large);checks++;
       console.log(`PASS: ${profile}/${style} real SDK → WordPress private field draft/read; ${JSON.stringify(listing).length} chars.`);
     }finally{await client.close();}
   }
