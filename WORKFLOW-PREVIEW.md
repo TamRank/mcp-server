@@ -16,6 +16,22 @@ in an older section may be superseded by a later tested increment. The guide and
 these fixtures do not close customer onboarding, other clients/platforms or the
 remaining Phase 4 acceptance gates.
 
+## Installed mixed historical schema recovery — 14 September
+
+The separate historical mixed-schema recovery matrix also passes on 14 September:
+3,030 native checks per PHP 8.2/8.5, single-site and two network sites; the same
+matrix passes on PHP 8.5 from the independently installed package. It combines
+schema with redirects and maximum 25-item batches, kills owned workers before/
+after commits in forward/inverse work, erases direct attribution and replays only
+the exact original recovery confirmation. No duplicate website writes or new
+approval are allowed. All runners report owned database cleanup.
+
+Reproduce using `node test/workflow-package.mjs --allow-network
+--native-schema-history-recovery-mixed` with the explicit owned native settings
+below. These tests exercise the existing schema policy; they do not change or
+close the separate public field/redirect-history API, full privacy UI/download,
+retention or other remaining Phase 4 gates.
+
 ## Installed field workflow acceptance
 
 `test/workflow-package.mjs --allow-network --native-fields` now runs the extracted
