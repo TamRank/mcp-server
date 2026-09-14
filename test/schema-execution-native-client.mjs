@@ -1,6 +1,6 @@
 /** Actual owned WordPress forward execution through stdio/verified TLS. */
 import assert from 'node:assert/strict';
-import {existsSync} from 'node:fs';
+import {existsSync,appendFileSync,lstatSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {ownedInstalledRuntime} from './owned-installed-entry.mjs';
@@ -9,6 +9,7 @@ import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {validSchemaExecutionResponse,matchesSchemaExecutionRequest,isSchemaExecutionPlan} from '../src/schema-execution.js';
 import {validSchemaRollbackPreview,matchesSchemaRollbackRequest} from '../src/schema-rollback.js';
 import {verifySchemaAuthority} from './schema-execution-native-authority.mjs';
+import {observeSchemaExecution} from './schema-execution-observation.mjs';
 let raw='';for await(const chunk of process.stdin)raw+=chunk;
 const f=JSON.parse(raw),root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const runtime=ownedInstalledRuntime(root);
@@ -66,7 +67,13 @@ try{
     check((await call('execute_change_set',wrong)).isError,'Wrong exact approval refused natively');
     if(args.confirmation.acknowledgements.length){const missing=structuredClone(args);missing.confirmation.acknowledgements=[];
       check((await call('execute_change_set',missing)).isError,'Required schema acknowledgement refused when absent');}
-    data=decode(await call('execute_change_set',args),'Approved native schema execution');
+    const observed=await observeSchemaExecution(call,args,validSchemaExecutionResponse);
+    const trace=path.join(f.root,'schema-execution-timing.jsonl');
+    assert.ok(!existsSync(trace)||lstatSync(trace).isFile()&&!lstatSync(trace).isSymbolicLink()&&lstatSync(trace).size<131072);
+    const timing={profile:f.profile,style:f.style,items:before.record.envelope.plan.items.length,
+      inverse:before.record.envelope.plan.policy_version==='workflow-schema-rollback-1',...observed.observation};
+    appendFileSync(trace,JSON.stringify(timing)+'\n',{mode:0o600});
+    data=decode(observed.response,'Approved native schema execution '+JSON.stringify(timing));
     check(data.record.state==='executed'&&data.record.approval_recorded,'Immediate approved set executed');
     check(validSchemaExecutionResponse(data,a.change_set_id,a.confirmation.plan_hash),'Exact result bound to approved identity/hash');
     const stub=data.record.registration.attestation;
