@@ -4,6 +4,18 @@ Branch `feat/mcp-workflows` prepares MCP `0.4.0-preview` in package
 `@tam-rank/mcp-server`. The shipped entry, npm bin and package version remain
 unchanged. This is not a release or a replacement of the active MCP connection.
 
+For the current first-connection guide, use [README.md](README.md). It separates
+the normal legacy bin from the explicit workflow entry, starts with site-local
+read-only credentials and explains profiles, approvals and connection failures.
+`node test/workflow-onboarding.mjs` checks its configuration, tool inventories,
+read walkthrough, transport boundaries and bundled links without contacting a
+site. The package harness runs that check before creating the archive.
+
+The dated sections below retain increment-level evidence; a restriction stated
+in an older section may be superseded by a later tested increment. The guide and
+these fixtures do not close customer onboarding, other clients/platforms or the
+remaining Phase 4 acceptance gates.
+
 ## Installed field workflow acceptance
 
 `test/workflow-package.mjs --allow-network --native-fields` now runs the extracted

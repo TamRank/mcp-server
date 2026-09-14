@@ -15,6 +15,7 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const run=promisify(execFile);
 const npm=resolve(dirname(process.execPath),'../lib/node_modules/npm/bin/npm-cli.js');
 const pkg=JSON.parse(await readFile(join(root,'package.json'),'utf8'));
+await run(process.execPath,[join(root,'test/workflow-onboarding.mjs')],{cwd:root,timeout:30000,maxBuffer:1048576});
 const online=process.argv.includes('--allow-network');
 const nativeFields=process.argv.includes('--native-fields');
 const nativeBetaUpgrade=process.argv.includes('--native-beta-upgrade');
