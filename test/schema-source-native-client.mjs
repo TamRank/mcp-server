@@ -27,6 +27,14 @@ for(const style of ['pretty','query']){
     await client.connect(transport);
     const listing=await client.listTools();check(listing.tools.length===20&&JSON.stringify(listing).length<16000,'Native acquisition preserves canonical tool budget');
     const caps=await ok('get_capabilities',{});check(caps.schema_preview?.available===true,'Native preview available after actual discovery');
+    const sourceBudget=caps.schema_source_jobs?.hourly_budget;
+    // Older PRO branches remain usable by this shared runner while an isolated
+    // source-quota branch is awaiting integration. Opt in to its stronger contract.
+    if(f.source_budget_required){
+      check(sourceBudget?.policy==='schema-source-hourly-advice-1'&&Number.isInteger(sourceBudget.remaining_requests)
+        &&sourceBudget.remaining_requests>=2&&sourceBudget.remaining_requests<=10,'Native source budget reaches MCP capabilities');
+      check(sourceBudget.is_reservation===false&&sourceBudget.automatic_retry===false,'Current quota is not permission or a queued retry');
+    }
     for(const probe of [false,true]){
       const start=sends(),suffix=style+'-'+(probe?'probe':'passive');
       const prepared=await ok('start_scan',{type:'schema_source',mode:'preview',post_ids:[f.post_id],capture_mode:'native_render'});
@@ -50,6 +58,10 @@ for(const style of ['pretty','query']){
       const comparison=await ok('plan_changes',{schema_preview:{operation:'schema.detect',target:{post_id:f.post_id},fields:{source_job:ref}}});
       check(!comparison.plan_persisted&&!comparison.approval_recorded&&!comparison.execution_available,'Source approval never becomes schema execution approval');
       check(sends()===start+1,'Comparison does not fetch again');receipts.push({source_job:ref,comparison:comparison.comparison});
+    }
+    if(f.source_budget_required){
+      const afterCaps=await ok('get_capabilities',{}),afterBudget=afterCaps.schema_source_jobs?.hourly_budget;
+      check(afterBudget?.remaining_requests===sourceBudget.remaining_requests-2,'Two real source captures consume two slots; reads, preview and replay consume none');
     }
     check(!errors.includes(f.token),'No PAT in stderr');
   }finally{await client.close();}
