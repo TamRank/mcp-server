@@ -27,7 +27,9 @@ const nativeReads=process.argv.includes('--native-reads');
 const nativeScans=process.argv.includes('--native-scans');
 const nativeScanReceipts=process.argv.includes('--native-scan-receipts');
 const nativeRedirects=process.argv.includes('--native-redirects'),nativeSchema=process.argv.includes('--native-schema');
+const nativeSchemaHistory=process.argv.includes('--native-schema-history');
 const nativeCases=[
+  ...(nativeSchemaHistory?[['schema-history-mcp','native schema historical MCP read and exact replay over TLS']]:[]),
   ...(nativeBetaUpgrade?[['beta-upgrade','shipped beta MCP/TLS paired FREE/PRO upgrade native checks']]:[]),
   ...(nativeBetaReads?[['beta-reads','shipped beta MCP/TLS paired FREE/PRO upgrade stored-read native checks']]:[]),
   ...(nativeBetaRedirects?[['beta-redirects','shipped beta MCP/TLS paired FREE/PRO upgrade redirect/rollback/recovery native checks']]:[]),
@@ -50,7 +52,7 @@ const nativeCases=[
     ['schema-recovery-mixed-mcp','native schema worker interruption and fresh journal recovery over MCP/TLS'],
     ['schema-recovery-authority-mcp','native schema recovery checks with token/scope/membership/entitlement changed after preview on the same MCP session']]:[])
 ];
-assert.ok(process.argv.slice(2).every(arg=>['--allow-network','--native-reads','--native-scans','--native-scan-receipts','--native-fields','--native-redirects','--native-schema','--native-beta-upgrade','--native-beta-reads','--native-beta-redirects','--native-beta-schema','--native-beta-pagespeed','--native-beta-work'].includes(arg)),'Unknown installation-test argument');
+assert.ok(process.argv.slice(2).every(arg=>['--allow-network','--native-reads','--native-scans','--native-scan-receipts','--native-fields','--native-redirects','--native-schema','--native-schema-history','--native-beta-upgrade','--native-beta-reads','--native-beta-redirects','--native-beta-schema','--native-beta-pagespeed','--native-beta-work'].includes(arg)),'Unknown installation-test argument');
 if(nativeBetaUpgrade||nativeBetaReads||nativeBetaRedirects||nativeBetaSchema||nativeBetaPageSpeed||nativeBetaWork)assert.ok(process.env.TAMRANK_TEST_BETA_ZIP,'Exact distributed beta path required');
 let nativePro;
 if(nativeCases.length){
@@ -77,7 +79,7 @@ try {
   for(const p of ['src/source-scans.js','src/pagespeed-scans.js','src/workflow-identity.js'])assert.ok(paths.includes(p),`Missing packed ${p}`);
   assert.ok(paths.includes('src/field-proposals.js'),'Typed field proposal contract is packaged');
   for(const p of ['src/field-execution.js','src/field-recovery.js','src/redirect-execution.js'])assert.ok(paths.includes(p),`Missing typed execution contract ${p}`);
-  for(const p of ['src/schema-preview.js','src/schema-execution.js','src/schema-rollback.js','src/schema-recovery.js'])
+  for(const p of ['src/schema-preview.js','src/schema-execution.js','src/schema-execution-history.js','src/schema-rollback.js','src/schema-recovery.js'])
     assert.ok(paths.includes(p),`Missing typed schema workflow contract ${p}`);
   for(const p of ['index.js','index-workflow.js','receipt-storage.js','src/workflow-tools.js','src/workflow-rest.js','src/scan-maintenance.js','src/scan-recovery-chat.js','src/scan-receipt-store.js','SCAN-RECEIPTS.md','WORKFLOW-PREVIEW.md','package.json'])assert.ok(paths.includes(p),`Missing packed ${p}`);
   assert.ok(paths.every(p=>!p.split('/').some(s=>s==='..' || s.startsWith('.')) && !/^(?:test|node_modules|docs)\//.test(p)), 'No test fixtures, credentials or hidden configuration in package');
