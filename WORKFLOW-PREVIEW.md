@@ -1380,3 +1380,26 @@ acquisition and installation/privacy/activation gates remain open.
 The dependency lock was updated within existing declared ranges. `npm audit fix
 --ignore-scripts` reported zero known vulnerabilities at the time of this check;
 this is not a guarantee of vulnerability absence. No global install or publication.
+
+## Schema history after attribution removal — 14 September
+
+The existing `get_changes(kind=execution)` and exact `execute_change_set` replay
+accept a closed, non-executable schema-history view from the native server.
+No private storage proof, old execution token or removed client/user identity
+is returned. All selected items and remaining semantic results stay visible.
+The server still verifies current authority, original approval and request
+binding; this display cannot become another executable proposal.
+
+`npm run test:schema-history` covers the closed contract and bridge (106 checks).
+The same checks are included in `npm run test:workflow`. The new native suite is
+PRO's `--schema-history-mcp`; `test/workflow-package.mjs --allow-network
+--native-schema-history` uses an extracted package and independently installed
+dependencies. The native matrix passes 4,572 checks on each PHP 8.2/8.5 runtime,
+including single-site and two network clients. The same matrix passes from an
+extracted package on PHP 8.5, with clean-cache, lock-based dependencies and no
+checkout-runtime fallback. All standard workflow regressions pass too. The live
+legacy smoke test requires a configured site/PAT and was not completed here;
+no customer credentials were substituted.
+
+This does not establish complete privacy UI/export/retention acceptance or
+replay of an old separate recovery confirmation. No new tool or activation.
