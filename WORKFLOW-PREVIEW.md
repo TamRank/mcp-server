@@ -151,6 +151,31 @@ PRO source: `samkl8/tamrank-pro`, branch `feat/mcp-source-quota`,
 `docs/mcp-phase4b-source-budget.md`. Integration into the main development branch
 is still pending; this does not activate customer writers or publish a package.
 
+### Tested source-client runtimes — 14 September
+
+The same installed-source matrix also passes with official macOS arm64
+Node **18.20.8** and **24.21.0**, in addition to **22.17.0**: 963 native checks
+for each Node/PHP pairing (PHP 8.2 and 8.5), plus the clean-cache package baseline.
+The 18 targeted source/transport/onboarding tests pass on all three Node versions.
+Each runtime launches the extracted server and its separately installed, locked
+dependencies; the system Node installation is untouched.
+
+This specifically verifies native source acquisition, preview, quota readback,
+exact source-request replay and the package's read/draft baseline. It does not
+extend every field/redirect/schema executor or recovery result to other Node
+versions, prove every Node 18 patch release, or cover Windows/Linux.
+
+The Node 18 and 24 archives were checked against the official SHA-256 manifests
+before execution: [Node 18.20.8 checksums](https://nodejs.org/download/release/v18.20.8/SHASUMS256.txt)
+and the [Node 24 manifest checked on 14 September 2026](https://nodejs.org/download/release/latest-v24.x/SHASUMS256.txt).
+The tested arm64 archives had SHA-256
+`6626fb7526fb2d84c8200ab915496934f44f0cfa7bd6c73318322e43ce21457a` (18.20.8) and
+`6239d4cf92d864487ec8cd3615038f7b67e7f58b77b21cd2f09ea9fbd68065fe` (24.21.0).
+This is download-integrity verification over HTTPS, not an independent signing-key audit.
+Prefer maintained LTS for a new installation; Node 18 is tested only because the
+package still declares that technical minimum. It is EOL according to the
+[official release status](https://nodejs.org/en/about/previous-releases).
+
 ### Inverse workflow
 
 The public inverse lane is implemented behind the additional server flag

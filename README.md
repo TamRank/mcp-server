@@ -74,9 +74,13 @@ The first calls should be `get_site_context`, `get_capabilities`,
 Follow returned cursors when inspecting a group's targets; the dashboard's
 four-item preview is not the complete target list.
 
-The package declares Node.js 18 or later; the recorded installed/native matrix
-uses Node.js 22 on macOS and WordPress with PHP 8.2/8.5. That is not verification
-of every supported Node version, operating system, host or theme/builder.
+The package declares Node.js 18 or later. Prefer a maintained LTS runtime;
+Node 18 is end-of-life and its compatibility test is not a deployment recommendation.
+The installed source-capture/preview chain is verified on macOS arm64 with
+Node 18.20.8, 22.17.0 and 24.21.0, each against WordPress on PHP 8.2/8.5.
+Other native workflow evidence uses Node 22 unless explicitly stated otherwise.
+This does not verify every Node version, operating system, host or theme/builder;
+the detailed scope and runtime sources are in [WORKFLOW-PREVIEW.md](WORKFLOW-PREVIEW.md).
 
 ## Profiles and tools
 

@@ -69,7 +69,8 @@ if(nativeCases.length){
 }
 const lock=JSON.parse(await readFile(join(root,'package-lock.json'),'utf8'));
 assert.ok(Object.values(lock.packages).every(entry=>!entry.resolved || new URL(entry.resolved).origin==='https://registry.npmjs.org'),'Only the official package registry is permitted');
-const before=await Promise.all(['package.json','package-lock.json','index.js'].map(p=>readFile(join(root,p),'utf8')));
+const sourceFiles=['package.json','package-lock.json','index.js','README.md','WORKFLOW-PREVIEW.md'];
+const before=await Promise.all(sourceFiles.map(p=>readFile(join(root,p),'utf8')));
 const pat='tamrank_pat_fixture_'+randomBytes(16).toString('hex');
 const requests=[];let server;
 const scratch=await mkdtemp(join(tmpdir(),'tamrank-package-'));
@@ -92,6 +93,8 @@ try {
   assert.ok(paths.every(p=>!p.split('/').some(s=>s==='..' || s.startsWith('.')) && !/^(?:test|node_modules|docs)\//.test(p)), 'No test fixtures, credentials or hidden configuration in package');
   await run('tar',['-xzf',join(scratch,packed.filename),'-C',scratch],{timeout:10000});
   const installed=await realpath(join(scratch,'package'));
+  for(const file of ['README.md','WORKFLOW-PREVIEW.md'])assert.equal(await readFile(join(installed,file),'utf8'),
+    before[sourceFiles.indexOf(file)],'Installed guide exactly matches the reviewed source: '+file);
   const privateDirectory=join(await realpath(scratch),'receipt-storage');
   const setup=await run(process.execPath,[join(installed,'receipt-storage.js'),'init','--directory',privateDirectory],{env:environment});
   assert.equal(JSON.parse(setup.stdout).created,true);
@@ -198,7 +201,7 @@ try {
     }
     console.log('NATIVE PACKAGE OK: '+nativeCases.map(([mode])=>mode).join(', '));
   }
-  assert.deepEqual(await Promise.all(['package.json','package-lock.json','index.js'].map(p=>readFile(join(root,p),'utf8'))),before,'Packaging must not modify source manifest, lock or shipped entry');
+  assert.deepEqual(await Promise.all(sourceFiles.map(p=>readFile(join(root,p),'utf8'))),before,'Packaging must not modify source manifest, lock, shipped entry or guides');
   console.log(`WORKFLOW PACKAGE OK: extracted tarball with ${online?'clean-cache':'offline'} npm ci using repository lock; installed entry, 12/20/42 profiles, both REST forms, scan preview/private draft mapping; baseline writers disabled${nativeCases.length?'; selected native matrices passed':''}. Source and active installation untouched; unconstrained registry resolution untested.`);
 } finally {
   if(server)await new Promise(resolve=>server.close(resolve));
