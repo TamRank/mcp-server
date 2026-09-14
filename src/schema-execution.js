@@ -1,5 +1,6 @@
 /** Read-only semantic schema records. Raw native envelopes are never tool output. */
 import {z} from 'zod';
+import {validSchemaExecutionHistory} from './schema-execution-history.js';
 import {validExecutionResponse,fieldOperations,executionSchema} from './field-execution.js';
 import {redirectOperations,capability,redirectConfirmationBody,mixedExecutionSchema} from './redirect-execution.js';
 export const schemaExecutionPolicies=['workflow-schema-execution-1','workflow-schema-rollback-1'];
@@ -46,6 +47,7 @@ export function validSchemaExecutionResponse(data,id=null,planHash=null){
   let encoded;try{encoded=JSON.stringify(data);}catch{return false;}
   if(typeof encoded!=='string'||Buffer.byteLength(encoded,'utf8')>1048576||!keys(data,['contract_version','record'],['contract_version','record'])
     ||!validExecutionResponse(data,id,planHash,schemaExecutionPolicies))return false;
+  if(data.record.history!==undefined)return validSchemaExecutionHistory(data.record);
   const r=data.record,p=r.envelope?.plan,inverse=p?.policy_version==='workflow-schema-rollback-1';
   if(!keys(r,['state','plan_persisted','approval_recorded','projection','envelope','registration','item_results'],
     ['state','plan_persisted','approval_recorded','projection','envelope','registration','item_results'])

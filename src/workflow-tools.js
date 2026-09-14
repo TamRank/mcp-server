@@ -17,6 +17,7 @@ import {validSchemaExecutionResponse,schemaForwardToken,schemaInverseToken,schem
 import {schemaRollbackShape,isSchemaRollback,isSchemaRollbackPreview,validSchemaRollbackInput,
   validSchemaRollbackPreview,matchesSchemaRollbackRequest} from './schema-rollback.js';
 import {schemaRecoveryToken,validSchemaRecoveryProposal,validSchemaRecoveryInput,validSchemaRecoveryResult} from './schema-recovery.js';
+import {matchesSchemaHistoricalExecution} from './schema-execution-history.js';
 import {recoveryExecutionSchema,recoveryInput,validRecoveryProposal,validRecoveryInput,recoveryBody,validRecoveryResult} from './field-recovery.js';
 import {capability,redirectToken,redirectRecoveryToken,redirectExecutionSchema,mixedExecutionSchema,isRedirectExecutionPlan,
   redirectConfirmationBody,validRedirectExecutionResponse,validRedirectRecoveryProposal,validRedirectRecoveryInput,validRedirectRecoveryResult} from './redirect-execution.js';
@@ -347,7 +348,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
           const valid=isSchema?(nativeRead?schemaExecutionRead:schemaAllowed&&(schemaPlan||schemaExecute||schemaRollback)&&policy===schemaPolicy)
               &&validSchemaExecutionResponse(data,id,hash)&&(!schemaPlan||matchesSchemaExecutionRequest(data,a))
               &&(!schemaRollback||matchesSchemaRollbackRequest(data,a))
-              &&(!schemaExecute||(data.record.approval_recorded===true&&data.record.envelope.change_token===a.change_token
+              &&(!schemaExecute||(data.record.history?matchesSchemaHistoricalExecution(data,a):data.record.approval_recorded===true&&data.record.envelope.change_token===a.change_token
                 &&JSON.stringify(data.record.envelope.plan.required_acknowledgements)===JSON.stringify(a.confirmation.acknowledgements)))
             :isRedirect?redirectAllowed&&!schemaPlan&&!schemaExecute&&!schemaRollback
               &&(nativeRead||rollback||redirectPlan||redirectExecute)&&validRedirectExecutionResponse(data,id,hash,expected)
