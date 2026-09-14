@@ -29,9 +29,11 @@ const nativeScanReceipts=process.argv.includes('--native-scan-receipts');
 const nativeRedirects=process.argv.includes('--native-redirects'),nativeSchema=process.argv.includes('--native-schema');
 const nativeSchemaHistory=process.argv.includes('--native-schema-history');
 const nativeSchemaHistoryRecovery=process.argv.includes('--native-schema-history-recovery');
+const nativeSchemaHistoryRecoveryMixed=process.argv.includes('--native-schema-history-recovery-mixed');
 const nativeCases=[
   ...(nativeSchemaHistory?[['schema-history-mcp','native schema historical MCP read and exact replay over TLS']]:[]),
   ...(nativeSchemaHistoryRecovery?[['schema-history-recovery-mcp','native schema historical recovery confirmation replays over MCP/TLS']]:[]),
+  ...(nativeSchemaHistoryRecoveryMixed?[['schema-history-recovery-mixed-mcp','native schema historical mixed recovery over MCP/TLS']]:[]),
   ...(nativeBetaUpgrade?[['beta-upgrade','shipped beta MCP/TLS paired FREE/PRO upgrade native checks']]:[]),
   ...(nativeBetaReads?[['beta-reads','shipped beta MCP/TLS paired FREE/PRO upgrade stored-read native checks']]:[]),
   ...(nativeBetaRedirects?[['beta-redirects','shipped beta MCP/TLS paired FREE/PRO upgrade redirect/rollback/recovery native checks']]:[]),
@@ -54,7 +56,7 @@ const nativeCases=[
     ['schema-recovery-mixed-mcp','native schema worker interruption and fresh journal recovery over MCP/TLS'],
     ['schema-recovery-authority-mcp','native schema recovery checks with token/scope/membership/entitlement changed after preview on the same MCP session']]:[])
 ];
-assert.ok(process.argv.slice(2).every(arg=>['--allow-network','--native-reads','--native-scans','--native-scan-receipts','--native-fields','--native-redirects','--native-schema','--native-schema-history','--native-schema-history-recovery','--native-beta-upgrade','--native-beta-reads','--native-beta-redirects','--native-beta-schema','--native-beta-pagespeed','--native-beta-work'].includes(arg)),'Unknown installation-test argument');
+assert.ok(process.argv.slice(2).every(arg=>['--allow-network','--native-reads','--native-scans','--native-scan-receipts','--native-fields','--native-redirects','--native-schema','--native-schema-history','--native-schema-history-recovery','--native-schema-history-recovery-mixed','--native-beta-upgrade','--native-beta-reads','--native-beta-redirects','--native-beta-schema','--native-beta-pagespeed','--native-beta-work'].includes(arg)),'Unknown installation-test argument');
 if(nativeBetaUpgrade||nativeBetaReads||nativeBetaRedirects||nativeBetaSchema||nativeBetaPageSpeed||nativeBetaWork)assert.ok(process.env.TAMRANK_TEST_BETA_ZIP,'Exact distributed beta path required');
 let nativePro;
 if(nativeCases.length){
