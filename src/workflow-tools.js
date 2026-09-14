@@ -380,6 +380,10 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         && capabilities.reads?.diagnose_page?.url_target?.available!==true)
         return failure('workflow_operation_unavailable','URL analytics are not available in this site preview. No request was sent.');
       const scanPlan=def.scanPlan && parsed.data.mode==='plan';
+      if (canonical==='start_scan' && parsed.data.type==='index'
+        && (!Array.isArray(capabilities?.specialist_reads?.start_scan?.types)
+          || !capabilities.specialist_reads.start_scan.types.includes('index')))
+        return failure('workflow_operation_unavailable','Exact index preview is unavailable on this site. No request was sent.');
       const proposalRead=canonical==='get_scan_status' && parsed.data.proposal_id!==undefined;
       if (def.specialist && !scanPlan && !proposalRead && !maintenanceRead && !def.maintenanceWrite && capabilities && capabilities.specialist_reads?.[canonical]?.available!==true)
         return failure('workflow_operation_unavailable','This specialist read is unavailable on this site. No request was sent.');
@@ -474,13 +478,15 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         :a.type==='pagespeed'&&(a.proposal_id!==undefined||a.execution_id!==undefined)?Object.keys(a).length===2
         :a.receipt_reference!==undefined?a.execution_id!==undefined && Object.keys(a).length===2:a.proposal_id!==undefined || a.execution_id!==undefined || a.source_job_id!==undefined?Object.keys(a).length===1:a.type!==undefined,
     }:{
-      description:'Preview→plan→show all URLs/warnings→chat→run. No auto-retry. PageSpeed: proposal_id; source: source_job_id.',
-      specialist:true,scanPlan:true,path:a=>a.mode==='plan'?'/scans/proposals':'/scans/preview',schema:{mode:z.enum(['preview','plan','run']),type:z.enum(['pagespeed','schema_source']),
+      description:'Preview→plan→show all URLs/warnings→chat→run. No retry. PageSpeed: proposal_id; source: source_job_id. Index: preview only.',
+      specialist:true,scanPlan:true,path:a=>a.mode==='plan'?'/scans/proposals':'/scans/preview',schema:{mode:z.enum(['preview','plan','run']),type:z.enum(['pagespeed','schema_source','index']),
         post_ids:z.array(pageId).min(1).max(25).refine(ids=>new Set(ids).size===ids.length).optional(),expected_revision:z.string().regex(/^[a-f0-9]{64}$/).optional(),
         source_job_id:scanId.optional(),proposal_id:scanId.optional(),confirmation:scanConfirmation.optional(),
         capture_mode:z.literal('native_render').optional(),probe_content:z.literal(true).optional(),
         client_request_id:z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/).optional()},
-      validate:a=>a.type==='schema_source'?a.proposal_id===undefined&&validSourceStart(a)
+      validate:a=>a.type==='index'?a.mode==='preview' && a.post_ids!==undefined
+        && Object.keys(a).every(k=>['mode','type','post_ids','expected_revision'].includes(k))
+        :a.type==='schema_source'?a.proposal_id===undefined&&validSourceStart(a)
         &&(a.confirmation===undefined||sourceConfirmation.safeParse(a.confirmation).success):validPageSpeedStart(a),
       query:a=>a.mode==='plan'?strip(a,['mode']):({...strip(a,['mode']),post_ids:a.post_ids.join(',')}),
     });

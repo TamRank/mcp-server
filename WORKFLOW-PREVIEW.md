@@ -582,11 +582,33 @@ Both require the exact operation to be advertised in server capabilities.
 Six optional specialists are connected: `get_gsc_pages`, `get_redirects`,
 `get_images_missing_alt`, `get_site_diagnostics`, `get_topical_authority` and
 passive `get_scan_status`, as described below. `start_scan` additionally supports
-explicit PageSpeed preview and separately authorised private drafts, never execution.
+explicit PageSpeed preview and separately authorised private drafts. PageSpeed and
+schema-source execution use their separately gated lanes documented above/below.
+Index supports only the exact read-only preview described below.
 `plan_changes` and exact-ID `get_changes` now support the separately gated private
 metadata/social/alt and redirect subsets below. The three field operations also have
 the separately gated execution bridge below; redirects/mixed sets use the new lane above. Remaining native MCP failure/owner acceptance,
-scan execution and Phase 4 remain open; there is no customer-site activation.
+index execution and Phase 4 remain open; there is no customer-site activation.
+
+## Exact index preview — 14 September
+
+`start_scan({type:"index",mode:"preview",post_ids:[205,1]})` reads 1–25 explicit
+managed public pages, in full and in order. Optional `expected_revision` detects
+changed stored evidence. Requires explicit index-preview site capability and the
+existing PRO/administrator/site:read guards. No index `plan`/`run`, confirmation,
+client-request-ID or legacy fallback is accepted.
+
+The response shows stored property matching, any recorded job and shared manual
+cooldown. No domain rewrite, Google call, job creation or approval happens.
+Credits, cost, remaining quota and request ceiling stay unknown; selected URLs
+are not a provider budget. No recorded job is not proof of completion.
+
+Index execution remains in the original phase-4 scope. The inspected backend
+still needs a durable idempotent start, complete job/result history and an enforced
+per-job attempt budget before this preview can become an executable proposal.
+PRO contract/evidence: `samkl8/tamrank-pro`, branch `feat/mcp-workflows`,
+`docs/mcp-phase4b-index-preview.md`. Tests: `npm run test:workflow-scans` and the
+PRO native single-/multisite read runners on PHP 8.2/8.5.
 
 ## Exact field execution bridge (development opt-in)
 

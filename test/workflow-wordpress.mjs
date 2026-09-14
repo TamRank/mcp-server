@@ -217,8 +217,23 @@ try {
   assert.deepEqual(repeated.targets,preview.targets);
   const allPreview=await call(diagnosticClient,'start_scan',{...previewArgs,post_ids:Array.from({length:25},(_,i)=>i+1)});
   assert.equal(allPreview.target_count,25);assert.equal(allPreview.targets.length,25);
-  for(const extra of [{mode:'execute'},{type:'index'},{force:true}])assert.equal((await diagnosticClient.callTool({name:'start_scan',arguments:{...previewArgs,...extra}})).isError,true);
+  for(const extra of [{mode:'execute'},{type:'unsupported'},{force:true}])assert.equal((await diagnosticClient.callTool({name:'start_scan',arguments:{...previewArgs,...extra}})).isError,true);
   console.log(`SCAN PREVIEW E2E OK: exact 25 targets, both REST forms, no scan/approval/provider call; ${specialistSurface} specialist surface chars.`);
+  assert.ok(caps.specialist_reads.start_scan.types.includes('index'));
+  const indexArgs={...previewArgs,type:'index'},indexPreview=await call(diagnosticClient,'start_scan',indexArgs);
+  assert.deepEqual(indexPreview.targets.map(t=>t.post_id),[205,1]);
+  assert.equal(indexPreview.targets[0].url,pageBase+'/?page_id=205');
+  assert.equal(indexPreview.backend_requested,false);assert.equal(indexPreview.plan_persisted,false);
+  assert.equal(indexPreview.execution_enabled,false);assert.equal(indexPreview.approval_requested,false);
+  assert.equal(indexPreview.quota_context.tamrank_credits,null);assert.equal(indexPreview.quota_context.provider_request_ceiling,null);
+  assert.ok(indexPreview.blockers.includes('index_backend_contract_unverified'));
+  const indexRepeat=await call(diagnosticQuery,'start_scan',{...indexArgs,expected_revision:indexPreview.preview_revision});
+  assert.deepEqual(indexRepeat.targets,indexPreview.targets);
+  const indexAll=await call(diagnosticClient,'start_scan',{...indexArgs,post_ids:Array.from({length:25},(_,i)=>i+1)});
+  assert.equal(indexAll.targets.length,25);
+  for(const extra of [{mode:'plan'},{mode:'run'},{force:true},{client_request_id:'implicit-index-plan'}])
+    assert.equal((await diagnosticClient.callTool({name:'start_scan',arguments:{...indexArgs,...extra}})).isError,true);
+  console.log('INDEX PREVIEW E2E OK: exact 25 targets, both REST forms, unknown cost, no plan/approval/poll/dispatch.');
   const editor=await connect('core',config.editor_token); await assert.rejects(call(editor,'get_capabilities'),/workflow_operator_unavailable/);
   const expired=await connect('core',config.expired_token); await assert.rejects(call(expired,'get_capabilities'),/agent_token_expired/);
   console.log(`WORKFLOW WORDPRESS E2E OK: real MCP stdio + HTTP + native WP; 205 search results/targets, URL analytics with 205 keywords, 206-term union and 90 daily rows; 12/42 tools, ${surface} core surface chars; unsafe/unavailable calls refused.`);
