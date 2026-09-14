@@ -19,6 +19,7 @@ await run(process.execPath,[join(root,'test/workflow-onboarding.mjs')],{cwd:root
 const online=process.argv.includes('--allow-network');
 const nativeFields=process.argv.includes('--native-fields');
 const nativeBetaUpgrade=process.argv.includes('--native-beta-upgrade');
+const nativeBaseline095Upgrade=process.argv.includes('--native-095-upgrade');
 const nativeBetaReads=process.argv.includes('--native-beta-reads');
 const nativeBetaRedirects=process.argv.includes('--native-beta-redirects');
 const nativeBetaSchema=process.argv.includes('--native-beta-schema');
@@ -38,6 +39,7 @@ const nativeCases=[
   ...(nativeSchemaHistoryRecovery?[['schema-history-recovery-mcp','native schema historical recovery confirmation replays over MCP/TLS']]:[]),
   ...(nativeSchemaHistoryRecoveryMixed?[['schema-history-recovery-mixed-mcp','native schema historical mixed recovery over MCP/TLS']]:[]),
   ...(nativeBetaUpgrade?[['beta-upgrade','shipped beta MCP/TLS paired FREE/PRO upgrade native checks']]:[]),
+  ...(nativeBaseline095Upgrade?[['source-095-upgrade','source 0.9.5 MCP/TLS paired FREE/PRO upgrade native checks']]:[]),
   ...(nativeBetaReads?[['beta-reads','shipped beta MCP/TLS paired FREE/PRO upgrade stored-read native checks']]:[]),
   ...(nativeBetaRedirects?[['beta-redirects','shipped beta MCP/TLS paired FREE/PRO upgrade redirect/rollback/recovery native checks']]:[]),
   ...(nativeBetaSchema?[['beta-schema','shipped beta MCP/TLS paired FREE/PRO upgrade schema/source/rollback native checks']]:[]),
@@ -59,7 +61,7 @@ const nativeCases=[
     ['schema-recovery-mixed-mcp','native schema worker interruption and fresh journal recovery over MCP/TLS'],
     ['schema-recovery-authority-mcp','native schema recovery checks with token/scope/membership/entitlement changed after preview on the same MCP session']]:[])
 ];
-assert.ok(process.argv.slice(2).every(arg=>['--allow-network','--native-reads','--native-scans','--native-scan-receipts','--native-fields','--native-redirects','--native-schema','--native-schema-history','--native-schema-history-recovery','--native-schema-history-recovery-mixed','--native-schema-sources','--native-beta-upgrade','--native-beta-reads','--native-beta-redirects','--native-beta-schema','--native-beta-pagespeed','--native-beta-work'].includes(arg)),'Unknown installation-test argument');
+assert.ok(process.argv.slice(2).every(arg=>['--allow-network','--native-reads','--native-scans','--native-scan-receipts','--native-fields','--native-redirects','--native-schema','--native-schema-history','--native-schema-history-recovery','--native-schema-history-recovery-mixed','--native-schema-sources','--native-beta-upgrade','--native-095-upgrade','--native-beta-reads','--native-beta-redirects','--native-beta-schema','--native-beta-pagespeed','--native-beta-work'].includes(arg)),'Unknown installation-test argument');
 if(nativeBetaUpgrade||nativeBetaReads||nativeBetaRedirects||nativeBetaSchema||nativeBetaPageSpeed||nativeBetaWork)assert.ok(process.env.TAMRANK_TEST_BETA_ZIP,'Exact distributed beta path required');
 let nativePro;
 if(nativeCases.length){
@@ -186,9 +188,9 @@ try {
     assert.throws(()=>ownedInstalledRuntime(root,''),'Empty package override cannot fall back to source');
     assert.throws(()=>ownedInstalledRuntime(root,root),'Checkout cannot masquerade as installed package');
     for(const [mode,expected] of nativeCases){
-      const reads=mode==='stored-reads'||mode==='stored-reads-multisite',scans=mode==='pagespeed-scans'||mode==='pagespeed-receipts',beta=['beta-upgrade','beta-reads','beta-redirects','beta-schema','beta-pagespeed','beta-work'].includes(mode);
+      const reads=mode==='stored-reads'||mode==='stored-reads-multisite',scans=mode==='pagespeed-scans'||mode==='pagespeed-receipts',beta=['beta-upgrade','source-095-upgrade','beta-reads','beta-redirects','beta-schema','beta-pagespeed','beta-work'].includes(mode);
       console.log('RUN INSTALLED: '+mode+' → extracted entry → '+(reads||scans?'owned HTTP':'verified TLS')+' → owned WordPress.');
-      const nativeArgs=beta?[join(nativePro,'docs/mcp-phase4e-beta-upgrade-wordpress.mjs'),'--installed-mcp',...(mode==='beta-reads'?['--stored-reads']:mode==='beta-redirects'?['--redirects']:mode==='beta-schema'?['--schema']:mode==='beta-pagespeed'?['--pagespeed']:mode==='beta-work'?['--work']:[])]:scans?[join(root,'test/workflow-pagespeed-native.mjs'),...(mode==='pagespeed-receipts'?['--result-journal']:[])]:reads?[join(nativePro,mode==='stored-reads-multisite'?'docs/mcp-phase4e-read-network-wordpress.mjs':'docs/mcp-phase4e-read-wordpress.mjs')]:[join(nativePro,'docs/mcp-phase4c-change-store-wordpress.mjs'),'--'+mode];
+      const nativeArgs=beta?[join(nativePro,'docs/mcp-phase4e-beta-upgrade-wordpress.mjs'),'--installed-mcp',...(mode==='source-095-upgrade'?['--baseline-095']:mode==='beta-reads'?['--stored-reads']:mode==='beta-redirects'?['--redirects']:mode==='beta-schema'?['--schema']:mode==='beta-pagespeed'?['--pagespeed']:mode==='beta-work'?['--work']:[])]:scans?[join(root,'test/workflow-pagespeed-native.mjs'),...(mode==='pagespeed-receipts'?['--result-journal']:[])]:reads?[join(nativePro,mode==='stored-reads-multisite'?'docs/mcp-phase4e-read-network-wordpress.mjs':'docs/mcp-phase4e-read-wordpress.mjs')]:[join(nativePro,'docs/mcp-phase4c-change-store-wordpress.mjs'),'--'+mode];
       const nativeRun=run(process.execPath,nativeArgs,
         {cwd:nativePro,env:{...process.env,TAMRANK_MAINT_MCP:root,TAMRANK_TEST_PACKED_ROOT:installed},
           // Full paired schema acquisition/execution matrix honors real request windows.
