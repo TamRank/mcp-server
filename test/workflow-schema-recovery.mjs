@@ -58,6 +58,31 @@ function result(f){
       attempts:i.stored_state==='applied'?1:0,...i.stored_state==='applied'?{audit_id:n+1,committed_at:now+1,changed:true,invalidation:'delivered',
         ...i.source_url?{redirect_result:{redirect_id:i.actual_redirect_id,before:null,after:null}}:{}}:{}}))}};
 }
+function historicalResult(f){
+  const r=result(f).record,p=r.envelope.plan,inverse=p.kind==='rollback',removed=now+1100;
+  const strip=a=>{const {mode,received_at,plan_hash,statement,acknowledgements,provenance_asserted,human_verified}=a;
+    return {mode,received_at,plan_hash,statement,acknowledgements,provenance_asserted,human_verified,attribution_removed_at:removed};};
+  const e=r.registration;delete e.client_request_id;delete e.recovery.client_request_id;
+  e.attestation=strip(e.attestation);e.recovery.attestation=strip(e.recovery.attestation);
+  const acks=new Set();
+  const items=p.items.map((i,n)=>{
+    delete i.schema_comparison;
+    if(inverse)i.original_order=p.items.length-n-1;
+    if(i.operation==='schema.select'&&inverse)acks.add('replace_manual_schema');
+    if(i.operation==='schema_settings.update')acks.add('site_wide_identity');
+    if(i.operation==='redirect.delete')acks.add('redirect_deletion');
+    const result=r.item_results[n];
+    if(result.state==='applied'&&schemaOperations.includes(i.operation))result.schema_result={
+      policy:inverse?'native-schema-rollback-item-1':'native-schema-item-1',current_graph_hash:original,proposed_graph_hash:hash,frontend_output_verified:false};
+    return {...i,result};
+  });
+  e.attestation.acknowledgements=[...acks].sort();
+  return {contract_version:1,record:{state:r.state,approval_recorded:true,execution_available:false,projection:r.projection,
+    history:{contract_version:1,kind:'field_execution_history',change_set_id:id,change_kind:p.kind,source_policy:p.policy_version,
+      original_plan_hash:original,site:{installation_id:installation,blog_id:1,site_origin:p.binding.site_origin},attribution:{removed_at:removed},
+      created_at:now,expires_at:now+600,state:r.state,action_id:null,...inverse?{reverses:p.reverses}:{origin:p.origin},
+      approval_recorded:true,execution_available:false,items,execution:e}}};
+}
 let checks=0,calls=[],response,error;
 const check=(v,label)=>{checks++;assert.ok(v,label);},equal=(a,b,label)=>{checks++;assert.deepEqual(a,b,label);};
 const transport={async post(path,body){calls.push({path,body});if(error)throw error;return response;}};
@@ -71,6 +96,9 @@ for(const inverse of [false,true])for(const operations of [['schema.select'],['s
   check(validSchemaRecoveryInput(recoveryInput(f.input)),'Closed exact fresh consent');
   response=result(f);check(validSchemaExecutionResponse(response),`Full semantic execution fixture: ${inverse}/${applied}/${operations.join(',')}`);
   check(validSchemaRecoveryResult(response,f.proposal),'Exact source policy, actor, receipt and per-item dispositions');
+  const historical=historicalResult(f);
+  check(validSchemaExecutionResponse(historical),'Closed erased historical fixture');
+  check(validSchemaRecoveryResult(historical,f.proposal),'Historical recovery matches retained site, receipt and complete dispositions');
 }
 const f=fixture();
 for(const edit of [p=>p.website_writes=1,p=>p.execution_available=true,p=>p.approval_recorded=true,p=>p.expires_at++,
@@ -88,6 +116,17 @@ for(const edit of [r=>r.state='executed',r=>r.envelope.plan.policy_version='work
   r=>r.envelope.plan.items[0].target.post_id++,r=>r.registration.recovery.attestation.human_verified=true]){
   const bad=result(f);edit(bad.record);check(!validSchemaRecoveryResult(bad,f.proposal),'Wrong receipt or unexpected write cannot claim recovery success');
 }
+for(const edit of [h=>h.source_policy='workflow-schema-rollback-1',h=>h.site.blog_id++,h=>h.site.installation_id=id,
+  h=>h.site.site_origin='https://other.invalid',h=>h.execution.execution_id=installation,h=>delete h.execution.recovery,
+  h=>h.execution.recovery.version=2,h=>h.execution.recovery.plan_hash=original,h=>h.execution.recovery.at=now,
+  h=>h.execution.recovery.at=f.proposal.plan.expires_at,h=>h.execution.recovery.recovery_mode='delivery_only',
+  h=>h.execution.recovery.attestation.acknowledgements=[],h=>h.execution.recovery.attestation.human_verified=true,
+  h=>h.execution.recovery.attestation.operator_id=2,h=>h.execution.recovery.client_request_id='private',
+  h=>h.items[0].target.post_id++,h=>h.items[0].url='https://other.invalid/page',h=>h.items.pop(),
+  h=>h.items[1].result.state='applied',h=>h.items[1].result.attempts=1,h=>h.execution_available=true]){
+  const bad=historicalResult(f);edit(bad.record.history);
+  check(!validSchemaRecoveryResult(bad,f.proposal),'Changed historical recovery or leaked private identities rejected');
+}
 if(!process.argv.includes('--bridge')){console.log(`PASS: ${checks} schema recovery semantic checks; route integration not covered (pending --bridge).`);process.exit(0);}
 const tools=registry();
 for(const f of cases){
@@ -99,6 +138,8 @@ for(const f of cases){
   equal(sent.body.confirmation.acknowledgements,f.proposal.plan.required_acknowledgements);
   check(!Object.hasOwn(sent.body,'items')&&!Object.hasOwn(sent.body,'source_jobs'),'No website values or scan dispatch');
   await tools.get('execute_change_set').h(f.input);equal(calls.splice(0),[sent],'Exact request identity on explicit retry');
+  response=historicalResult(f);check(!(await tools.get('execute_change_set').h(f.input)).isError,'Historical recovery accepted without new authority');
+  equal(calls.splice(0),[sent],'Historical retry sends only the identical separate recovery confirmation');
 }
 check(tools.get('get_changes').c.annotations.readOnlyHint,'Recovery proposal has no mutation hint');
 for(const edit of [a=>a.confirmation.confirmed=false,a=>a.confirmation.acknowledgements=[],a=>a.confirmation.acknowledgements.reverse(),

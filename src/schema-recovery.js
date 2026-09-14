@@ -49,20 +49,25 @@ export function validSchemaRecoveryInput(v){return confirmation.safeParse(v).suc
   &&v.confirmation.plan_hash===v.proposal.plan_hash&&same(v.confirmation.acknowledgements,v.proposal.plan.required_acknowledgements);}
 export function validSchemaRecoveryResult(data,proposal){
   if(!validSchemaRecoveryProposal(proposal)||!validSchemaExecutionResponse(data,proposal.plan.change_set_id,proposal.plan.original_plan_hash))return false;
-  const r=data.record,p=proposal.plan,stored=r.envelope.plan,e=r.registration,receipt=e?.recovery;
+  // Erased actor/request identities stay private. WordPress verifies the exact
+  // original recovery request; here we compare only its retained public facts.
+  const r=data.record,p=proposal.plan,h=r.history,stored=h?null:r.envelope.plan,
+    e=h?h.execution:r.registration,receipt=e?.recovery,items=h?h.items:stored.items,
+    site=h?h.site:stored.binding;
   const states=p.recovery_mode==='delivery_only'?['running','executed']:[p.items.some(i=>i.stored_state==='applied')?'partial':'failed'];
-  if(!states.includes(r.state)||stored.policy_version!==p.source_policy||e?.execution_id!==p.execution_id
-    ||stored.binding.token_id!==p.original_token_id||stored.binding.operator_id!==p.binding.operator_id
-    ||stored.binding.blog_id!==p.binding.blog_id||stored.binding.installation_id!==p.binding.installation_id||stored.binding.site_origin!==p.binding.site_origin
+  if(!states.includes(r.state)||(h?h.source_policy:stored.policy_version)!==p.source_policy||e?.execution_id!==p.execution_id
+    ||site.blog_id!==p.binding.blog_id||site.installation_id!==p.binding.installation_id||site.site_origin!==p.binding.site_origin
     ||receipt?.version!==3||!Number.isSafeInteger(receipt.at)||receipt.at<p.created_at||receipt.at>=p.expires_at
     ||receipt.policy_version!=='workflow-schema-recovery-1'||receipt.plan_hash!==proposal.plan_hash
     ||receipt.recovery_mode!==p.recovery_mode||receipt.attestation?.plan_hash!==proposal.plan_hash
+    ||receipt.attestation.human_verified!==false
+    ||!same(receipt.attestation.acknowledgements,p.required_acknowledgements)||items.length!==p.items.length)return false;
+  if(!h&&(stored.binding.token_id!==p.original_token_id||stored.binding.operator_id!==p.binding.operator_id
     ||receipt.attestation.change_set_id!==p.change_set_id||receipt.attestation.operator_id!==p.binding.operator_id
-    ||receipt.attestation.attested_by_token_id!==p.binding.token_id||receipt.attestation.human_verified!==false
-    ||receipt.client_request_id!=='mcp-recover-'+proposal.plan_hash||receipt.attestation.client_request_id!==receipt.client_request_id
-    ||!same(receipt.attestation.acknowledgements,p.required_acknowledgements)||stored.items.length!==p.items.length)return false;
+    ||receipt.attestation.attested_by_token_id!==p.binding.token_id
+    ||receipt.client_request_id!=='mcp-recover-'+proposal.plan_hash||receipt.attestation.client_request_id!==receipt.client_request_id))return false;
   return p.items.every((i,n)=>{
-    const item=stored.items[n],result=r.item_results[n];
+    const item=items[n],result=h?item.result:r.item_results[n];
     return item.item_id===i.item_id&&item.operation===i.operation
       &&Object.keys(i.target).length===Object.keys(item.target).length&&Object.entries(i.target).every(([k,v])=>item.target[k]===v)
       &&(i.url!==undefined?item.url===i.url:(item.after??item.before)?.source_url===i.source_url
