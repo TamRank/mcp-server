@@ -14,6 +14,9 @@
     "src/",
     "assets/",
     "README.md",
+    "QUICKSTART-NL.md",
+    "QUICKSTART-DE.md",
+    "QUICKSTART-FR.md",
     "WORKFLOW-PREVIEW.md",
     "SCAN-RECEIPTS.md",
     "LICENSE"

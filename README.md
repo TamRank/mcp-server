@@ -1,5 +1,10 @@
 # TamRank MCP — workflow development preview
 
+Start guides: **English** (this page) · [Nederlands](QUICKSTART-NL.md) ·
+[Deutsch](QUICKSTART-DE.md) · [Français](QUICKSTART-FR.md).
+The translated quickstarts cover the same development entry and safety boundaries;
+they do not change the client or WordPress interface language.
+
 TamRank helps you find relevant SEO work, inspect the evidence, review an exact
 proposal and, after approval in chat, execute supported changes and inspect the
 result. It uses the same work sources as the WordPress dashboard. Completing
