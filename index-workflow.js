@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Opt-in development entry; does not replace the installed 0.3.x bridge. */
+/** Canonical safe workflow entry for the 0.4 beta package. */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { WorkflowClient } from './src/workflow-rest.js';

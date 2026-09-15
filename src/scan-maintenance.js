@@ -24,8 +24,9 @@ export async function discoverWorkflows(client,{preview=false,profile='core'}={}
   let capabilities=null,preflight={ok:true},maintenanceOnly=false;
   try {
     capabilities=await client.get('/capabilities');
-    if(capabilities.full_v2_compatible!==true && !preview)
-      preflight={ok:false,code:'workflow_upgrade_required',message:'This site has not completed V2 compatibility. Enable the explicit development preview; no legacy writer fallback.'};
+    const compatible=capabilities.full_v2_compatible===true || capabilities.mcp_bridge_compatibility==='safe-beta-1';
+    if(!compatible && !preview)
+      preflight={ok:false,code:'workflow_upgrade_required',message:'This site has not activated a compatible TamRank workflow profile. Activate the safe beta profile in WordPress or use an explicit development preview; no legacy writer fallback.'};
   } catch(err) {
     preflight={ok:false,code:err.code || 'workflow_unavailable',message:'Workflow connection check failed. Check site, token and readiness, then restart.'};
     if(err.status===429)preflight={...preflight,message:'Connection check rate-limited. Wait before restarting; no automatic retry.',...rateLimitAdvice(err.data)};

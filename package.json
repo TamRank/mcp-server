@@ -1,12 +1,12 @@
 {
   "name": "@tam-rank/mcp-server",
-  "version": "0.3.0-preview",
+  "version": "0.4.0-beta.1",
   "description": "MCP server for TamRank WordPress SEO — connect Claude and Cursor to your site",
   "type": "module",
   "bin": {
-    "tamrank-mcp": "./index.js"
+    "tamrank-mcp": "./index-workflow.js"
   },
-  "main": "./index.js",
+  "main": "./index-workflow.js",
   "files": [
     "index.js",
     "index-workflow.js",
@@ -22,7 +22,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "start": "node index.js",
+    "start": "node index-workflow.js",
     "test": "node test/smoke.mjs && node test/surface.mjs",
     "test:smoke": "node test/smoke.mjs",
     "test:surface": "node test/surface.mjs",
