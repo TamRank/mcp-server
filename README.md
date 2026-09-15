@@ -1,8 +1,8 @@
-# TamRank MCP — workflow development preview
+# TamRank MCP — 0.4 beta
 
 Start guides: **English** (this page) · [Nederlands](QUICKSTART-NL.md) ·
 [Deutsch](QUICKSTART-DE.md) · [Français](QUICKSTART-FR.md).
-The translated quickstarts cover the same development entry and safety boundaries;
+The translated quickstarts cover the same beta entry and safety boundaries;
 they do not change the client or WordPress interface language.
 
 TamRank helps you find relevant SEO work, inspect the evidence, review an exact
@@ -10,20 +10,20 @@ proposal and, after approval in chat, execute supported changes and inspect the
 result. It uses the same work sources as the WordPress dashboard. Completing
 research is not proof of a website fix or an SEO improvement.
 
-**Phase 4 is still in development. Do not activate these writers on customer
-sites yet.** This branch is not an npm release. No stable release date is promised.
+**Use this beta on an owned test site first. Do not activate its writers on a
+customer site without a separately reviewed release decision.** The repository
+build is not published merely by changing its version.
 
-## Choose the correct entry
+## Package and entry
 
-| Entry | Status on this branch |
+| Entry | Status in `0.4.0-beta.1` |
 |---|---|
-| `index-workflow.js` | Explicit development workflow entry. Identifies itself as `tamrank-workflow-preview` / `0.4.0-preview`. |
-| `index.js`, `npm start`, `tamrank-mcp` | Unchanged older V1 entry. These do **not** select the new workflow. |
-| Package manifest | Still `@tam-rank/mcp-server` / `0.3.0-preview`. Package/bin/version migration is a separate release step. |
+| `tamrank-mcp`, `npm start`, package main | Canonical safe workflow entry. Identifies itself as `tamrank-mcp` / `0.4.0-beta.1`. |
+| `index-workflow.js` | The same canonical entry when running a checkout directly. |
+| `index.js` | Compatibility path to the same safe workflow; it no longer starts the V1 implementation. |
 
-An `npx @tam-rank/mcp-server` command is not a way to test this branch. Use the
-explicit local entry below. The existing active MCP connection is not replaced
-by checking out this branch.
+The package name is `@tam-rank/mcp-server`; the first beta is deliberately pinned
+as `@tam-rank/mcp-server@0.4.0-beta.1`. Publishing remains a separate human action.
 
 The detailed implementation evidence and remaining gates are in
 [WORKFLOW-PREVIEW.md](WORKFLOW-PREVIEW.md). Older paragraphs there record
@@ -31,23 +31,17 @@ individual increments, not a claim that all Phase 4 checks are complete.
 
 ## First connection: owned test site, reads first
 
-1. Use a reviewed checkout of this repository on `feat/mcp-workflows`, in a
-   persistent local directory. From that directory run `npm ci --ignore-scripts`
-   to install the repository's locked dependencies. This downloads dependencies;
-   it does not publish the package or activate WordPress features.
-2. The **owned test site** must have the matching FREE and PRO development
-   builds, their required storage and explicitly enabled server-side read
-   support. Client environment variables cannot enable WordPress capabilities.
-   An ordinary beta installation is not automatically V2-ready. Do not copy a
-   blanket list of development flags into a customer configuration.
-3. In that site's TamRank **Settings → Integrations → AI Agents (MCP)** card,
+1. The **owned test site** must have the matching FREE and PRO beta builds. In
+   TamRank, activate the reviewed safe workflow profile while creating its PAT.
+   Client environment variables cannot enable WordPress capabilities.
+2. In that site's TamRank **Settings → Integrations → AI Agents (MCP)** card,
    create a **site-local PAT**, linked to your current WordPress operator.
    Begin with `site:read`; grant additional
    operation scopes only for a separately approved test. A licence key or an
    invented token prefix is not a PAT. Do not put a real token in git, shared
    screenshots, tickets or chat transcripts.
-4. Configure a separate stdio server in your MCP client. Replace both absolute
-   paths, the example site URL and the token placeholder. Clients using an
+3. Configure a separate stdio server in your MCP client. Replace the example
+   site URL and token placeholder. Clients using an
    `mcpServers` configuration shape can use this template; others need the same
    command, arguments and environment in their own settings.
 
@@ -55,20 +49,19 @@ individual increments, not a claim that all Phase 4 checks are complete.
 {
   "mcpServers": {
     "tamrank-test": {
-      "command": "/absolute/path/to/node",
-      "args": ["/absolute/path/to/mcp-server/index-workflow.js"],
+      "command": "npx",
+      "args": ["-y", "@tam-rank/mcp-server@0.4.0-beta.1"],
       "env": {
         "TAMRANK_SITE_URL": "https://test.example.com",
         "TAMRANK_PAT": "REPLACE_WITH_SITE_LOCAL_PAT",
-        "TAMRANK_TOOL_PROFILE": "core",
-        "TAMRANK_WORKFLOW_PREVIEW": "1"
+        "TAMRANK_TOOL_PROFILE": "core"
       }
     }
   }
 }
 ```
 
-5. Restart **this test connection**, then ask:
+4. Restart **this test connection**, then ask:
 
 > Confirm the site identity and available capabilities. Show the top three
 > existing tasks and the separate signals, with their evidence and data windows.
@@ -118,8 +111,8 @@ In the workflow entry's legacy profile, only `get_site_context`,
 `get_capabilities`, `get_signals`, `get_priority_actions` and
 `get_next_action` currently map to canonical reads. Other old names return a
 migration error without running their old handlers. Old writes never fall back
-to V1. The planned 0.4.x migration minor retains that profile; its removal in
-0.5.0 is a release plan, not a version change already made here.
+to V1. The 0.4.x beta retains that profile for migration. Removal remains a
+later release decision and is not performed by this beta.
 
 ## From research to an approved change
 

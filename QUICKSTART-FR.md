@@ -4,22 +4,15 @@ TamRank vous aide à trouver les tâches SEO pertinentes, à examiner les élém
 qui les justifient et à exécuter les modifications prises en charge après votre
 accord. Commencez par la lecture seule.
 
-**Il s'agit d'une version de développement de la phase 4, pas d'une publication
-npm. N'activez pas encore ces fonctions d'écriture sur les sites de clients.**
+**Utilisez d'abord cette bêta sur votre propre site de test. N'activez ses
+fonctions d'écriture sur un site client qu'après une validation de publication distincte.**
 Ce guide ne modifie aucun réglage et n'accorde aucun droit supplémentaire à l'IA.
 La traduction ne change ni la langue des réponses MCP ni celle de l'interface WordPress.
 
 ## 1. Prérequis
 
-- Votre propre site de test, avec les versions de développement FREE et PRO
-  correspondantes, le stockage configuré et les fonctions de lecture explicitement
-  activées. La bêta habituelle n'est pas automatiquement prête pour ce parcours.
-  Faites préparer le site de test ; ne copiez pas de paramètres de développement
-  sur les sites de clients.
-- Une copie vérifiée de `TamRank/mcp-server`, branche `feat/mcp-workflows`, dans
-  un dossier local permanent. Exécutez `npm ci --ignore-scripts` dans ce dossier
-  pour installer les dépendances fixées dans le fichier de verrouillage.
-  Cette commande ne publie ni n'active rien.
+- Votre propre site de test, avec les versions bêta FREE et PRO correspondantes.
+  Dans TamRank, activez le profil de workflow sûr lors de la création du PAT.
 - Un client MCP capable de lancer un programme local via stdio, et Node.js.
   Les versions testées et leurs limites figurent dans le [guide anglais](README.md).
 - Un **PAT propre au site** : un jeton d'accès créé dans TamRank,
@@ -30,12 +23,12 @@ La traduction ne change ni la langue des réponses MCP ni celle de l'interface W
 
 ## 2. Créer une connexion de test distincte
 
-Utilisez `index-workflow.js`. `index.js`, `npm start` et `tamrank-mcp` lancent
-encore l'ancien point d'entrée. `npx @tam-rank/mcp-server` ne récupère pas non
-plus cette branche. Le paquet reste `@tam-rank/mcp-server` / `0.3.0-preview` ;
-le workflow s'identifie comme `tamrank-workflow-preview` / `0.4.0-preview`.
+Utilisez la bêta épinglée `@tam-rank/mcp-server` / `0.4.0-beta.1`. `npx`,
+`npm start`, `tamrank-mcp`, `index-workflow.js` et le chemin de compatibilité
+`index.js` lancent le même workflow sûr, identifié comme
+`tamrank-mcp` / `0.4.0-beta.1`.
 
-Remplacez les deux chemins absolus, l'URL d'exemple et le jeton fictif dans les
+Remplacez l'URL d'exemple et le jeton fictif dans les
 réglages locaux de votre client. Cet exemple convient aux clients utilisant
 `mcpServers` ; les autres utilisent la même commande, les mêmes arguments et
 variables d'environnement dans leurs propres réglages. Votre connexion existante
@@ -45,21 +38,19 @@ reste séparée.
 {
   "mcpServers": {
     "tamrank-test": {
-      "command": "/absolute/path/to/node",
-      "args": ["/absolute/path/to/mcp-server/index-workflow.js"],
+      "command": "npx",
+      "args": ["-y", "@tam-rank/mcp-server@0.4.0-beta.1"],
       "env": {
         "TAMRANK_SITE_URL": "https://test.example.com",
         "TAMRANK_PAT": "REPLACE_WITH_SITE_LOCAL_PAT",
-        "TAMRANK_TOOL_PROFILE": "core",
-        "TAMRANK_WORKFLOW_PREVIEW": "1"
+        "TAMRANK_TOOL_PROFILE": "core"
       }
     }
   }
 }
 ```
 
-`TAMRANK_WORKFLOW_PREVIEW` sélectionne la compatibilité de développement ; il
-ne contourne aucun droit ni contrôle de sécurité WordPress. Le profil `core`
+Le profil `core`
 propose 12 noms d'outils, `specialist` 20 et `legacy` 42. Un outil visible ne
 signifie pas que son exécution est autorisée. Les anciennes fonctions d'écriture
 ne servent pas de solution de repli.

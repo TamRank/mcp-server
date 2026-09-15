@@ -5,8 +5,19 @@ All notable changes to `@tam-rank/mcp-server` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-> This package has never been published to npm. V1.1 is advertised as
-> `0.3.0-preview`; the first stable release number remains an open decision.
+> This package has not been published by these repository changes. The reviewed
+> first beta version is `0.4.0-beta.1`; a stable release remains a later decision.
+
+## [0.4.0-beta.1] - 2026-09-15
+
+### Changed
+
+- The canonical safe workflow is now the package main, `tamrank-mcp` bin and
+  `npm start` entry. The old `index.js` path forwards to that same workflow.
+- A site with the explicit `safe-beta-1` release profile can connect without a
+  hidden development-preview environment variable.
+- The temporary 42-name legacy profile keeps only five safe read aliases; all
+  other legacy names fail closed without invoking their former implementations.
 
 ## [Unreleased]
 

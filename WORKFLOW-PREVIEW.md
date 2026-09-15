@@ -1,11 +1,12 @@
-# Workflow bridge — development preview
+# Workflow bridge — 0.4 beta evidence
 
-Branch `feat/mcp-workflows` prepares MCP `0.4.0-preview` in package
-`@tam-rank/mcp-server`. The shipped entry, npm bin and package version remain
-unchanged. This is not a release or a replacement of the active MCP connection.
+Branch `feat/mcp-workflows` prepares `@tam-rank/mcp-server@0.4.0-beta.1`.
+The package main, npm bin and `npm start` now use the canonical safe workflow;
+`index.js` is a compatibility path to that same entry. This version change does
+not publish npm, replace an active MCP connection or activate a WordPress site.
 
 For the current first-connection guide, use [README.md](README.md). It separates
-the normal legacy bin from the explicit workflow entry, starts with site-local
+the beta package and safe workflow entry, starts with site-local
 read-only credentials and explains profiles, approvals and connection failures.
 `node test/workflow-onboarding.mjs` checks its configuration, tool inventories,
 read walkthrough, transport boundaries and bundled links without contacting a
@@ -621,15 +622,15 @@ This is not frontend routing, customer activation or general hosting acceptance.
 
 ## Entry and profiles
 
-Run `node index-workflow.js` explicitly with site-local `TAMRANK_PAT` and
-`TAMRANK_SITE_URL`. HTTPS is required except literal loopback HTTP for tests.
+Run the pinned npm beta or `node index-workflow.js` from a reviewed checkout with
+site-local `TAMRANK_PAT` and `TAMRANK_SITE_URL`. HTTPS is required except literal loopback HTTP for tests.
 `TAMRANK_REST_STYLE=query` supports the query-string REST form; default is pretty.
 `TAMRANK_TIMEOUT` is milliseconds, 1–120000, default 30000.
 
-The plugin must expose contract 2. Incomplete compatibility is refused unless
-`TAMRANK_WORKFLOW_PREVIEW=1` explicitly selects development workflows. The matching
-FREE/PRO branches require their server-side read flag; a client cannot enable it.
-Do not enable this preview on customer sites yet.
+The plugin must expose contract 2 and either full V2 compatibility or the exact
+`safe-beta-1` MCP bridge compatibility. Other incomplete profiles are refused.
+`TAMRANK_WORKFLOW_PREVIEW=1` remains only for explicit development fixtures; it
+does not belong in normal beta setup and cannot enable server-side capabilities.
 
 `TAMRANK_TOOL_PROFILE` is `core` (default, 12 names), `specialist` (20 names), or
 `legacy` (42 old names, opt-in for the planned 0.4.x minor only). Seven core reads
