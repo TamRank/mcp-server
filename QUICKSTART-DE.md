@@ -23,6 +23,9 @@ Schreibfunktionen auf Kundenwebsites nur nach einer gesonderten Release-Prüfung
   Aktivierung ein zweites PAT nur mit `site:read` und verwende dieses im Client.
   Ein Lizenzschlüssel ist kein PAT. Teile das Token nicht in Chats, Screenshots
   oder Tickets und speichere es nicht in git.
+- Für die Aufgabenverwaltung erstellst du ein separates PAT nur mit
+  `site:read` und `tasks:write`. Das verpflichtende Setup-PAT enthält bewusst
+  kein Aufgabenrecht.
 
 ## 2. Eine separate Testverbindung einrichten
 
@@ -31,7 +34,15 @@ Verwende die fest angegebene Beta `@tam-rank/mcp-server` / `0.4.0-beta.1`.
 `index.js` starten denselben sicheren Workflow. Er meldet sich als
 `tamrank-mcp` / `0.4.0-beta.1`.
 
-Ersetze die Beispiel-URL und den Token-Platzhalter in den
+Bevor diese Beta tatsächlich in npm veröffentlicht ist, installierst du die
+mitgelieferte `.tgz`-Datei in einem leeren lokalen Verzeichnis:
+
+```bash
+npm install --prefix /absoluter/pfad/tamrank-mcp-test \
+  /absoluter/pfad/tam-rank-mcp-server-0.4.0-beta.1-candidate.tgz
+```
+
+Ersetze die Beispiel-URL, den absoluten Pfad und den Token-Platzhalter in den
 lokalen Clienteinstellungen. Das Beispiel gilt für Clients mit `mcpServers`;
 andere Clients verwenden denselben Befehl, dieselben Argumente und Umgebungsvariablen
 in ihren eigenen Einstellungen. Die bestehende Verbindung bleibt separat erhalten.
@@ -40,8 +51,8 @@ in ihren eigenen Einstellungen. Die bestehende Verbindung bleibt separat erhalte
 {
   "mcpServers": {
     "tamrank-test": {
-      "command": "npx",
-      "args": ["-y", "@tam-rank/mcp-server@0.4.0-beta.1"],
+      "command": "node",
+      "args": ["/absolute/path/tamrank-mcp-test/node_modules/@tam-rank/mcp-server/index-workflow.js"],
       "env": {
         "TAMRANK_SITE_URL": "https://test.example.com",
         "TAMRANK_PAT": "REPLACE_WITH_SITE_LOCAL_PAT",
@@ -51,6 +62,10 @@ in ihren eigenen Einstellungen. Die bestehende Verbindung bleibt separat erhalte
   }
 }
 ```
+
+Die kürzere Konfiguration mit `npx -y @tam-rank/mcp-server@0.4.0-beta.1`
+funktioniert erst, nachdem genau diese
+Version mit dem Beta-Tag im öffentlichen npm-Register veröffentlicht wurde.
 
 Das Profil `core` bietet 12
 Toolnamen, `specialist` 20 und `legacy` 42. Ein sichtbarer Toolname ist keine
@@ -93,11 +108,13 @@ Recherche erlaubt keine Seitenänderung und beweist keine SEO-Verbesserung.
 Scans und die Wiederherstellung unterbrochener Ausführungen benötigen eigene
 Zustimmungen; `get_scan_status` setzt nichts fort.
 
-Die unterstützten Entwicklungsvorgänge betreffen Metadaten, Social-Media-Felder,
-Alt-Texte, Weiterleitungen und begrenzte Vorgänge im bestehenden TamRank-Schemasystem.
-Keine Änderungen an Seiteninhalten oder Pagebuildern, keine automatischen internen
-Links, kein beliebiges JSON-LD und keine neuen Schemavorlagen. Nicht alles ist rückgängig zu machen.
-Die Messung des SEO-Ergebnisses gehört zu Phase 5.
+Das aktuelle Profil `safe-beta-1` führt nur Metadaten, Social-Media-Felder und
+Alt-Texte von Anhängen aus. Weiterleitungs-, Schema- und Scan-Ausführung bleiben
+serverseitig deaktiviert, auch wenn dafür gesondert begrenzte
+Entwicklungsimplementierungen existieren. Es gibt keine Änderungen an
+Seiteninhalten oder Pagebuildern, keine automatischen internen Links, kein
+beliebiges JSON-LD und keine neuen Schemavorlagen. Nicht alles ist rückgängig zu
+machen. Die Messung des SEO-Ergebnisses gehört zu Phase 5.
 
 ## Wenn die Verbindung nicht funktioniert
 

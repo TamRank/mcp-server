@@ -24,6 +24,9 @@ La traduction ne change ni la langue des réponses MCP ni celle de l'interface W
   l'activation un second PAT limité à `site:read` et utilisez-le dans le client.
   Une clé de licence n'est pas un PAT. Ne partagez pas le jeton dans les
   conversations, captures d'écran ou tickets et ne le stockez pas dans git.
+- Pour administrer les tâches, créez un PAT distinct limité à `site:read` et
+  `tasks:write`. Le PAT de configuration obligatoire n'inclut volontairement
+  aucun droit de gestion des tâches.
 
 ## 2. Créer une connexion de test distincte
 
@@ -32,7 +35,15 @@ Utilisez la bêta épinglée `@tam-rank/mcp-server` / `0.4.0-beta.1`. `npx`,
 `index.js` lancent le même workflow sûr, identifié comme
 `tamrank-mcp` / `0.4.0-beta.1`.
 
-Remplacez l'URL d'exemple et le jeton fictif dans les
+Avant la publication effective de cette bêta dans npm, installez le fichier
+`.tgz` fourni dans un répertoire local vide :
+
+```bash
+npm install --prefix /chemin/absolu/tamrank-mcp-test \
+  /chemin/absolu/tam-rank-mcp-server-0.4.0-beta.1-candidate.tgz
+```
+
+Remplacez l'URL d'exemple, le chemin absolu et le jeton fictif dans les
 réglages locaux de votre client. Cet exemple convient aux clients utilisant
 `mcpServers` ; les autres utilisent la même commande, les mêmes arguments et
 variables d'environnement dans leurs propres réglages. Votre connexion existante
@@ -42,8 +53,8 @@ reste séparée.
 {
   "mcpServers": {
     "tamrank-test": {
-      "command": "npx",
-      "args": ["-y", "@tam-rank/mcp-server@0.4.0-beta.1"],
+      "command": "node",
+      "args": ["/absolute/path/tamrank-mcp-test/node_modules/@tam-rank/mcp-server/index-workflow.js"],
       "env": {
         "TAMRANK_SITE_URL": "https://test.example.com",
         "TAMRANK_PAT": "REPLACE_WITH_SITE_LOCAL_PAT",
@@ -53,6 +64,10 @@ reste séparée.
   }
 }
 ```
+
+La configuration plus courte avec `npx -y @tam-rank/mcp-server@0.4.0-beta.1`
+ne fonctionnera qu'après la publication
+effective de cette version avec le tag bêta dans le registre npm public.
 
 Le profil `core`
 propose 12 noms d'outils, `specialist` 20 et `legacy` 42. Un outil visible ne
@@ -96,12 +111,13 @@ Cocher une recherche terminée n'autorise pas une modification de page et ne pro
 pas une amélioration SEO. Les scans et la récupération d'exécutions interrompues
 nécessitent leurs propres accords ; `get_scan_status` ne reprend rien.
 
-Les opérations de développement prises en charge concernent les métadonnées,
-les champs sociaux, les textes alternatifs, les redirections et des opérations
-limitées dans le système de schéma existant de TamRank. Pas de modification du
-contenu des pages ou des constructeurs de pages, de liens internes automatiques,
-de JSON-LD arbitraire ou de nouveaux modèles de schéma. Tout n'est pas réversible.
-La mesure du résultat SEO relève de la phase 5.
+Le profil actuel `safe-beta-1` exécute uniquement les métadonnées, les champs
+sociaux et les textes alternatifs des pièces jointes. L'exécution des
+redirections, des schémas et des scans reste désactivée côté serveur, même si
+des implémentations de développement distinctes et limitées existent. Il ne
+modifie ni le contenu des pages ni les constructeurs de pages, n'ajoute aucun
+lien interne automatique, JSON-LD arbitraire ou nouveau modèle de schéma. Tout
+n'est pas réversible. La mesure du résultat SEO relève de la phase 5.
 
 ## Si la connexion échoue
 

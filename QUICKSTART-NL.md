@@ -23,6 +23,8 @@ van de MCP-antwoorden of de WordPress-interface.
   tweede PAT met alleen `site:read` en gebruik dat in de client. Gebruik geen
   licentiesleutel. Deel het token niet in chat, screenshots of tickets en zet
   het niet in git.
+- Voor taakbeheer maak je een afzonderlijk PAT met alleen `site:read` en
+  `tasks:write`. Het verplichte setup-PAT bevat bewust geen taakrecht.
 
 ## 2. Maak een aparte testverbinding
 
@@ -31,7 +33,15 @@ Gebruik de vastgepinde beta `@tam-rank/mcp-server` / `0.4.0-beta.1`. `npx`,
 `index.js` starten allemaal dezelfde veilige workflow, die zich meldt als
 `tamrank-mcp` / `0.4.0-beta.1`.
 
-Vervang de voorbeeld-URL en de tokenplaceholder in je
+Vóór deze bèta echt in npm is gepubliceerd, installeer je het meegeleverde
+`.tgz`-bestand in een lege lokale map:
+
+```bash
+npm install --prefix /absoluut/pad/tamrank-mcp-test \
+  /absoluut/pad/tam-rank-mcp-server-0.4.0-beta.1-candidate.tgz
+```
+
+Vervang de voorbeeld-URL, het absolute pad en de tokenplaceholder in je
 lokale clientinstellingen. Dit voorbeeld is voor clients met `mcpServers`;
 andere clients gebruiken dezelfde opdracht, argumenten en omgevingsvariabelen
 in hun eigen instellingen. Je bestaande verbinding blijft apart bestaan.
@@ -40,8 +50,8 @@ in hun eigen instellingen. Je bestaande verbinding blijft apart bestaan.
 {
   "mcpServers": {
     "tamrank-test": {
-      "command": "npx",
-      "args": ["-y", "@tam-rank/mcp-server@0.4.0-beta.1"],
+      "command": "node",
+      "args": ["/absolute/path/tamrank-mcp-test/node_modules/@tam-rank/mcp-server/index-workflow.js"],
       "env": {
         "TAMRANK_SITE_URL": "https://test.example.com",
         "TAMRANK_PAT": "REPLACE_WITH_SITE_LOCAL_PAT",
@@ -51,6 +61,10 @@ in hun eigen instellingen. Je bestaande verbinding blijft apart bestaan.
   }
 }
 ```
+
+De kortere configuratie met `npx -y @tam-rank/mcp-server@0.4.0-beta.1` werkt
+pas nadat precies die versie echt met
+de bètatag in het publieke npm-register is gepubliceerd.
 
 Het profiel `core` biedt 12 toolnamen,
 `specialist` 20 en `legacy` 42. Een zichtbare toolnaam betekent niet dat je die
@@ -91,11 +105,12 @@ Onderzoek afvinken is geen toestemming voor paginawijzigingen en geen bewijs
 van SEO-herstel. Scans en herstel van onderbroken uitvoeringen vragen apart
 toestemming; `get_scan_status` hervat niets.
 
-De ondersteunde ontwikkelhandelingen betreffen metadata, sociale velden,
-alt-tekst, redirects en beperkte handelingen binnen TamRanks bestaande schema.
-Geen wijzigingen aan paginatekst/pagebuilders, automatische interne links,
-willekeurige JSON-LD of nieuwe schematemplates. Niet alles kan worden teruggedraaid.
-Meten van het SEO-resultaat hoort bij fase 5.
+Het huidige profiel `safe-beta-1` voert alleen metadata, sociale velden en
+attachment-alttekst uit. Redirect-, schema- en scanuitvoering blijven
+server-side uitgeschakeld, ook al bestaan daarvoor afzonderlijk begrensde
+ontwikkelimplementaties. Er zijn geen wijzigingen aan paginatekst/pagebuilders,
+automatische interne links, willekeurige JSON-LD of nieuwe schematemplates.
+Niet alles kan worden teruggedraaid. Meten van het SEO-resultaat hoort bij fase 5.
 
 ## Als verbinden niet lukt
 

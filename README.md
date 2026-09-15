@@ -43,10 +43,40 @@ deliberately not included in the distributed package.
    create a second PAT with only `site:read` after activation and use that PAT
    in step 3. A licence key or an invented token prefix is not a PAT. Do not put
    a real token in git, shared screenshots, tickets or chat transcripts.
+   Task pickup, notes and reviewed-state changes require a separate PAT with
+   only `site:read` and `tasks:write`; the five-scope setup PAT intentionally
+   does not include task administration.
 3. Configure a separate stdio server in your MCP client. Replace the example
    site URL and token placeholder. Clients using an
    `mcpServers` configuration shape can use this template; others need the same
    command, arguments and environment in their own settings.
+
+Before this beta is published to npm, install the supplied tarball in an empty
+local directory and start its absolute entry path:
+
+```bash
+npm install --prefix /absolute/path/tamrank-mcp-test \
+  /absolute/path/tam-rank-mcp-server-0.4.0-beta.1-candidate.tgz
+```
+
+```json
+{
+  "mcpServers": {
+    "tamrank-test": {
+      "command": "node",
+      "args": ["/absolute/path/tamrank-mcp-test/node_modules/@tam-rank/mcp-server/index-workflow.js"],
+      "env": {
+        "TAMRANK_SITE_URL": "https://test.example.com",
+        "TAMRANK_PAT": "REPLACE_WITH_SITE_LOCAL_PAT",
+        "TAMRANK_TOOL_PROFILE": "core"
+      }
+    }
+  }
+}
+```
+
+Only after `@tam-rank/mcp-server@0.4.0-beta.1` has actually been published with
+the beta dist-tag may the shorter registry configuration be used:
 
 ```json
 {
@@ -137,11 +167,13 @@ When the owned test site's exact operation is available:
    obtain **new** approval. Changed current values, unsupported contexts or
    missing evidence can prevent rollback. Not everything is reversible.
 
-Supported development policies cover metadata/social fields, attachment alt
-text, redirects and restricted operations in TamRank's existing schema system.
-No page-body/builder writes, automatic internal links, arbitrary JSON-LD or
-new schema templates. Stored fields are not automatically proof of effective
-frontend output. GSC outcome measurement is Phase 5, not a score-refresh claim.
+The current `safe-beta-1` profile executes only metadata/social fields and
+attachment alt text. Redirect, schema and scan execution remain disabled
+server-side even though separately gated development implementations exist.
+There are no page-body/builder writes, automatic internal links, arbitrary
+JSON-LD or new schema templates. Stored fields are not automatically proof of
+effective frontend output. GSC outcome measurement is Phase 5, not a
+score-refresh claim.
 
 Scans and interrupted-run recovery have their own explicit proposals and
 permissions. `get_scan_status` never resumes a scan. A queued job is not proof

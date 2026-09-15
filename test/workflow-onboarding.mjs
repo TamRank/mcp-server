@@ -15,6 +15,7 @@ const readme=await readFile(join(root,'README.md'),'utf8');
 const pkg=JSON.parse(await readFile(join(root,'package.json'),'utf8'));
 const examples=[...readme.matchAll(/```json\n([\s\S]*?)\n```/g)].map(match=>JSON.parse(match[1]));
 const settings=examples[0]?.mcpServers?.['tamrank-test'];
+const registrySettings=examples[1]?.mcpServers?.['tamrank-test'];
 const inlineNames=text=>[...text.matchAll(/`([a-z][a-z_]+)`/g)].map(match=>match[1]);
 function registry(profile) {
   const tools=new Map(),calls=[];
@@ -25,13 +26,16 @@ function registry(profile) {
   return {tools,calls};
 }
 
-test('configuration selects the pinned beta package with placeholders only',async()=>{
-  assert.equal(examples.length,1);
+test('configuration separates unpublished tarball and later registry entries',async()=>{
+  assert.equal(examples.length,2);
   assert.equal(Object.keys(examples[0].mcpServers).length,1);
-  assert.equal(settings.command,'npx');
-  assert.deepEqual(settings.args,['-y','@tam-rank/mcp-server@0.4.0-beta.1']);
+  assert.equal(settings.command,'node');
+  assert.deepEqual(settings.args,['/absolute/path/tamrank-mcp-test/node_modules/@tam-rank/mcp-server/index-workflow.js']);
   assert.deepEqual(settings.env,{TAMRANK_SITE_URL:'https://test.example.com',TAMRANK_PAT:'REPLACE_WITH_SITE_LOCAL_PAT',
     TAMRANK_TOOL_PROFILE:'core'});
+  assert.equal(registrySettings.command,'npx');
+  assert.deepEqual(registrySettings.args,['-y','@tam-rank/mcp-server@0.4.0-beta.1']);
+  assert.deepEqual(registrySettings.env,settings.env);
   const entry=await readFile(join(root,'index-workflow.js'),'utf8');
   for(const key of Object.keys(settings.env))assert.ok(entry.includes('process.env.'+key),'Known entry setting: '+key);
   assert.equal(readme.includes('NODE_TLS_REJECT_UNAUTHORIZED'),false);
@@ -136,7 +140,8 @@ const locales=[
 for(const {file,reads,warning,boundaries} of locales)test('localized first connection preserves the reviewed contract: '+file,async()=>{
   const guide=await readFile(join(root,file),'utf8'),plain=guide.replace(/\*\*/g,'').replace(/\s+/g,' ');
   const configs=[...guide.matchAll(/```json\n([\s\S]*?)\n```/g)].map(match=>JSON.parse(match[1]));
-  assert.deepEqual(configs,examples,'Translations use the exact same placeholder configuration, not another entry or wider permissions');
+  assert.deepEqual(configs,[examples[0]],'Translations use the exact unpublished-tarball configuration, not a wider entry');
+  assert.ok(guide.includes('npx -y @tam-rank/mcp-server@0.4.0-beta.1'),'Published-registry shortcut remains explicit');
   for(const value of [pkg.name,pkg.version,workflowIdentity.name,workflowIdentity.version])assert.ok(guide.includes('`'+value+'`'));
   for(const sentence of [warning,...boundaries])assert.ok(plain.includes(sentence),'Preserve reviewed localized safety statement: '+sentence);
   assert.equal(guide.includes('NODE_TLS_REJECT_UNAUTHORIZED'),false);
