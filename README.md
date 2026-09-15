@@ -25,9 +25,9 @@ build is not published merely by changing its version.
 The package name is `@tam-rank/mcp-server`; the first beta is deliberately pinned
 as `@tam-rank/mcp-server@0.4.0-beta.1`. Publishing remains a separate human action.
 
-The detailed implementation evidence and remaining gates are in
-[WORKFLOW-PREVIEW.md](WORKFLOW-PREVIEW.md). Older paragraphs there record
-individual increments, not a claim that all Phase 4 checks are complete.
+This package contains the customer-facing setup and safety boundary only.
+Internal implementation evidence, branch history and release-gate notes are
+deliberately not included in the distributed package.
 
 ## First connection: owned test site, reads first
 
@@ -77,8 +77,7 @@ Node 18 is end-of-life and its compatibility test is not a deployment recommenda
 The installed source-capture/preview chain is verified on macOS arm64 with
 Node 18.20.8, 22.17.0 and 24.21.0, each against WordPress on PHP 8.2/8.5.
 Other native workflow evidence uses Node 22 unless explicitly stated otherwise.
-This does not verify every Node version, operating system, host or theme/builder;
-the detailed scope and runtime sources are in [WORKFLOW-PREVIEW.md](WORKFLOW-PREVIEW.md).
+This does not verify every Node version, operating system, host or theme/builder.
 
 ## Profiles and tools
 
@@ -143,9 +142,8 @@ frontend output. GSC outcome measurement is Phase 5, not a score-refresh claim.
 
 Scans and interrupted-run recovery have their own explicit proposals and
 permissions. `get_scan_status` never resumes a scan. A queued job is not proof
-that a worker is running. See [WORKFLOW-PREVIEW.md](WORKFLOW-PREVIEW.md) and,
-only when needed, [SCAN-RECEIPTS.md](SCAN-RECEIPTS.md); local receipt storage is
-optional and is not required for a first read-only connection.
+that a worker is running. Local receipt storage is optional and is not required
+for a first read-only connection.
 
 ## Connection troubleshooting
 
@@ -183,16 +181,10 @@ are not implemented by this branch. Customer rollout remains a separate step.
 
 ## Verification and release boundary
 
-`npm run test:workflow` checks the workflow contracts and bridge.
-`node test/workflow-onboarding.mjs` checks this configuration template against
-the local transport and tool definitions without contacting a site.
-`node test/workflow-package.mjs --allow-network` checks an extracted archive
-using separately installed dependencies and a synthetic local server; it needs
-network access for dependency installation and binds only loopback listeners.
-
-Native WordPress variants require an explicitly owned disposable environment.
-See [WORKFLOW-PREVIEW.md](WORKFLOW-PREVIEW.md) for their commands, measured
-coverage and cleanup boundaries. Passing a fixture is not live customer
+`npm test` checks the installed package identity, entry point and compatibility
+inventory without contacting a site. The source repository has additional
+development and native WordPress suites; those fixtures and internal evidence
+are intentionally not shipped. Passing a fixture is not live customer
 activation, an npm publication or proof of all hosting/privacy compatibility.
 
 MIT applies to this MCP package; site access remains subject to TamRank's current

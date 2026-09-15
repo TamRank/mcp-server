@@ -124,5 +124,5 @@ de sites, ni vue de portefeuille, ni accord groupé entre clients. L'activation
 sur les sites de clients reste une étape distincte.
 
 Le [guide anglais](README.md) détaille les outils et les réglages de transport.
-[WORKFLOW-PREVIEW.md](WORKFLOW-PREVIEW.md) décrit l'implémentation et les tests ;
-un test réussi ne prouve pas que la phase 4 ou tous les hébergements sont prêts.
+Les preuves de développement internes ne sont volontairement pas incluses dans
+le paquet client ; un test réussi ne valide pas tous les hébergements.

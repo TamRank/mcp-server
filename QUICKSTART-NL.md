@@ -116,5 +116,5 @@ niet voor klant B. Eén centrale sitewisselaar, portfolio-overzicht of gezamenli
 akkoord voor meerdere klanten is hiermee niet gebouwd. Klantactivering blijft apart.
 
 De [Engelse gids](README.md) bevat de volledige tool- en transportinstellingen.
-[WORKFLOW-PREVIEW.md](WORKFLOW-PREVIEW.md) beschrijft de implementatie en tests;
-een geslaagde test is geen bewijs dat fase 4 of iedere hostingomgeving klaar is.
+Interne ontwikkelbewijzen worden bewust niet in het klantpakket meegestuurd;
+een geslaagde test is geen bewijs dat iedere hostingomgeving klaar is.

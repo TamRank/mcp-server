@@ -89,7 +89,7 @@ if(nativeCases.length){
 }
 const lock=JSON.parse(await readFile(join(root,'package-lock.json'),'utf8'));
 assert.ok(Object.values(lock.packages).every(entry=>!entry.resolved || new URL(entry.resolved).origin==='https://registry.npmjs.org'),'Only the official package registry is permitted');
-const guides=['README.md','WORKFLOW-PREVIEW.md','QUICKSTART-NL.md','QUICKSTART-DE.md','QUICKSTART-FR.md'];
+const guides=['README.md','QUICKSTART-NL.md','QUICKSTART-DE.md','QUICKSTART-FR.md'];
 const sourceFiles=['package.json','package-lock.json','index.js','index-workflow.js','src/workflow-identity.js',...guides];
 const before=await Promise.all(sourceFiles.map(p=>readFile(join(root,p),'utf8')));
 const pat='tamrank_pat_fixture_'+randomBytes(16).toString('hex');
@@ -111,7 +111,8 @@ try {
   for(const p of ['src/field-execution.js','src/field-recovery.js','src/redirect-execution.js'])assert.ok(paths.includes(p),`Missing typed execution contract ${p}`);
   for(const p of ['src/schema-preview.js','src/schema-execution.js','src/schema-execution-history.js','src/schema-rollback.js','src/schema-recovery.js'])
     assert.ok(paths.includes(p),`Missing typed schema workflow contract ${p}`);
-  for(const p of ['index.js','index-workflow.js','receipt-storage.js','src/workflow-tools.js','src/workflow-rest.js','src/workflow-error.js','src/legacy-tool-inventory.js','src/scan-maintenance.js','src/scan-recovery-chat.js','src/scan-receipt-store.js','SCAN-RECEIPTS.md','WORKFLOW-PREVIEW.md','package.json'])assert.ok(paths.includes(p),`Missing packed ${p}`);
+  for(const p of ['index.js','index-workflow.js','receipt-storage.js','scripts/package-smoke.mjs','src/workflow-tools.js','src/workflow-rest.js','src/workflow-error.js','src/legacy-tool-inventory.js','src/scan-maintenance.js','src/scan-recovery-chat.js','src/scan-receipt-store.js','package.json'])assert.ok(paths.includes(p),`Missing packed ${p}`);
+  for(const p of ['SCAN-RECEIPTS.md','WORKFLOW-PREVIEW.md'])assert.equal(paths.includes(p),false,`Internal development evidence must not ship: ${p}`);
   for(const p of ['src/rest.js','src/tools.js'])assert.equal(paths.includes(p),false,`Retired V1 implementation must not ship: ${p}`);
   assert.ok(paths.every(p=>!p.split('/').some(s=>s==='..' || s.startsWith('.')) && !/^(?:test|node_modules|docs)\//.test(p)), 'No test fixtures, credentials or hidden configuration in package');
   await run('tar',['-xzf',join(scratch,packed.filename),'-C',scratch],{timeout:10000});

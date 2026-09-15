@@ -119,5 +119,5 @@ gemeinsame Freigabe für mehrere Kunden ist damit nicht implementiert. Die
 Aktivierung auf Kundenwebsites bleibt ein separater Schritt.
 
 Die [englische Anleitung](README.md) enthält alle Tool- und Transporteinstellungen.
-[WORKFLOW-PREVIEW.md](WORKFLOW-PREVIEW.md) beschreibt Implementierung und Tests;
-ein bestandener Test beweist nicht, dass Phase 4 oder jede Hostingumgebung bereit ist.
+Interne Entwicklungsnachweise sind bewusst nicht im Kundenpaket enthalten; ein
+bestandener Test beweist nicht, dass jede Hostingumgebung bereit ist.
