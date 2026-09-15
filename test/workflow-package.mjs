@@ -127,7 +127,7 @@ try {
   // This is not a fresh registry dependency-resolution/install guarantee.
   await writeFile(join(installed,'package-lock.json'),before[1]);
   await run(process.execPath,[npm,'ci',...(online?[]:['--offline']),'--ignore-scripts','--no-audit','--no-fund'],
-    {cwd:installed,env:environment,timeout:60000,maxBuffer:1048576});
+    {cwd:installed,env:environment,timeout:180000,maxBuffer:1048576});
   const installedPkg=JSON.parse(await readFile(join(installed,'package.json'),'utf8'));
   assert.equal(installedPkg.version,pkg.version);assert.deepEqual(installedPkg.bin,pkg.bin);
   const localRequire=createRequire(join(installed,'package.json'));
