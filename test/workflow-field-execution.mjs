@@ -66,7 +66,7 @@ const uncertain=await tools.get('execute_change_set').h(execute);
 check(uncertain.isError&&JSON.parse(uncertain.content[0].text).automatic_retry===false,'Timeout requires reconciliation');
 check(!uncertain.content[0].text.includes('Sensitive server detail')&&calls.length===1,'No unsafe error echo or automatic retry');calls=[];throwError=null;
 const historical={contract_version:1,record:{state:'executed',history:{kind:'field_execution_history',change_set_id:id,original_plan_hash:hash}}};
-check(validExecutionResponse(historical,id,hash),'Attribution-removed history remains readable');
+check(!validExecutionResponse(historical,id,hash),'Incomplete unprojected historical records are refused; complete projected history has its own suite');
 check(!validExecutionResponse(historical,other,hash),'Historical response remains set-bound');
 for(const info of [{name:'<script>',version:'x'},{name:'é'.repeat(41),version:'x'},{name:'client\nname',version:null}])
   check(confirmationBody(execute,info).confirmation.client.name==='unknown','Unsafe/oversized provenance becomes explicitly unknown');

@@ -38,6 +38,8 @@ const history=z.object({contract_version:z.literal(1),kind:z.literal('field_exec
   approval_recorded:z.boolean(),execution_available:z.literal(false),items:z.array(item).min(1).max(25),execution}).strict();
 const record=z.object({state:z.string(),history,approval_recorded:z.boolean(),execution_available:z.literal(false),
   projection:z.object({contract:z.literal('schema_execution_view_v1'),private_proofs_omitted:z.literal(true),plan_hash_scope:z.literal('complete_stored_plan')}).strict()}).strict();
+// Shared closed display shapes; policy-specific validators remain separate.
+export {history as schemaHistoricalShape,record as schemaHistoricalRecordShape};
 export function validSchemaExecutionHistory(r){
   if(!record.safeParse(r).success)return false;
   const h=r.history,e=h.execution,inverse=h.change_kind==='rollback';

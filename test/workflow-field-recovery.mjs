@@ -75,7 +75,7 @@ check(uncertain.isError&&JSON.parse(uncertain.content[0].text).automatic_retry==
 check(calls.length===1&&!uncertain.content[0].text.includes('private server detail'),'No retry or private error echo');calls=[];error=null;
 response=reply();response.record={state:'partial',history:{kind:'field_execution_history',change_set_id:id,original_plan_hash:original,
   execution:{recovery:{plan_hash:hash,attestation:{human_verified:false,attribution_removed_at:1800000500}}}}};
-check(!(await tools.get('execute_change_set').h(input)).isError,'Redacted historical exact replay remains readable');calls=[];
+check((await tools.get('execute_change_set').h(input)).isError,'Incomplete historical recovery is refused; complete minimal histories are covered separately');calls=[];
 check(!validRecoveryProposal({...proposal,plan:{...proposal.plan,required_acknowledgements:[...fieldRecoveryAcks].reverse()}}),'Returned acknowledgements must match order');
 const server=new McpServer({name:'recovery-fixture',version:'1'}),client=new Client({name:'Owned client',version:'2'});
 registerWorkflowTools(server,transport,{capabilities:caps});

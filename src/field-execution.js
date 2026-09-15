@@ -1,6 +1,7 @@
 /** Canonical field workflow. Client provenance comes from MCP, never approval text. */
 import {z} from 'zod';
 import {scanId} from './scan-maintenance.js';
+import {validHistoricalExecution} from './execution-history.js';
 export const fieldOperations=['meta.update','social.update','image_alt.update'];
 export const fieldExecutionPolicies=['workflow-field-execution-1','workflow-field-rollback-1'];
 const digest=z.string().regex(/^[a-f0-9]{64}$/);
@@ -24,6 +25,10 @@ export function isFieldExecutionPlan(input,support){
 export function validExecutionResponse(data,id=null,hash=null,policies=fieldExecutionPolicies){
   if(data?.contract_version!==1||!data.record||typeof data.record!=='object'||Array.isArray(data.record))return false;
   const r=data.record,p=r.envelope?.plan,h=r.history??r.history_record?.record?.history;
+  // Internal signed storage records are never valid public tool output.
+  if(r.history_record!==undefined)return false;
+  if(h&&policies.some(v=>v.startsWith('workflow-field-')||v.startsWith('workflow-redirect-')))
+    return validHistoricalExecution(data,id,hash,policies);
   const resultId=p?.change_set_id??h?.change_set_id,resultHash=r.envelope?.plan_hash??h?.original_plan_hash;
   if(!scanId.safeParse(resultId).success||!digest.safeParse(resultHash).success||(id!==null&&id!==resultId)||(hash!==null&&hash!==resultHash))return false;
   if(p&&!policies.includes(p.policy_version))return false;

@@ -18,6 +18,7 @@ import {schemaRollbackShape,isSchemaRollback,isSchemaRollbackPreview,validSchema
   validSchemaRollbackPreview,matchesSchemaRollbackRequest} from './schema-rollback.js';
 import {schemaRecoveryToken,validSchemaRecoveryProposal,validSchemaRecoveryInput,validSchemaRecoveryResult} from './schema-recovery.js';
 import {matchesSchemaHistoricalExecution} from './schema-execution-history.js';
+import {matchesHistoricalExecution} from './execution-history.js';
 import {recoveryExecutionSchema,recoveryInput,validRecoveryProposal,validRecoveryInput,recoveryBody,validRecoveryResult} from './field-recovery.js';
 import {capability,redirectToken,redirectRecoveryToken,redirectExecutionSchema,mixedExecutionSchema,isRedirectExecutionPlan,
   redirectConfirmationBody,validRedirectExecutionResponse,validRedirectRecoveryProposal,validRedirectRecoveryInput,validRedirectRecoveryResult} from './redirect-execution.js';
@@ -353,7 +354,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
             :isRedirect?redirectAllowed&&!schemaPlan&&!schemaExecute&&!schemaRollback
               &&(nativeRead||rollback||redirectPlan||redirectExecute)&&validRedirectExecutionResponse(data,id,hash,expected)
             :fieldAllowed&&!redirectPlan&&!redirectExecute&&!schemaPlan&&!schemaExecute&&!schemaRollback&&validExecutionResponse(data,id,hash);
-          if(!valid)
+          if(!valid||(!isSchema&&def.fieldExecution==='execute'&&data?.record?.history&&!matchesHistoricalExecution(data,a)))
             return failure('field_execution_incompatible_response','Result could not be verified. Reconcile this set with get_changes(kind=execution); do not repeat writes automatically.');
           return result(data);
         }catch(err){return failure(err.code||'field_execution_uncertain','Workflow refused or uncertain. Read the same set with get_changes(kind=execution); no automatic retry or legacy fallback.',
