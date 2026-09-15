@@ -34,8 +34,7 @@
     "test:workflow-scans": "node test/workflow-index-preview.mjs && node test/workflow-pagespeed-scans.mjs && node test/workflow-source-scans.mjs && node --test test/workflow-scan-receipt-recovery.mjs",
     "test:integration": "node test/workflow-package.mjs",
     "test:all": "npm test && npm run test:workflow",
-    "scan": "gitleaks detect --config .gitleaks.toml --no-banner --redact",
-    "prepare": "git config core.hooksPath .githooks 2>/dev/null || true"
+    "scan": "gitleaks detect --config .gitleaks.toml --no-banner --redact"
   },
   "keywords": [
     "mcp",
