@@ -11,13 +11,18 @@ van de MCP-antwoorden of de WordPress-interface.
 ## 1. Wat je nodig hebt
 
 - Een eigen testsite met de bijpassende FREE- en PRO-betaversies. Activeer in
-  TamRank het veilige workflowprofiel wanneer je het PAT aanmaakt.
+  TamRank het veilige workflowprofiel met het setup-PAT. Bij de eerste
+  activering zijn de vijf door TamRank geselecteerde rechten verplicht:
+  site lezen, wijzigingssets, metadata, audit en herstel. Dat is geen blijvend
+  akkoord op websitewijzigingen.
 - Een MCP-client die een lokaal programma via stdio kan starten, en Node.js.
   Zie de [Engelse gids](README.md) voor de geteste versies en de grenzen daarvan.
 - Een **sitegebonden PAT**: een toegangstoken aangemaakt bij TamRank
-  **Settings → Integrations → AI Agents (MCP)** op die testsite. Begin met alleen
-  `site:read`. Gebruik geen licentiesleutel. Deel het token niet in chat,
-  screenshots of tickets en zet het niet in git.
+  **Settings → Integrations → AI Agents (MCP)** op die testsite. Wil je de eerste
+  clientverbinding strikt alleen-lezen houden, maak dan na de activering een
+  tweede PAT met alleen `site:read` en gebruik dat in de client. Gebruik geen
+  licentiesleutel. Deel het token niet in chat, screenshots of tickets en zet
+  het niet in git.
 
 ## 2. Maak een aparte testverbinding
 

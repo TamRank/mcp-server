@@ -11,13 +11,18 @@ Schreibfunktionen auf Kundenwebsites nur nach einer gesonderten Release-Prüfung
 ## 1. Voraussetzungen
 
 - Eine eigene Testwebsite mit den zusammengehörigen FREE- und PRO-Betaversionen.
-  Aktiviere in TamRank das sichere Workflow-Profil, wenn du das PAT erstellst.
+  Aktiviere in TamRank das sichere Workflow-Profil mit dem Setup-PAT. Bei der
+  ersten Aktivierung sind die fünf von TamRank ausgewählten Rechte erforderlich:
+  Website lesen, Änderungssätze, Metadaten, Audit und Wiederherstellung. Das ist
+  keine dauerhafte Zustimmung zu Websiteänderungen.
 - Einen MCP-Client, der ein lokales Programm über stdio starten kann, und Node.js.
   Getestete Versionen und Einschränkungen stehen in der [englischen Anleitung](README.md).
 - Ein **websitegebundenes PAT**: ein Zugriffstoken aus TamRank
-  **Settings → Integrations → AI Agents (MCP)** auf dieser Testwebsite. Beginne
-  ausschließlich mit `site:read`. Ein Lizenzschlüssel ist kein PAT. Teile das
-  Token nicht in Chats, Screenshots oder Tickets und speichere es nicht in git.
+  **Settings → Integrations → AI Agents (MCP)** auf dieser Testwebsite. Soll die
+  erste Clientverbindung strikt schreibgeschützt sein, erstelle nach der
+  Aktivierung ein zweites PAT nur mit `site:read` und verwende dieses im Client.
+  Ein Lizenzschlüssel ist kein PAT. Teile das Token nicht in Chats, Screenshots
+  oder Tickets und speichere es nicht in git.
 
 ## 2. Eine separate Testverbindung einrichten
 

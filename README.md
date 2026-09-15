@@ -35,11 +35,14 @@ deliberately not included in the distributed package.
    TamRank, activate the reviewed safe workflow profile while creating its PAT.
    Client environment variables cannot enable WordPress capabilities.
 2. In that site's TamRank **Settings → Integrations → AI Agents (MCP)** card,
-   create a **site-local PAT**, linked to your current WordPress operator.
-   Begin with `site:read`; grant additional
-   operation scopes only for a separately approved test. A licence key or an
-   invented token prefix is not a PAT. Do not put a real token in git, shared
-   screenshots, tickets or chat transcripts.
+   activate the safe workflow with a **site-local setup PAT**, linked to your
+   current WordPress operator. First activation requires the five permissions
+   selected by TamRank: site read, change sets, metadata, audit and rollback.
+   This makes the reviewed workflow available; it is not standing approval for
+   a website change. If the first client connection must be strictly read-only,
+   create a second PAT with only `site:read` after activation and use that PAT
+   in step 3. A licence key or an invented token prefix is not a PAT. Do not put
+   a real token in git, shared screenshots, tickets or chat transcripts.
 3. Configure a separate stdio server in your MCP client. Replace the example
    site URL and token placeholder. Clients using an
    `mcpServers` configuration shape can use this template; others need the same

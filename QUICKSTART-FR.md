@@ -12,14 +12,18 @@ La traduction ne change ni la langue des réponses MCP ni celle de l'interface W
 ## 1. Prérequis
 
 - Votre propre site de test, avec les versions bêta FREE et PRO correspondantes.
-  Dans TamRank, activez le profil de workflow sûr lors de la création du PAT.
+  Dans TamRank, activez le profil de workflow sûr avec le PAT de configuration.
+  La première activation exige les cinq droits sélectionnés par TamRank :
+  lecture du site, jeux de modifications, métadonnées, audit et restauration.
+  Cela ne constitue pas une autorisation permanente de modifier le site.
 - Un client MCP capable de lancer un programme local via stdio, et Node.js.
   Les versions testées et leurs limites figurent dans le [guide anglais](README.md).
 - Un **PAT propre au site** : un jeton d'accès créé dans TamRank,
-  **Settings → Integrations → AI Agents (MCP)**, sur ce site de test. Commencez
-  uniquement avec `site:read`. Une clé de licence n'est pas un PAT. Ne partagez
-  pas le jeton dans les conversations, captures d'écran ou tickets et ne le
-  stockez pas dans git.
+  **Settings → Integrations → AI Agents (MCP)**, sur ce site de test. Pour une
+  première connexion client strictement en lecture seule, créez après
+  l'activation un second PAT limité à `site:read` et utilisez-le dans le client.
+  Une clé de licence n'est pas un PAT. Ne partagez pas le jeton dans les
+  conversations, captures d'écran ou tickets et ne le stockez pas dans git.
 
 ## 2. Créer une connexion de test distincte
 
