@@ -60,5 +60,9 @@
     "type": "git",
     "url": "https://github.com/TamRank/mcp-server"
   },
-  "homepage": "https://tamrank.com/agents"
+  "homepage": "https://tamrank.com/agents",
+  "publishConfig": {
+    "access": "public",
+    "tag": "beta"
+  }
 }

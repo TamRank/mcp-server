@@ -45,6 +45,7 @@ test('package version, identity and normal entries are the reviewed beta',()=>{
   assert.equal(workflowIdentity.version,pkg.version);
   assert.equal(pkg.main,'./index-workflow.js');
   assert.deepEqual(pkg.bin,{'tamrank-mcp':'./index-workflow.js'});
+  assert.deepEqual(pkg.publishConfig,{access:'public',tag:'beta'});
   assert.equal(Object.hasOwn(pkg.scripts,'prepare'),false,'Published package must not change consumer git hooks');
   assert.ok(readme.includes('Publishing remains a separate human action'));
   assert.ok(readme.includes('Do not activate its writers on a'));
