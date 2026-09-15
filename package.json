@@ -12,6 +12,8 @@
     "index-workflow.js",
     "receipt-storage.js",
     "src/",
+    "!src/rest.js",
+    "!src/tools.js",
     "assets/",
     "README.md",
     "QUICKSTART-NL.md",

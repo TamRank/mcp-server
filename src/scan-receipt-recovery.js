@@ -2,7 +2,7 @@
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
 import {WorkflowClient} from './workflow-rest.js';
-import {ApiError} from './rest.js';
+import {ApiError} from './workflow-error.js';
 import {isScanReceipt, receiptSite} from './scan-receipt-store.js';
 import {recoveryConfirmation,recoveryAcks,receiptReference} from './scan-recovery-chat.js';
 

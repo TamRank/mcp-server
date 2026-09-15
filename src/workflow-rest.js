@@ -1,5 +1,5 @@
 /** Strict V2 transport. No credential redirects, V1 fallback or implicit retries. */
-import { ApiError } from './rest.js';
+import { ApiError } from './workflow-error.js';
 import { isScanReceipt } from './scan-receipt-store.js';
 
 // Only bounded operational advice crosses the error boundary; never arbitrary server data.

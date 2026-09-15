@@ -8,6 +8,7 @@ import { WorkflowClient } from '../src/workflow-rest.js';
 import { workflowIdentity } from '../src/workflow-identity.js';
 import { registerWorkflowTools, workflowDefinitions } from '../src/workflow-tools.js';
 import { discoverWorkflows } from '../src/scan-maintenance.js';
+import { legacyToolInventory } from '../src/legacy-tool-inventory.js';
 
 const root=dirname(dirname(fileURLToPath(import.meta.url)));
 const readme=await readFile(join(root,'README.md'),'utf8');
@@ -69,6 +70,10 @@ test('first connection walkthrough issues only its four documented reads',async(
 test('legacy profile keeps only the five documented read aliases',async()=>{
   const {tools,calls}=registry('legacy');
   const aliases=['get_site_context','get_capabilities','get_signals','get_priority_actions','get_next_action'];
+  const inventory=legacyToolInventory();
+  assert.equal(inventory.length,42);
+  assert.equal(new Set(inventory.map(({name})=>name)).size,42);
+  assert.deepEqual([...tools.keys()],[...inventory.map(({name})=>name)]);
   const paragraph=readme.split("In the workflow entry's legacy profile, only ")[1].split('currently map')[0];
   assert.deepEqual(inlineNames(paragraph),aliases);
   for(const [name,{handler}]of tools){

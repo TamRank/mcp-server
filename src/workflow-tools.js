@@ -1,6 +1,6 @@
 /** Canonical workflow surface; writers stay unavailable until the server proves readiness. */
 import { z } from 'zod';
-import { registerTools as registerLegacy } from './tools.js';
+import { legacyToolInventory } from './legacy-tool-inventory.js';
 import { closeScanSchema, scanId } from './scan-maintenance.js';
 import {receiptReference,recoveryAcks} from './scan-recovery-chat.js';
 import {maintenanceAcks,sourceMaintenanceAcks,discoverSourceScans} from './scan-maintenance.js';
@@ -423,9 +423,8 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
     });
   };
   if (profile === 'legacy') {
-    // Reuse names/schemas without ever installing a legacy handler on the real server.
-    const inventory = [];
-    registerLegacy({ registerTool(name, config) { inventory.push({ name, config }); } }, {});
+    // Static descriptors only: the retired module and its handlers are never loaded.
+    const inventory = legacyToolInventory();
     const aliases = { get_site_context:'get_site_context', get_capabilities:'get_capabilities', get_signals:'get_signals',
       get_priority_actions:'get_work_queue', get_next_action:'get_work_queue' };
     for (const { name, config } of inventory) {
