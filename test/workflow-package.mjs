@@ -18,6 +18,8 @@ const pkg=JSON.parse(await readFile(join(root,'package.json'),'utf8'));
 await run(process.execPath,[join(root,'test/workflow-onboarding.mjs')],{cwd:root,timeout:30000,maxBuffer:1048576});
 const online=process.argv.includes('--allow-network');
 const nativeFields=process.argv.includes('--native-fields');
+const nativeFieldHistoryRecovery=process.argv.includes('--native-field-history-recovery');
+const nativeRedirectHistoryRecovery=process.argv.includes('--native-redirect-history-recovery');
 const nativeBetaUpgrade=process.argv.includes('--native-beta-upgrade');
 const nativeBaseline095Upgrade=process.argv.includes('--native-095-upgrade');
 const native095Reads=process.argv.includes('--native-095-reads');
@@ -39,6 +41,8 @@ const nativeSchemaHistoryRecovery=process.argv.includes('--native-schema-history
 const nativeSchemaHistoryRecoveryMixed=process.argv.includes('--native-schema-history-recovery-mixed');
 const nativeSchemaSources=process.argv.includes('--native-schema-sources');
 const nativeCases=[
+  ...(nativeFieldHistoryRecovery?[['field-history-recovery-mcp','native field historical recovery MCP/TLS checks']]:[]),
+  ...(nativeRedirectHistoryRecovery?[['redirect-history-recovery-mcp','native redirect historical recovery MCP/TLS checks']]:[]),
   ...(nativeSchemaSources?[['schema-native-source-mcp','native render-bound schema drafts over local TLS checks']]:[]),
   ...(nativeSchemaHistory?[['schema-history-mcp','native schema historical MCP read and exact replay over TLS']]:[]),
   ...(nativeSchemaHistoryRecovery?[['schema-history-recovery-mcp','native schema historical recovery confirmation replays over MCP/TLS']]:[]),
@@ -71,7 +75,7 @@ const nativeCases=[
     ['schema-recovery-mixed-mcp','native schema worker interruption and fresh journal recovery over MCP/TLS'],
     ['schema-recovery-authority-mcp','native schema recovery checks with token/scope/membership/entitlement changed after preview on the same MCP session']]:[])
 ];
-assert.ok(process.argv.slice(2).every(arg=>['--allow-network','--native-reads','--native-scans','--native-scan-receipts','--native-fields','--native-redirects','--native-schema','--native-schema-history','--native-schema-history-recovery','--native-schema-history-recovery-mixed','--native-schema-sources','--native-beta-upgrade','--native-095-upgrade','--native-095-reads','--native-095-redirects','--native-095-schema','--native-095-pagespeed','--native-095-work','--native-beta-reads','--native-beta-redirects','--native-beta-schema','--native-beta-pagespeed','--native-beta-work'].includes(arg)),'Unknown installation-test argument');
+assert.ok(process.argv.slice(2).every(arg=>['--allow-network','--native-reads','--native-scans','--native-scan-receipts','--native-fields','--native-field-history-recovery','--native-redirect-history-recovery','--native-redirects','--native-schema','--native-schema-history','--native-schema-history-recovery','--native-schema-history-recovery-mixed','--native-schema-sources','--native-beta-upgrade','--native-095-upgrade','--native-095-reads','--native-095-redirects','--native-095-schema','--native-095-pagespeed','--native-095-work','--native-beta-reads','--native-beta-redirects','--native-beta-schema','--native-beta-pagespeed','--native-beta-work'].includes(arg)),'Unknown installation-test argument');
 if(nativeBetaUpgrade||nativeBetaReads||nativeBetaRedirects||nativeBetaSchema||nativeBetaPageSpeed||nativeBetaWork)assert.ok(process.env.TAMRANK_TEST_BETA_ZIP,'Exact distributed beta path required');
 let nativePro;
 if(nativeCases.length){
