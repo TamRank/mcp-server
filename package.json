@@ -62,7 +62,6 @@
   },
   "homepage": "https://tamrank.com/agents",
   "publishConfig": {
-    "access": "public",
-    "tag": "beta"
+    "access": "public"
   }
 }

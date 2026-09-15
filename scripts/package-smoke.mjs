@@ -13,7 +13,7 @@ assert.equal(manifest.name,'@tam-rank/mcp-server');
 assert.equal(manifest.version,workflowIdentity.version);
 assert.equal(manifest.main,'./index-workflow.js');
 assert.equal(manifest.bin?.['tamrank-mcp'],'./index-workflow.js');
-assert.deepEqual(manifest.publishConfig,{access:'public',tag:'beta'});
+assert.deepEqual(manifest.publishConfig,{access:'public'});
 assert.equal(legacyToolInventory().length,42);
 await access(resolve(root,'index-workflow.js'));
 await access(resolve(root,'src/workflow-tools.js'));
