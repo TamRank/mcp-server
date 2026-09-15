@@ -90,7 +90,7 @@ if(nativeCases.length){
 const lock=JSON.parse(await readFile(join(root,'package-lock.json'),'utf8'));
 assert.ok(Object.values(lock.packages).every(entry=>!entry.resolved || new URL(entry.resolved).origin==='https://registry.npmjs.org'),'Only the official package registry is permitted');
 const guides=['README.md','WORKFLOW-PREVIEW.md','QUICKSTART-NL.md','QUICKSTART-DE.md','QUICKSTART-FR.md'];
-const sourceFiles=['package.json','package-lock.json','index.js',...guides];
+const sourceFiles=['package.json','package-lock.json','index.js','index-workflow.js','src/workflow-identity.js',...guides];
 const before=await Promise.all(sourceFiles.map(p=>readFile(join(root,p),'utf8')));
 const pat='tamrank_pat_fixture_'+randomBytes(16).toString('hex');
 const requests=[];let server;
@@ -134,6 +134,7 @@ try {
   const {Client}=await import(pathToFileURL(localRequire.resolve('@modelcontextprotocol/sdk/client/index.js')).href);
   const {StdioClientTransport}=await import(pathToFileURL(localRequire.resolve('@modelcontextprotocol/sdk/client/stdio.js')).href);
   const specialists=['get_gsc_pages','get_redirects','get_images_missing_alt','get_site_diagnostics','get_topical_authority','get_scan_status'];
+  let betaCompatible=true;
   const capabilities={contract_version:2,full_v2_compatible:false,execution_enabled:false,
     reads:{get_site_context:{available:true}},specialist_reads:Object.fromEntries(specialists.map(name=>[name,{available:true}]))};
   capabilities.specialist_reads.start_scan={available:true,modes:['preview'],execution_enabled:false};
@@ -161,14 +162,15 @@ try {
       assert.equal(url.searchParams.has('mode'),false);
     }
     res.writeHead(200,{'Content-Type':'application/json'});
-    res.end(JSON.stringify(route.endsWith('/capabilities')?capabilities:{contract_version:2,fixture:true,product_writes_performed:false}));
+    res.end(JSON.stringify(route.endsWith('/capabilities')?{...capabilities,mcp_bridge_compatibility:betaCompatible?'safe-beta-1':'not_advertised'}:{contract_version:2,fixture:true,product_writes_performed:false}));
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   const url='http://127.0.0.1:'+server.address().port;
-  async function session(profile,style,preview=true) {
-    const transport=new StdioClientTransport({command:process.execPath,args:[join(installed,'index-workflow.js')],cwd:installed,
+  const installedEntry=join(installed,installedPkg.bin['tamrank-mcp'].replace(/^\.\//,''));
+  async function session(profile,style,{entry=installedEntry,preview=false,ready=true}={}) {
+    const transport=new StdioClientTransport({command:process.execPath,args:[entry],cwd:installed,
       env:{PATH:process.env.PATH,TAMRANK_PAT:pat,TAMRANK_SITE_URL:url,TAMRANK_TOOL_PROFILE:profile,TAMRANK_REST_STYLE:style,
-        TAMRANK_WORKFLOW_PREVIEW:preview?'1':'0'},stderr:'pipe'});
+        ...(preview?{TAMRANK_WORKFLOW_PREVIEW:'1'}:{})},stderr:'pipe'});
     let stderr='';transport.stderr?.on('data',chunk=>{stderr+=chunk;});
     const client=new Client({name:'tamrank-package-fixture',version:'1.0.0'});
     try {
@@ -178,7 +180,7 @@ try {
       let n=requests.length;
       const blocked=await client.callTool({name:profile==='legacy'?'update_meta':'execute_change_set',arguments:{}});
       assert.equal(blocked.isError,true);assert.equal(requests.length,n);
-      if(!preview){assert.equal((await client.callTool({name:'get_site_context',arguments:{}})).isError,true);assert.equal(requests.length,n);}
+      if(!ready){assert.equal((await client.callTool({name:'get_site_context',arguments:{}})).isError,true);assert.equal(requests.length,n);}
       else if(profile!=='legacy') {
         assert.ok(!(await client.callTool({name:'plan_changes',arguments:fieldRequest})).isError);
         assert.ok(!(await client.callTool({name:'get_changes',arguments:{change_set_id:proposalId}})).isError);
@@ -198,7 +200,10 @@ try {
     assert.ok(!stderr.includes(pat),'No fixture token in stderr');
   }
   for(const profile of ['core','specialist','legacy'])for(const style of ['pretty','query'])await session(profile,style);
-  await session('core','pretty',false);
+  await session('core','pretty',{entry:join(installed,'index.js')});
+  betaCompatible=false;
+  await session('core','pretty',{ready:false});
+  betaCompatible=true;
   if(nativeCases.length){
     await writeFile(join(scratch,'owned-native-package.json'),JSON.stringify({source_root:await realpath(root),package_root:installed,
       package_version:pkg.version,entry_sha256:createHash('sha256').update(await readFile(join(installed,'index-workflow.js'))).digest('hex')}),{mode:0o600});

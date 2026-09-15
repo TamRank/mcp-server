@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFile, access } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, isAbsolute } from 'node:path';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { WorkflowClient } from '../src/workflow-rest.js';
 import { workflowIdentity } from '../src/workflow-identity.js';
@@ -24,25 +24,28 @@ function registry(profile) {
   return {tools,calls};
 }
 
-test('configuration selects the explicit workflow entry with placeholders only',async()=>{
+test('configuration selects the pinned beta package with placeholders only',async()=>{
   assert.equal(examples.length,1);
   assert.equal(Object.keys(examples[0].mcpServers).length,1);
-  assert.ok(isAbsolute(settings.command));
-  assert.deepEqual(settings.args,['/absolute/path/to/mcp-server/index-workflow.js']);
+  assert.equal(settings.command,'npx');
+  assert.deepEqual(settings.args,['-y','@tam-rank/mcp-server@0.4.0-beta.1']);
   assert.deepEqual(settings.env,{TAMRANK_SITE_URL:'https://test.example.com',TAMRANK_PAT:'REPLACE_WITH_SITE_LOCAL_PAT',
-    TAMRANK_TOOL_PROFILE:'core',TAMRANK_WORKFLOW_PREVIEW:'1'});
+    TAMRANK_TOOL_PROFILE:'core'});
   const entry=await readFile(join(root,'index-workflow.js'),'utf8');
   for(const key of Object.keys(settings.env))assert.ok(entry.includes('process.env.'+key),'Known entry setting: '+key);
   assert.equal(readme.includes('NODE_TLS_REJECT_UNAUTHORIZED'),false);
   assert.equal(/tamrank_pat_[a-zA-Z0-9_-]{20,}/.test(readme),false,'No token-shaped credential in example');
 });
 
-test('package version and normal bin remain distinct from the preview identity',()=>{
+test('package version, identity and normal entries are the reviewed beta',()=>{
   for(const value of [pkg.name,pkg.version,workflowIdentity.name,workflowIdentity.version])assert.ok(readme.includes('`'+value+'`'));
-  assert.equal(pkg.main,'./index.js');
-  assert.deepEqual(pkg.bin,{'tamrank-mcp':'./index.js'});
-  assert.ok(readme.includes('not an npm release'));
-  assert.ok(readme.includes('Do not activate these writers on customer'));
+  assert.equal(pkg.version,'0.4.0-beta.1');
+  assert.equal(workflowIdentity.name,'tamrank-mcp');
+  assert.equal(workflowIdentity.version,pkg.version);
+  assert.equal(pkg.main,'./index-workflow.js');
+  assert.deepEqual(pkg.bin,{'tamrank-mcp':'./index-workflow.js'});
+  assert.ok(readme.includes('Publishing remains a separate human action'));
+  assert.ok(readme.includes('Do not activate its writers on a'));
 });
 
 test('documented core and specialist names match the real registry',()=>{
@@ -92,10 +95,12 @@ test('documented URL, routing and timeout boundaries match the constructor',()=>
   assert.throws(()=>new WorkflowClient({...options,routeStyle:'v1'}));
 });
 
-test('preview is an explicit compatibility opt-in, never an authentication bypass',async()=>{
-  const client={get:async()=>({contract_version:2,full_v2_compatible:false})};
-  assert.equal((await discoverWorkflows(client,{profile:'core'})).preflight.code,'workflow_upgrade_required');
-  assert.equal((await discoverWorkflows(client,{profile:'core',preview:settings.env.TAMRANK_WORKFLOW_PREVIEW==='1'})).preflight.ok,true);
+test('safe beta compatibility is explicit and development preview is no authentication bypass',async()=>{
+  const compatible={get:async()=>({contract_version:2,full_v2_compatible:false,mcp_bridge_compatibility:'safe-beta-1'})};
+  assert.equal((await discoverWorkflows(compatible,{profile:'core'})).preflight.ok,true);
+  const incompatible={get:async()=>({contract_version:2,full_v2_compatible:false,mcp_bridge_compatibility:'not_advertised'})};
+  assert.equal((await discoverWorkflows(incompatible,{profile:'core'})).preflight.code,'workflow_upgrade_required');
+  assert.equal((await discoverWorkflows(incompatible,{profile:'core',preview:true})).preflight.ok,true);
   const refusal={get:async()=>{throw Object.assign(new Error('Fixture refusal'),{status:401,code:'fixture_auth_denied'});}};
   assert.equal((await discoverWorkflows(refusal,{profile:'core',preview:true})).preflight.ok,false);
 });
@@ -108,15 +113,15 @@ test('README references bundled documents rather than temporary worktree paths',
 });
 
 const locales=[
-  {file:'QUICKSTART-NL.md',reads:'Eerste aanroepen:',warning:'Activeer deze schrijffuncties nog niet op klantwebsites.',
+  {file:'QUICKSTART-NL.md',reads:'Eerste aanroepen:',warning:'Activeer de schrijffuncties niet op een klantwebsite zonder een apart beoordeeld releasebesluit.',
     boundaries:['Een opgeslagen voorstel is nog geen toestemming.','niet het chatgesprek.',
       'niet automatisch opnieuw schrijven','nieuw akkoord','schakel TLS-controle niet uit',
       'Toestemming voor klant A geldt niet voor klant B.']},
-  {file:'QUICKSTART-DE.md',reads:'Erste Aufrufe:',warning:'Aktiviere diese Schreibfunktionen noch nicht auf Kundenwebsites.',
+  {file:'QUICKSTART-DE.md',reads:'Erste Aufrufe:',warning:'Aktiviere die Schreibfunktionen auf Kundenwebsites nur nach einer gesonderten Release-Prüfung.',
     boundaries:['Ein gespeicherter Vorschlag ist noch keine Freigabe.','nicht den Chatverlauf.',
       'nicht automatisch erneut schreiben','erneuter Zustimmung','deaktiviere die TLS-Prüfung nicht',
       'Zustimmung für Kunde A gilt nicht für Kunde B.']},
-  {file:'QUICKSTART-FR.md',reads:'Premiers appels :',warning:"N'activez pas encore ces fonctions d'écriture sur les sites de clients.",
+  {file:'QUICKSTART-FR.md',reads:'Premiers appels :',warning:"N'activez ses fonctions d'écriture sur un site client qu'après une validation de publication distincte.",
     boundaries:["Une proposition enregistrée n'est pas une autorisation.",'pas la conversation elle-même.',
       "ne relancez pas automatiquement l'écriture",'nouvel accord','ne désactivez pas la vérification TLS',
       "L'accord pour le client A ne vaut pas pour le client B."]}
