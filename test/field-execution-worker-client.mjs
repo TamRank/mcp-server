@@ -5,6 +5,7 @@ import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {existsSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
+import {validHistoricalExecution} from '../src/execution-history.js';
 const cwd=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 export async function runFieldExecutionClient({origin,fixture:f,tlsRoot,inspect,worker,control,recovery,recoveryRetention}){
   assert.match(tlsRoot,/^\/private\/tmp\/tr-maint-wp-[A-Za-z0-9]{6}$/);assert.ok(existsSync(tlsRoot+'/owned-fixture'));
@@ -169,14 +170,19 @@ export async function runFieldExecutionClient({origin,fixture:f,tlsRoot,inspect,
       const readBack=await auditReader.callTool({name:'get_changes',arguments:{change_set_id:revokedId,kind:'execution'}});
       ok(!readBack.isError,'MCP audit-only reader can read recovered execution');
       const recovered=JSON.parse(readBack.content[0].text).record;
-      equal(recovered.state,'partial');equal(recovered.item_results.map(i=>i.state),['applied','skipped','skipped']);
-      ok(!('attested_by_token_id' in recovered.registration.attestation),'Original direct attribution removed by native privacy request');
-      ok(!('attested_by_token_id' in recovered.registration.recovery.attestation),'Separate recovery direct attribution removed too');
-      ok(recovered.registration.recovery.attestation.attribution_removed_at>0,'Redacted recovery retains removal event');
-      equal(recovered.registration.recovery.attestation.human_verified,false);
-      equal(recovered.item_results[0].invalidation,'delivered','Recovered applied field has completed native cache/Action delivery');
-      equal(recovered.item_results[0].delivery.status,'delivered');
-      equal(recovered.item_results[0].delivery.attempts,2,'Backend failure retried only derived-data delivery');
+      ok(validHistoricalExecution({contract_version:1,record:recovered},revokedId,revokedPlan.envelope.plan_hash),'Recovered history satisfies the current closed public contract');
+      equal(recovered,nativeRecovery.history_view,'MCP history equals the independently verified native view');
+      equal(recovered.execution_available,false,'Privacy history grants no execution authority');
+      const history=recovered.history,results=history.items.map(i=>i.result),execution=history.execution;
+      equal(recovered.state,'partial');equal(results.map(i=>i.state),['applied','skipped','skipped']);
+      equal(results.map(i=>i.attempts),[1,0,0],'Historical view retains original field attempts');
+      ok(!('attested_by_token_id' in execution.attestation),'Original direct attribution removed by native privacy request');
+      ok(!('attested_by_token_id' in execution.recovery.attestation),'Separate recovery direct attribution removed too');
+      ok(execution.recovery.attestation.attribution_removed_at>0,'Redacted recovery retains removal event');
+      equal(execution.recovery.attestation.human_verified,false);
+      equal(results[0].invalidation,'delivered','Recovered applied field has completed native cache/Action delivery');
+      equal(results[0].delivery.status,'delivered');
+      equal(results[0].delivery.attempts,2,'Backend failure retried only derived-data delivery');
     }finally{await auditReader.close();}
     equal(inspect(),afterRevocation,'Native recovery, privacy and retention change neither applied nor pending fields');
     checks+=recoveryRetention(nativeRecovery.proposal).checks;
