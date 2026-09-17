@@ -11,7 +11,7 @@ import {workflowCatalog} from './workflow-catalog.js';
 import {sourceConfirmation,validSourceStart,sourcePath,sourceArgs} from './source-scans.js';
 import {scanConfirmation,pagespeedRoute,pagespeedSupport,discoverPageSpeedScans,validPageSpeedStart,
   validPageSpeedProposal,validPageSpeedProgress,pageSpeedStartBody,pageSpeedProgress} from './pagespeed-scans.js';
-import {executionSchema,rollbackSchema,confirmationBody,isFieldExecutionPlan,validExecutionResponse} from './field-execution.js';
+import {executionSchema,rollbackSchema,confirmationBody,isFieldExecutionPlan,validExecutionResponse,fieldOperations} from './field-execution.js';
 import {validSchemaExecutionResponse,schemaForwardToken,schemaInverseToken,schemaForwardExecutionSchema,schemaInverseExecutionSchema,schemaMixedExecutionSchema,
   schemaConfirmationBody,isSchemaExecutionPlan,matchesSchemaExecutionRequest} from './schema-execution.js';
 import {schemaRollbackShape,isSchemaRollback,isSchemaRollbackPreview,validSchemaRollbackInput,
@@ -36,6 +36,10 @@ const strip = (args, keys) => Object.fromEntries(Object.entries(args).filter(([k
 const result = data => ({ content: [{ type: 'text', text: JSON.stringify(data) }] });
 const failure = (code, message, advice) => ({ ...result({ code, message, ...(advice || {}) }), isError: true });
 const upgrade = name => failure('workflow_upgrade_required', `${name} is not a compatible legacy operation. Use the canonical workflow profile; no mutation was sent.`);
+const freezeArguments=value=>{
+  if(value&&typeof value==='object'&&!Object.isFrozen(value)){for(const item of Object.values(value))freezeArguments(item);Object.freeze(value);}
+  return value;
+};
 const researchOperations=['investigate.404','investigate.near_win','investigate.content_decay','investigate.ranking_decline',
   'investigate.ctr_decline','investigate.demand_decline','investigate.traffic_decline'];
 const pickupFields=['signal_id','snapshot_hash','target_keys','research_operation','title','note','priority','deadline'];
@@ -114,8 +118,10 @@ export function workflowDefinitions() {
   };
 }
 
-export function registerWorkflowTools(server, client, { profile = 'core', preflight = { ok: true }, capabilities = null, maintenanceOnly = false, recovery = null } = {}) {
+export function registerWorkflowTools(server, client, { profile = 'core', preflight = { ok: true }, capabilities = null, maintenanceOnly = false, recovery = null, hostedContext = null } = {}) {
   if (!['core','legacy','specialist'].includes(profile)) throw new Error('Unknown workflow tool profile.');
+  if(hostedContext)capabilities={...capabilities,schema_execution:undefined,redirect_execution:undefined,schema_preview:undefined,
+    field_execution:capabilities?.field_execution?{...capabilities.field_execution,recovery_available:false}:undefined};
   const serverOriginal=server;
   const clientInfo=()=>serverOriginal.server?.getClientVersion?.();
   const catalog=workflowCatalog(server);server=catalog.server;
@@ -209,6 +215,14 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   if(!maintenanceOnly&&schemaRecovery)defs.get_changes={...defs.get_changes,description:'Status/recovery preview.',
     schema:{...defs.get_changes.schema,kind:z.enum(['draft','execution','recovery']).optional()}};
   if(maintenanceOnly) defs.get_capabilities.path=()=>'/scans/maintenance/capabilities';
+  // Hidden hosted tools keep their real closed argument schemas so direct calls
+  // reach current authorization before an availability decision. Listing is a
+  // separate projection; SDK tool handles must not be disabled to hide a tool.
+  if(hostedContext){
+    if(!defs.execute_change_set.fieldExecution)defs.execute_change_set={...defs.execute_change_set,schema:executionSchema};
+    if(!defs.rollback_change_set.fieldExecution)defs.rollback_change_set={...defs.rollback_change_set,schema:rollbackSchema};
+    defs.get_changes={...defs.get_changes,schema:{...defs.get_changes.schema,kind:z.enum(['draft','execution','recovery']).optional()}};
+  }
   const register = (name, def, canonical = name, deprecated = false) => {
     const schema = z.object(def.schema).strict();
     const readOnly=Boolean(def.path)&&!def.write&&!def.scanPlan&&!def.maintenanceWrite&&!def.fieldPlan&&!def.fieldExecution;
@@ -216,9 +230,26 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       // Read-only already implies idempotence. Omitted open-world hint stays conservative.
       annotations: { readOnlyHint:readOnly, ...(!readOnly?{destructiveHint:Boolean(def.write || def.scanPlan || def.maintenanceWrite || def.fieldExecution==='execute')||!def.path}:{}),
         ...(!readOnly&&def.path?{idempotentHint:true}:{}) } }, async input => {
-      if (!preflight.ok) return failure(preflight.code || 'workflow_unavailable', preflight.message || 'Workflow startup refused; restart after correcting the configuration.',rateLimitAdvice(preflight));
+      if (!hostedContext && !preflight.ok) return failure(preflight.code || 'workflow_unavailable', preflight.message || 'Workflow startup refused; restart after correcting the configuration.',rateLimitAdvice(preflight));
       const parsed = schema.safeParse(input || {});
       if (!parsed.success || (def.validate && !def.validate(parsed.data))) return failure('invalid_request','Invalid or unknown tool arguments; nothing was sent.');
+      const authorizedArgs=hostedContext?structuredClone(parsed.data):null;
+      if(hostedContext){
+        let permission;
+        try{permission=await hostedContext.authorizer.authorizeOperation(canonical,freezeArguments(structuredClone(authorizedArgs)));}
+        catch{return failure('authorization_unavailable','Authorization could not be verified; nothing was sent.',{retryable:true});}
+        if(permission?.ok!==true){
+          const valid=permission?.ok===false&&typeof permission.code==='string'&&/^[a-z][a-z0-9_]{0,79}$/.test(permission.code)
+            &&typeof permission.message==='string'&&typeof permission.retryable==='boolean';
+          return valid?failure(permission.code,permission.message.slice(0,500),{retryable:permission.retryable})
+            :failure('authorization_unavailable','Authorization could not be verified; nothing was sent.',{retryable:true});
+        }
+        if(parsed.data.kind==='recovery'||parsed.data.recovery_plan!==undefined||parsed.data.schema_preview!==undefined
+          ||parsed.data.items?.some(item=>!fieldOperations.includes(item.operation)))
+          return failure('operation_unavailable','This mode is unavailable for hosted workflows; nothing was sent.');
+        if(!preflight.ok)return failure(preflight.code||'workflow_unavailable','Workflow startup refused; nothing was sent.');
+      }
+      const dispatch=async()=>{
       if((canonical==='get_scan_status' || canonical==='close_scan') && parsed.data.receipt_reference!==undefined){
         const write=canonical==='close_scan',serverReceipt=parsed.data.receipt_reference.startsWith('server_'),
           grant=serverReceipt?(write?'retained_settlement_available':'retained_receipt_review_available'):(write?'settlement_available':'receipt_review_available');
@@ -333,8 +364,9 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
           return failure('workflow_operation_unavailable','This exact operation is unavailable. Nothing was sent.');
         try{
           const a=parsed.data,path=nativePlan?'/changes/executions':nativeRead?'/changes/executions/'+a.change_set_id:def.path(a);
-          const data=nativeRead?await client.get(path):await client.post(path,def.fieldExecution==='execute'
-            ?(schemaExecute?schemaConfirmationBody(a,clientInfo()):redirectExecute?redirectConfirmationBody(a,clientInfo()):confirmationBody(a,clientInfo())):a);
+          let body=def.fieldExecution==='execute'
+            ?(schemaExecute?schemaConfirmationBody(a,clientInfo()):redirectExecute?redirectConfirmationBody(a,clientInfo()):confirmationBody(a,clientInfo(),hostedContext?.auditContext)):a;
+          const data=nativeRead?await client.get(path):await client.post(path,body);
           if(schemaRollback&&isSchemaRollbackPreview(a)){
             if(!validSchemaRollbackPreview(data,a))return failure('schema_rollback_preview_invalid_response','Comparison could not be verified. No approval or website execution was requested.');
             return result(data);
@@ -358,7 +390,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
             return failure('field_execution_incompatible_response','Result could not be verified. Reconcile this set with get_changes(kind=execution); do not repeat writes automatically.');
           return result(data);
         }catch(err){return failure(err.code||'field_execution_uncertain','Workflow refused or uncertain. Read the same set with get_changes(kind=execution); no automatic retry or legacy fallback.',
-          {automatic_retry:false,...(err.status===429?rateLimitAdvice(err.data):{})});}
+          {automatic_retry:false,...(hostedContext?err.data:err.status===429?rateLimitAdvice(err.data):{})});}
       }
       if(def.fieldRead&&parsed.data.kind==='draft')delete parsed.data.kind;
       if(def.fieldPlan&&parsed.data.schema_preview!==undefined){
@@ -417,9 +449,23 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
           if(recovery){try{data.scan_recovery=(await client.get('/scans/recovery/capabilities')).scan_recovery || {receipt_review_available:false,settlement_available:false};}
             catch{data.scan_recovery={receipt_review_available:false,settlement_available:false};}}
         }
-        return result(deprecated ? { deprecated: true, replacement: canonical, remove_in: '0.5.0', data } : data);
+        return result(hostedContext&&canonical==='get_capabilities'?hostedContext.filteredCapabilities
+          :deprecated ? { deprecated: true, replacement: canonical, remove_in: '0.5.0', data } : data);
       } catch (err) { return failure(typeof err.code === 'string' ? err.code : 'workflow_request_failed', err.status ? `Site refused the request (${err.status}). ${err.message}` : err.message,
-        err.status===429?rateLimitAdvice(err.data):undefined); }
+        hostedContext?err.data:err.status===429?rateLimitAdvice(err.data):undefined); }
+      };
+      const output=await dispatch();
+      if(hostedContext&&!output.isError){
+        try{
+          const validated=JSON.parse(output.content[0].text);
+          const recorded=await hostedContext.authorizer.recordValidatedResult(canonical,freezeArguments(structuredClone(authorizedArgs)),validated);
+          if(recorded?.ok!==true)throw new Error('Result recording refused');
+        }catch{
+          return failure(['plan_changes','rollback_change_set'].includes(canonical)?'proposal_binding_failed':'result_recording_failed',
+            'The validated result could not be recorded; no result was released.',{retryable:true});
+        }
+      }
+      return output;
     });
   };
   if (profile === 'legacy') {
