@@ -1,8 +1,8 @@
 # H3a partial library preparation — not a hosted runtime
 
 Basis: `2598a4a`, SDK `1.29.0`, Node `22.17.0`. Reviewed against
-`hosted-mcp-h0-3` and the H3a dispatch brief dated 2026-09-17. H0-4 is being
-updated independently. This branch does not yet provide `createWorkflowServer`,
+`hosted-mcp-h0-4` and the H3a dispatch brief dated 2026-09-17. This branch does
+not yet provide `createWorkflowServer`,
 a hosted package export, an injected production transport, or server hooks.
 The existing stdio implementation is unchanged.
 
@@ -83,6 +83,18 @@ capability cache policy. No server hook integration is claimed by this branch.
 4. `proposal_binding_failed` with `retryable:true` is a proposed SET02 code,
    absent from H0-3 section 9. The fail-closed behavior is required; the exact
    error and read-recorder failure behavior need recording in the contract.
+
+## H0-4 reconciliation
+
+The final H0-4 sections 5, 7, 8 and 9 were reread. Section 5 specifies the
+separate H1b-2 identity probe (2500 ms, 8 KiB, IP pinning, no redirects, one
+in-flight request per origin and eight globally); these are not the workload
+transport limits. Section 7 explicitly preserves consent-time grant scopes
+under broader site/PAT permissions. Section 8 retains the library interface.
+Section 9 adds H1a account/signature/nonce responses; these are outside this
+workload classifier. None resolves the four contract candidates above. The
+mapping rows used here remain unchanged. No H0-4 difference changes existing
+stdio behavior in this partial branch.
 
 ## Evidence boundaries
 
