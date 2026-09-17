@@ -11,12 +11,12 @@ export const executionSchema={change_set_id:scanId,change_token:z.string().regex
 export const rollbackSchema={change_set_id:scanId,client_request_id:requestId,
   item_ids:z.array(scanId).min(1).max(25).refine(v=>new Set(v).size===v.length)};
 const label=(v,n)=>typeof v==='string'&&v.trim()!==''&&Buffer.byteLength(v,'utf8')<=n&&!/[<>\p{C}]/u.test(v);
-export function confirmationBody(input,clientInfo){
+export function confirmationBody(input,clientInfo,auditContext){
   // An execution proposal is single-use. Exact retries derive the same request
   // identity, instead of inviting an agent to invent a new execution request.
   return {...input,client_request_id:'mcp-execute-'+input.confirmation.plan_hash,confirmation:{...input.confirmation,mode:'chat_attested',acknowledgements:[],
     client:{name:label(clientInfo?.name,80)?clientInfo.name:'unknown',version:label(clientInfo?.version,40)?clientInfo.version:null},
-    agent:{name:'unknown'}}};
+    agent:{name:label(auditContext?.grantLabel,80)?auditContext.grantLabel:'unknown'}}};
 }
 export function isFieldExecutionPlan(input,support){
   return support?.contract_version===1&&support.available===true&&Array.isArray(input.items)&&input.items.length>0
