@@ -23,6 +23,7 @@
     "LICENSE"
   ],
   "scripts": {
+    "test:hosted": "node test/hosted/error-map.mjs && node test/hosted/stub-vps-test.mjs",
     "start": "node index-workflow.js",
     "test": "node scripts/package-smoke.mjs",
     "test:dev": "node test/workflow-onboarding.mjs && node test/workflow-surface.mjs",
