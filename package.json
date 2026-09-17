@@ -7,6 +7,12 @@
     "tamrank-mcp": "./index-workflow.js"
   },
   "main": "./index-workflow.js",
+  "exports": {
+    ".": "./index-workflow.js",
+    "./hosted": "./src/hosted/factory.js",
+    "./discovery": "./src/scan-maintenance.js",
+    "./package.json": "./package.json"
+  },
   "files": [
     "index.js",
     "index-workflow.js",
@@ -16,6 +22,7 @@
     "!src/rest.js",
     "!src/tools.js",
     "assets/",
+    "HOSTED-MCP.md",
     "README.md",
     "QUICKSTART-NL.md",
     "QUICKSTART-DE.md",
@@ -23,6 +30,7 @@
     "LICENSE"
   ],
   "scripts": {
+    "test:hosted": "node test/hosted/error-map.mjs && node test/hosted/stub-vps-test.mjs && node test/hosted/transport.mjs && node test/hosted/factory.mjs && node test/hosted/package.mjs",
     "start": "node index-workflow.js",
     "test": "node scripts/package-smoke.mjs",
     "test:dev": "node test/workflow-onboarding.mjs && node test/workflow-surface.mjs",
