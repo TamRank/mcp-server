@@ -408,7 +408,10 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         ||(def.fieldPlan&&(!capabilities.field_proposals.origin_kinds?.includes(parsed.data.origin.kind)
           ||parsed.data.items.some(item=>!capabilities.field_proposals.operations?.includes(item.operation))))))
         return failure('workflow_operation_unavailable','Private field drafts require explicit site support and current permissions. Nothing was sent.');
-      if (capabilities?.reads?.[canonical]?.available === false) return failure('workflow_operation_unavailable', `${canonical} is unavailable on this site.`);
+      // Hosted reads need a positive advertisement; stdio keeps refusing only an explicit false.
+      const hostedRead=hostedContext&&!def.write&&!def.fieldPlan&&!def.fieldRead;
+      if (capabilities?.reads?.[canonical]?.available === false || (hostedRead && capabilities?.reads?.[canonical]?.available !== true))
+        return failure('workflow_operation_unavailable', `${canonical} is unavailable on this site.`);
       if (canonical==='diagnose_page' && parsed.data.url!==undefined && capabilities
         && capabilities.reads?.diagnose_page?.url_target?.available!==true)
         return failure('workflow_operation_unavailable','URL analytics are not available in this site preview. No request was sent.');
