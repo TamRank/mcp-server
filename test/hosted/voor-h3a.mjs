@@ -121,6 +121,21 @@ test('5: a 429 without a valid WP envelope fails closed', async () => {
   }
 });
 
+test('5: a write acknowledged with an unreadable contract is uncertain, a read is not', async () => {
+  let { client } = hosted([{ body: { contract_version: 2, record: {} } }]);
+  await refusal(client.post(executePath, {}), { code: 'site_upgrade_required', retryable: false, outcome_unknown: true });
+  ({ client } = hosted([{ body: { contract_version: 3 } }]));
+  await refusal(client.post('/work-items', {}), { code: 'site_upgrade_required', retryable: false, outcome_unknown: true });
+  ({ client } = hosted([{ body: { contract_version: 3 } }]));
+  await refusal(client.get('/site/context'), { code: 'site_upgrade_required', retryable: false, outcome_unknown: false });
+  const fixture = await connect({ responses: [{ body: { contract_version: 2, record: {} } }] });
+  try {
+    const output = value(await fixture.client.callTool({ name: 'execute_change_set', arguments: executeArgs() }));
+    assert.equal(output.code, 'site_upgrade_required'); assert.equal(output.outcome_unknown, true);
+    assert.equal(output.automatic_retry, false); assert.equal(fixture.stub.recorded.length, 0);
+  } finally { await fixture.close(); }
+});
+
 test('6: recorder failure is retryable and releases no change-set ID or result', async () => {
   for (const [name, args, body, code] of [
     ['plan_changes', planArgs(), nativeReply(), 'proposal_binding_failed'],
