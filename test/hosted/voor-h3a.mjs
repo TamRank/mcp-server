@@ -79,6 +79,48 @@ test('4: both WordPress REST forms come from rest_base_url, never from concatena
   }
 });
 
+test('5: each confirmed WP error maps exactly through the hosted client; a wrong status is no evidence', async () => {
+  for (const [status, code, expected] of [
+    [401, 'agent_token_missing', 'upstream_auth_unavailable'], [401, 'agent_token_invalid', 'site_reconnect_required'],
+    [401, 'agent_token_expired', 'site_reconnect_required'], [401, 'agent_token_revoked', 'site_reconnect_required'],
+    [401, 'cloud_link_pending', 'site_link_unavailable'], [401, 'cloud_link_revoked', 'site_reconnect_required'],
+    [402, 'pro_required', 'site_entitlement_required'], [403, 'agent_scope_insufficient', 'site_scope_insufficient'],
+    [403, 'workflow_operator_unavailable', 'site_owner_unavailable'], [409, 'workflow_profile_required', 'site_profile_required'],
+    [409, 'workflow_upgrade_required', 'site_upgrade_required'],
+    [403, 'agent_token_revoked', 'site_unavailable'], [401, 'pro_required', 'site_unavailable'],
+  ]) {
+    const { client, stub } = hosted([wp(status, code)]);
+    await refusal(client.get('/site/context'), { code: expected, retryable: expected === 'site_unavailable', outcome_unknown: false });
+    assert.equal(stub.calls.length, 1);
+  }
+});
+
+test('5: retry_after is read only from a valid WP 429 JSON body', async () => {
+  for (const [response, expected] of [
+    [wp(429, 'rate_limit_exceeded', { retry_after: 30 }), { retry_after: 30 }],
+    [wp(429, 'change_execution_rate_limited', { retry_after: 45, remaining: 0 }), { retry_after: 45 }],
+    [{ ...wp(429, 'rate_limit_exceeded'), headers: { 'retry-after': '30' } }, {}],
+    [wp(429, 'rate_limit_exceeded', { retry_after: 3601 }), {}], [wp(429, 'rate_limit_exceeded', { retry_after: '30' }), {}],
+  ]) {
+    const { client } = hosted([response]);
+    await refusal(client.get('/site/context'), { code: 'rate_limited', retryable: true, outcome_unknown: false, ...expected });
+  }
+});
+
+test('5: a 429 without a valid WP envelope fails closed', async () => {
+  assert.deepEqual(mapHostedOutcome({ status: 429, code: 'rate_limit_exceeded', validWpEnvelope: false, kind: 'write', retryAfter: 30 }),
+    { code: 'site_unavailable', retryable: false, outcome_unknown: true });
+  for (const response of [{ status: 429, html: '<html>Too Many Requests</html>' },
+    { status: 429, body: { data: { retry_after: 3600 } } },
+    { status: 429, body: { code: 'rate_limit_exceeded', message: 'Synthetic', data: { status: 503, retry_after: 30 } } }]) {
+    let { client, stub } = hosted([response]);
+    await refusal(client.post('/work-items', {}), { code: 'site_unavailable', retryable: false, outcome_unknown: true });
+    assert.equal(stub.calls.length, 1);
+    ({ client } = hosted([response]));
+    await refusal(client.get('/site/context'), { code: 'site_unavailable', retryable: true, outcome_unknown: false });
+  }
+});
+
 test('6: recorder failure is retryable and releases no change-set ID or result', async () => {
   for (const [name, args, body, code] of [
     ['plan_changes', planArgs(), nativeReply(), 'proposal_binding_failed'],

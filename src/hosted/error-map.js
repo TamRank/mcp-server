@@ -12,7 +12,8 @@ export function mapHostedOutcome({ status = 0, code, validWpEnvelope = false, ki
     '401:cloud_link_pending': 'site_link_unavailable',
     '401:cloud_link_revoked': 'site_reconnect_required',
   };
-  if (status === 429) return { code: 'rate_limited', retryable: true, outcome_unknown: false,
+  // Any valid WP 429 refused before work. A proxy/HTML or mismatched 429 is no such evidence.
+  if (status === 429 && validWpEnvelope) return { code: 'rate_limited', retryable: true, outcome_unknown: false,
     ...(Number.isInteger(retryAfter) && retryAfter >= 1 && retryAfter <= 3600 ? { retry_after: retryAfter } : {}) };
   const mapped = validWpEnvelope && (known[`${status}:${code}`]
     || (code === 'workflow_upgrade_required' ? 'site_upgrade_required' : undefined));

@@ -28,7 +28,7 @@ for (const status of [0, 401, 403, 404, 500, 503]) {
 }
 assert.deepEqual(mapHostedOutcome({ status: 401, code: 'agent_token_revoked', validWpEnvelope: false }),
   { code: 'site_unavailable', retryable: true, outcome_unknown: false });
-assert.deepEqual(mapHostedOutcome({ status: 429, retryAfter: 20 }),
+assert.deepEqual(mapHostedOutcome({ status: 429, retryAfter: 20, validWpEnvelope: true }),
   { code: 'rate_limited', retryable: true, outcome_unknown: false, retry_after: 20 });
-assert.equal(Object.hasOwn(mapHostedOutcome({ status: 429, retryAfter: 3601 }), 'retry_after'), false);
+assert.equal(Object.hasOwn(mapHostedOutcome({ status: 429, retryAfter: 3601, validWpEnvelope: true }), 'retry_after'), false);
 console.log('PASS: hosted mapping, known WP errors, ERR02 unknown JSON/HTML, uncertain writes; no persistent actions.');
