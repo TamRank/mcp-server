@@ -284,5 +284,5 @@ try {
   await assert.rejects(client.get('/echo-error'),e=>e.code==='workflow_request_failed'&&!e.message.includes('fixture-not-a-real-token')&&e.message.length<=500);
   await assert.rejects(new WorkflowClient({siteUrl:base,pat:'fixture',timeoutMs:100}).get('/slow'),e=>e.code==='timeout');
   for(const siteUrl of ['http://real-site.invalid','https://user:pass@site.invalid','https://site.invalid/?key=secret']) assert.throws(()=>new WorkflowClient({siteUrl,pat:'fixture'}));
-  console.log('WORKFLOW SURFACE OK: 12/20/42 profiles, gated research/manual administration, unavailable website writers, strict inputs, full-target mapping, bounded HTTP/timeout/redirect protection.');
+  console.log('WORKFLOW SURFACE OK: 13/21/42 profiles, gated research/manual administration, outcome reads, unavailable website writers, strict inputs, full-target mapping, bounded HTTP/timeout/redirect protection.');
 } finally { server.closeAllConnections(); await new Promise(resolve=>server.close(resolve)); }

@@ -65,7 +65,7 @@ for (const edit of [
   } finally { await fixture.close(); }
 }
 
-// Deny independently for all twelve, including set-binding and hidden execution.
+// Deny independently for all thirteen, including set-binding and hidden execution.
 for (const [name, args] of calls) {
   const fixture = await connect({ decisions: { [name]: { ok: false, code: name === 'get_changes' ? 'change_set_forbidden' : 'insufficient_scope',
     message: 'Synthetic deny', retryable: false } } });
@@ -255,4 +255,4 @@ for (const response of [{ status: 503, body: { code: 'unavailable', message: 'Sy
   } finally { await b.close(); await server.close(); }
 }
 assert.equal(typeof buildWorkflowServer, 'function');
-console.log('PASS: hosted factory validation/deep-freeze, twelve hook paths, hidden direct authorization, SET01/SET02/CTX01/WRITE01/SCOPE01/PROTO01, trusted audit and preserved MCP clientInfo.');
+console.log('PASS: hosted factory validation/deep-freeze, thirteen hook paths, hidden direct authorization, SET01/SET02/CTX01/WRITE01/SCOPE01/PROTO01, trusted audit and preserved MCP clientInfo.');

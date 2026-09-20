@@ -56,10 +56,10 @@ test('package version, identity and normal entries are the reviewed beta',()=>{
 });
 
 test('documented core and specialist names match the real registry',()=>{
-  const documented=inlineNames(readme.split('The twelve core names are:')[1].split('A listed name')[0]);
+  const documented=inlineNames(readme.split('The thirteen core names are:')[1].split('A listed name')[0]);
   assert.deepEqual(documented,Object.keys(workflowDefinitions()));
   const specialist=inlineNames(readme.split('The specialist profile adds ')[1].split('Merely selecting it')[0]);
-  for(const [profile,count]of [['core',12],['specialist',20],['legacy',42]])assert.equal(registry(profile).tools.size,count);
+  for(const [profile,count]of [['core',13],['specialist',21],['legacy',42]])assert.equal(registry(profile).tools.size,count);
   assert.deepEqual([...registry('specialist').tools.keys()].filter(name=>!documented.includes(name)),specialist);
 });
 

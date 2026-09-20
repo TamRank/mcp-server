@@ -237,7 +237,7 @@ try {
     console.log('NATIVE PACKAGE OK: '+nativeCases.map(([mode])=>mode).join(', '));
   }
   assert.deepEqual(await Promise.all(sourceFiles.map(p=>readFile(join(root,p),'utf8'))),before,'Packaging must not modify source manifest, lock, shipped entry or guides');
-  console.log(`WORKFLOW PACKAGE OK: extracted tarball with ${online?'clean-cache':'offline'} npm ci using repository lock; installed entry, 12/20/42 profiles, both REST forms, scan preview/private draft mapping; baseline writers disabled${nativeCases.length?'; selected native matrices passed':''}. Source and active installation untouched; unconstrained registry resolution untested.`);
+  console.log(`WORKFLOW PACKAGE OK: extracted tarball with ${online?'clean-cache':'offline'} npm ci using repository lock; installed entry, 13/21/42 profiles, both REST forms, scan preview/private draft mapping; baseline writers disabled${nativeCases.length?'; selected native matrices passed':''}. Source and active installation untouched; unconstrained registry resolution untested.`);
 } finally {
   if(server)await new Promise(resolve=>server.close(resolve));
   // Only the exact directory created by this test; never a supplied path or a parent.

@@ -116,18 +116,18 @@ This does not verify every Node version, operating system, host or theme/builder
 
 | Profile | Tool names | Use |
 |---|---:|---|
-| `core` (default) | 12 | Day-to-day research and approved change workflows. |
-| `specialist` | 20 | Core plus deeper diagnostics and explicit scan/recovery workflows. |
+| `core` (default) | 13 | Day-to-day research, outcomes and approved change workflows. |
+| `specialist` | 21 | Core plus deeper diagnostics and explicit scan/recovery workflows. |
 | `legacy` | 42 | Temporary migration surface, **not** the old writer implementation. |
 
-The twelve core names are:
+The thirteen core names are:
 
 - `get_site_context`, `get_capabilities`
 - `get_work_queue`, `get_signals`
 - `search_pages`, `get_page`, `diagnose_page`
 - `update_work_item`
 - `plan_changes`, `execute_change_set`
-- `get_changes`, `rollback_change_set`
+- `get_changes`, `rollback_change_set`, `get_outcomes`
 
 A listed name is **not** proof of permission or availability. Server capabilities,
 current operator/PAT rights, licensing and the exact operation's development
@@ -163,7 +163,9 @@ When the owned test site's exact operation is available:
 4. Read the same execution with `get_changes`. If the response is lost or a
    timeout occurs, reconcile that ID first. Do not guess success, create a new
    set or repeat website writes automatically.
-5. To undo eligible changes, request a new `rollback_change_set` proposal and
+5. Read `get_outcomes` for the linked GSC monitoring state and measured change.
+   It reports an observed association, never proof that the edit caused it.
+6. To undo eligible changes, request a new `rollback_change_set` proposal and
    obtain **new** approval. Changed current values, unsupported contexts or
    missing evidence can prevent rollback. Not everything is reversible.
 
@@ -172,8 +174,8 @@ attachment alt text. Redirect, schema and scan execution remain disabled
 server-side even though separately gated development implementations exist.
 There are no page-body/builder writes, automatic internal links, arbitrary
 JSON-LD or new schema templates. Stored fields are not automatically proof of
-effective frontend output. GSC outcome measurement is Phase 5, not a
-score-refresh claim.
+effective frontend output. Outcome measurement is based on the linked GSC
+windows and site baseline; it is not a score-refresh or causality claim.
 
 Scans and interrupted-run recovery have their own explicit proposals and
 permissions. `get_scan_status` never resumes a scan. A queued job is not proof
