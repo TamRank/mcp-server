@@ -43,10 +43,10 @@ grant refusal. Factory rejects specialist/legacy/preview/recovery/receipt-store
 contexts; the hosted tool profile is core only. No schema/redirect writes,
 scan execution, recovery mode or legacy aliases are available.
 
-The capable core catalog is the twelve names: get_site_context,
+The capable core catalog is the thirteen names: get_site_context,
 get_capabilities, get_work_queue, get_signals, search_pages, get_page,
 diagnose_page, update_work_item, plan_changes, execute_change_set, get_changes,
-rollback_change_set. Reduced capabilities hide unavailable tools in tools/list,
+rollback_change_set, get_outcomes. Reduced capabilities hide unavailable tools in tools/list,
 but a direct call still passes argument validation and current authorization.
 A read is listed and dispatched only when filteredCapabilities.reads.<tool>
 .available is true; a missing entry counts as unavailable (stdio still
