@@ -1,198 +1,226 @@
-# @tam-rank/mcp-server
+# TamRank MCP — 0.4 beta
 
-> **The SEO plugin built for agents, not adapted from a generic CMS bridge.**  
-> Connect Claude, Cursor, and other AI agents directly to your WordPress site — read issues, fix meta titles, create redirects, and roll back changes, all from a single chat message.
+Start guides: **English** (this page) · [Nederlands](QUICKSTART-NL.md) ·
+[Deutsch](QUICKSTART-DE.md) · [Français](QUICKSTART-FR.md).
+The translated quickstarts cover the same beta entry and safety boundaries;
+they do not change the client or WordPress interface language.
 
-[![npm version](https://img.shields.io/npm/v/@tam-rank/mcp-server)](https://www.npmjs.com/package/@tam-rank/mcp-server)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Stable release: August 31, 2026](https://img.shields.io/badge/stable-August%2031%2C%202026-blue)](https://tamrank.com/agents)
+TamRank helps you find relevant SEO work, inspect the evidence, review an exact
+proposal and, after approval in chat, execute supported changes and inspect the
+result. It uses the same work sources as the WordPress dashboard. Completing
+research is not proof of a website fix or an SEO improvement.
 
-> **Developer preview.** Stable V1.1 releases August 31, 2026.  
-> [Join the early access waitlist](https://tamrank.com/agents) · [TamRank PRO](https://tamrank.com/pricing)
+**Use this beta on an owned test site first. Do not activate its writers on a
+customer site without a separately reviewed release decision.** The repository
+build is not published merely by changing its version.
 
----
+## Package and entry
 
-## What this is
-
-TamRank is a WordPress SEO plugin. This package is its [Model Context Protocol](https://modelcontextprotocol.io) server — a bridge that lets AI agents (Claude Desktop, Cursor, Claude Code) talk directly to TamRank's REST API on your WordPress site.
-
-Instead of opening your WordPress dashboard to find and fix SEO issues, you tell Claude:
-
-> *"Fix the top 10 SEO issues on my site."*
-
-Claude reads your site health, prioritizes fixes, proposes changes, and — after your approval — applies them. Every action is logged. Everything is reversible.
-
-TamRank is purpose-built for agent workflows: structured improvement schema, dry-run by default, scoped PAT auth with full audit trail, and a strategy layer that tells Claude *what to fix first and why* — not just a list of CRUD endpoints.
-
----
-
-## Architecture
-
-```
-┌─────────────────┐         ┌──────────────────┐         ┌────────────────┐
-│   MCP Client    │◄────────│   MCP Server     │◄────────│  TamRank       │
-│  (Claude        │ JSON-RPC│  (@tam-rank/     │  REST   │  (WordPress    │
-│   Desktop,      │  over   │   mcp-server)    │  HTTP   │   plugin       │
-│   Cursor,       │  stdio  │                  │         │   + VPS API)   │
-│   Claude Code)  │         │                  │         │                │
-└─────────────────┘         └──────────────────┘         └────────────────┘
-```
-
-The MCP server runs as a local process on your machine (`stdio` transport). Your AI client spawns it on startup, then calls tools on your behalf. Your WordPress credentials never leave your machine.
-
----
-
-## Quick start
-
-**Requires:** TamRank PRO · Node.js 18+
-
-**1. Generate a Personal Access Token**
-
-Log in at [tamrank.com/account/agent-tokens](https://tamrank.com/account/agent-tokens), create a token with the scopes you need, and copy it.
-
-**2. Add to Claude Desktop config** (`~/Library/Application Support/Claude/claude_desktop_config.json`)
-
-```json
-{
-  "mcpServers": {
-    "tamrank": {
-      "command": "npx",
-      "args": ["-y", "@tam-rank/mcp-server"],
-      "env": {
-        "TAMRANK_PAT": "tamrank_pat_xxxxxxxxxxxx",
-        "TAMRANK_SITE_URL": "https://your-site.com"
-      }
-    }
-  }
-}
-```
-
-**3. Restart Claude Desktop and say:**
-
-> *"What are the top SEO issues on my site?"*
-
-Setup time: under 5 minutes.
-
-### Multiple sites
-
-Each server instance talks to one site. To manage several sites, add one entry
-per site to your MCP config — each with its own token and URL. This is the same
-pattern the GitHub, Slack, and Postgres MCP servers use for multiple targets:
-
-```json
-{
-  "mcpServers": {
-    "tamrank-blog": {
-      "command": "npx",
-      "args": ["-y", "@tam-rank/mcp-server"],
-      "env": {
-        "TAMRANK_PAT": "tamrank_pat_AAA",
-        "TAMRANK_SITE_URL": "https://blog.example.com"
-      }
-    },
-    "tamrank-shop": {
-      "command": "npx",
-      "args": ["-y", "@tam-rank/mcp-server"],
-      "env": {
-        "TAMRANK_PAT": "tamrank_pat_BBB",
-        "TAMRANK_SITE_URL": "https://shop.example.com"
-      }
-    }
-  }
-}
-```
-
-Each site appears as its own set of tools — ask Claude to *"fix the meta on the
-blog"* and it uses that site's tools. Managing many client sites from a single
-entry — one tool set with in-chat site switching backed by your OS keychain — is
-on the [V2 agency roadmap](#roadmap).
-
----
-
-## Available tools (V1.1)
-
-| Tool | What it does | Scope required |
-|---|---|---|
-| `get_site_context` | Brand, language, site type — Claude knows your site before it acts | `site:read` |
-| `get_capabilities` | Check tier + available credits | `site:read` |
-| `get_site_overview` | All pages, posts, products with SEO status | `site:read` |
-| `get_site_health` | Priority issues ranked by impact | `site:read` |
-| `get_priority_actions` | "What should I fix first?" — filtered by focus area | `site:read` |
-| `get_next_action` | The ONE highest-impact action right now — top priority card with a resolved target and the tool that fixes it | `site:read` |
-| `get_issues` | Site-wide issue roll-up — one row per problem type (severity, count, impact, examples, drill-down tool), filterable by severity/type | `site:read` |
-| `search_posts` | Search/filter the managed pages — title/slug match, score range, missing meta, never-audited (worst-first sort) | `site:read` |
-| `get_meta` | Current SEO meta + score breakdown of one post (use before update_meta) | `site:read` |
-| `get_page_analysis` | Deep per-page audit: score breakdown (meta vs content, live + stale flag) + every content check with fix tips and evidence + a cached PageSpeed signal | `site:read` |
-| `get_site_analysis` | Deep pass across the lowest-scoring pages in one call | `site:read` |
-| `get_schema` | One page's Schema.org markup: effective type, source, confidence, validity + third-party conflict warning and a fix hint | `site:read` |
-| `get_schema_overview` | Site-wide schema coverage: % covered, type distribution, disabled/template/manual counts | `site:read` |
-| `get_schema_settings` | Site-wide Organization/WebSite schema identity (name, logo, contact, address, socials) + completeness | `site:read` |
-| `get_topical_authority` | Topical-authority map: pillar, clusters, coverage %, content gaps | `site:read` |
-| `get_pagespeed` | PageSpeed for one page — score + Core Web Vitals + opportunities (cached; refresh=true for a live test) | `site:read` |
-| `get_pagespeed_scan_status` | Progress of a background bulk PageSpeed scan | `site:read` |
-| `get_gsc_pages` | Search Console page performance (clicks, impressions, CTR, position) | `site:read` |
-| `get_gsc_keywords` | Per-page keyword performance + click-uplift potential | `site:read` |
-| `get_keyword_stability` | Per-keyword position stability + direction trend | `site:read` |
-| `get_index_status` | Google index status of one page from the last index scan (cached, credit-free) | `site:read` |
-| `get_site_index` | Site-wide index coverage rollup: counts per status, scan progress, refresh cooldown | `site:read` |
-| `get_images_missing_alt` | Images without alt text, returned so the model can see and caption them (credit-free) | `site:read` |
-| `get_redirects` | List existing redirects with chain status | `site:read` |
-| `get_redirect_chains` | Redirect chains (A→B→C) and loops computed live, each with a ready-made flatten fix | `site:read` |
-| `get_404s` | Open 404s grouped by URL, ranked by hits | `site:read` |
-| `request_recrawl` | Ask Google to (re)crawl one page via the TamRank backend (dry-run first; consumes AI credits) | `index:write` |
-| `start_index_scan` | Site-wide index scan of unchecked + stale pages (dry-run first; consumes AI credits; shares the dashboard's 48h cooldown) | `index:write` |
-| `get_index_scan_status` | Live-poll a running index scan (metered); passive and free when idle | `index:write` |
-| `update_meta` | Write meta title and description to any post (response shows the projected new score) | `meta:write` |
-| `update_image_alt` | Write alt text to an image attachment | `meta:write` |
-| `detect_schema` | Run auto schema detection on a page so it renders JSON-LD (for not_yet_detected pages); recompute, never overrides a manual choice | `meta:write` |
-| `update_schema_settings` | Write the site-wide Organization/WebSite schema identity (name, logo, contact, address, socials); dry-run first, reversible | `schema:write` |
-| `rescore_page` | Persist a fresh audit so the stored/dashboard score catches up — the verify step after a fix | `meta:write` |
-| `start_pagespeed_scan` | Queue a background bulk PageSpeed scan across the site (poll get_pagespeed_scan_status) | `meta:write` |
-| `manage_redirects` | Create, update, or delete 301/302 redirects | `redirects:write` |
-| `resolve_404` | Mark a 404 as resolved (with optional redirect) | `redirects:write` |
-| `get_audit_log` | Full history of agent-applied changes | `audit:read` |
-| `get_changes` | Incremental "what changed since X" feed (manual + agent), cursor-driven | `audit:read` |
-| `rollback` | Undo any logged action by event ID | `rollback` |
-
-All write tools default to **dry-run mode** — Claude shows you exactly what it will change before touching anything.
-
----
-
-## Authentication
-
-TamRank uses a Personal Access Token (PAT) system — not WordPress application passwords, not your license key directly.
-
-Each token:
-- Has a named scope (e.g. `meta:write` only, or `*:read` for dashboards)
-- Is bound to a specific site or all sites on your license
-- Generates a full audit trail
-- Can be revoked instantly from [tamrank.com/account/agent-tokens](https://tamrank.com/account/agent-tokens)
-- Is automatically invalidated if your license expires or is refunded
-
-Token prefix: `tamrank_pat_`. The prefix is distinctive so secret scanners can spot it. This repo ships a pre-commit hook plus a [gitleaks](https://github.com/gitleaks/gitleaks) rule ([`.gitleaks.toml`](.gitleaks.toml)) that block accidental token commits, and a CI scan runs on every push. **Never commit a token to version control.** If one leaks, revoke it instantly from your account.
-
----
-
-## Roadmap
-
-| Release | What |
+| Entry | Status in `0.4.0-beta.1` |
 |---|---|
-| **V1.1 — August 31, 2026** | Stable npm package · full read/write tool set · PAT auth · Claude Desktop + Cursor |
-| **V1.2 — September 22, 2026** | Hosted connector (`https://mcp.tamrank.com`) · OAuth flow · Custom connector URL for Claude.ai web |
-| **V1.3 — Q4 2026** | Anthropic Directory listing · ChatGPT Custom GPT · Apps in ChatGPT |
-| **V2 — Q1 2027** | Agency multi-tenant · 50+ client sites · white-label |
+| `tamrank-mcp`, `npm start`, package main | Canonical safe workflow entry. Identifies itself as `tamrank-mcp` / `0.4.0-beta.1`. |
+| `index-workflow.js` | The same canonical entry when running a checkout directly. |
+| `index.js` | Compatibility path to the same safe workflow; it no longer starts the V1 implementation. |
 
----
+The package name is `@tam-rank/mcp-server`; the first beta is deliberately pinned
+as `@tam-rank/mcp-server@0.4.0-beta.1`. Publishing remains a separate human action.
 
-## License
+This package contains the customer-facing setup and safety boundary only.
+Internal implementation evidence, branch history and release-gate notes are
+deliberately not included in the distributed package.
 
-MIT — the MCP server package itself is open source.  
-TamRank PRO license required to use it against a live site. [See pricing.](https://tamrank.com/pricing)
+## First connection: owned test site, reads first
 
----
+1. The **owned test site** must have the matching FREE and PRO beta builds. In
+   TamRank, activate the reviewed safe workflow profile while creating its PAT.
+   Client environment variables cannot enable WordPress capabilities.
+2. In that site's TamRank **Settings → Integrations → AI Agents (MCP)** card,
+   activate the safe workflow with a **site-local setup PAT**, linked to your
+   current WordPress operator. First activation requires the five permissions
+   selected by TamRank: site read, change sets, metadata, audit and rollback.
+   This makes the reviewed workflow available; it is not standing approval for
+   a website change. If the first client connection must be strictly read-only,
+   create a second PAT with only `site:read` after activation and use that PAT
+   in step 3. A licence key or an invented token prefix is not a PAT. Do not put
+   a real token in git, shared screenshots, tickets or chat transcripts.
+   Task pickup, notes and reviewed-state changes require a separate PAT with
+   only `site:read` and `tasks:write`; the five-scope setup PAT intentionally
+   does not include task administration.
+3. Configure a separate stdio server in your MCP client. Replace the example
+   site URL and token placeholder. Clients using an
+   `mcpServers` configuration shape can use this template; others need the same
+   command, arguments and environment in their own settings.
 
-## Links
+Before this beta is published to npm, install the supplied tarball in an empty
+local directory and start its absolute entry path:
 
-- [tamrank.com](https://tamrank.com) — plugin homepage
-- [tamrank.com/agents](https://tamrank.com/agents) — setup guide + demo video
-- [tamrank.com/pricing](https://tamrank.com/pricing) — PRO license
+```bash
+npm install --prefix /absolute/path/tamrank-mcp-test \
+  /absolute/path/tam-rank-mcp-server-0.4.0-beta.1-candidate.tgz
+```
+
+```json
+{
+  "mcpServers": {
+    "tamrank-test": {
+      "command": "node",
+      "args": ["/absolute/path/tamrank-mcp-test/node_modules/@tam-rank/mcp-server/index-workflow.js"],
+      "env": {
+        "TAMRANK_SITE_URL": "https://test.example.com",
+        "TAMRANK_PAT": "REPLACE_WITH_SITE_LOCAL_PAT",
+        "TAMRANK_TOOL_PROFILE": "core"
+      }
+    }
+  }
+}
+```
+
+Only after `@tam-rank/mcp-server@0.4.0-beta.1` has actually been published with
+the beta dist-tag may the shorter registry configuration be used:
+
+```json
+{
+  "mcpServers": {
+    "tamrank-test": {
+      "command": "npx",
+      "args": ["-y", "@tam-rank/mcp-server@0.4.0-beta.1"],
+      "env": {
+        "TAMRANK_SITE_URL": "https://test.example.com",
+        "TAMRANK_PAT": "REPLACE_WITH_SITE_LOCAL_PAT",
+        "TAMRANK_TOOL_PROFILE": "core"
+      }
+    }
+  }
+}
+```
+
+4. Restart **this test connection**, then ask:
+
+> Confirm the site identity and available capabilities. Show the top three
+> existing tasks and the separate signals, with their evidence and data windows.
+> Do not create a task, start a scan or change anything.
+
+The first calls should be `get_site_context`, `get_capabilities`,
+`get_work_queue` and `get_signals`. Verify the site identity before continuing.
+Follow returned cursors when inspecting a group's targets; the dashboard's
+four-item preview is not the complete target list.
+
+The package declares Node.js 18 or later. Prefer a maintained LTS runtime;
+Node 18 is end-of-life and its compatibility test is not a deployment recommendation.
+The installed source-capture/preview chain is verified on macOS arm64 with
+Node 18.20.8, 22.17.0 and 24.21.0, each against WordPress on PHP 8.2/8.5.
+Other native workflow evidence uses Node 22 unless explicitly stated otherwise.
+This does not verify every Node version, operating system, host or theme/builder.
+
+## Profiles and tools
+
+| Profile | Tool names | Use |
+|---|---:|---|
+| `core` (default) | 12 | Day-to-day research and approved change workflows. |
+| `specialist` | 20 | Core plus deeper diagnostics and explicit scan/recovery workflows. |
+| `legacy` | 42 | Temporary migration surface, **not** the old writer implementation. |
+
+The twelve core names are:
+
+- `get_site_context`, `get_capabilities`
+- `get_work_queue`, `get_signals`
+- `search_pages`, `get_page`, `diagnose_page`
+- `update_work_item`
+- `plan_changes`, `execute_change_set`
+- `get_changes`, `rollback_change_set`
+
+A listed name is **not** proof of permission or availability. Server capabilities,
+current operator/PAT rights, licensing and the exact operation's development
+gates determine what can run. Restart after an intentional capability change so
+the client's tool schemas are rediscovered.
+
+The specialist profile adds `get_site_diagnostics`, `get_gsc_pages`,
+`get_redirects`, `get_images_missing_alt`, `get_topical_authority`,
+`start_scan`, `get_scan_status` and `close_scan`. Merely selecting it does not
+grant scan or recovery rights.
+
+In the workflow entry's legacy profile, only `get_site_context`,
+`get_capabilities`, `get_signals`, `get_priority_actions` and
+`get_next_action` currently map to canonical reads. Other old names return a
+migration error without running their old handlers. Old writes never fall back
+to V1. The 0.4.x beta retains that profile for migration. Removal remains a
+later release decision and is not performed by this beta.
+
+## From research to an approved change
+
+When the owned test site's exact operation is available:
+
+1. Inspect the page and its evidence. Signals remain observations until an
+   explicit `update_work_item` pickup. Notes, reviewed URLs and page importance
+   are separate user-requested administrative writes, not website approval.
+2. Use `plan_changes` to prepare the supported exact change. Show **every**
+   target, before/after value, warning and required acknowledgement to the user.
+   A stored proposal is not approval.
+3. After explicit chat approval, submit the unchanged set, server-issued token,
+   plan hash and required confirmations via `execute_change_set`. Changing the
+   proposal requires fresh approval. WordPress stores an attestation, not the
+   chat transcript; it does not independently verify what the person said.
+4. Read the same execution with `get_changes`. If the response is lost or a
+   timeout occurs, reconcile that ID first. Do not guess success, create a new
+   set or repeat website writes automatically.
+5. To undo eligible changes, request a new `rollback_change_set` proposal and
+   obtain **new** approval. Changed current values, unsupported contexts or
+   missing evidence can prevent rollback. Not everything is reversible.
+
+The current `safe-beta-1` profile executes only metadata/social fields and
+attachment alt text. Redirect, schema and scan execution remain disabled
+server-side even though separately gated development implementations exist.
+There are no page-body/builder writes, automatic internal links, arbitrary
+JSON-LD or new schema templates. Stored fields are not automatically proof of
+effective frontend output. GSC outcome measurement is Phase 5, not a
+score-refresh claim.
+
+Scans and interrupted-run recovery have their own explicit proposals and
+permissions. `get_scan_status` never resumes a scan. A queued job is not proof
+that a worker is running. Local receipt storage is optional and is not required
+for a first read-only connection.
+
+## Connection troubleshooting
+
+| Symptom | Check / safe next step |
+|---|---|
+| Invalid workflow configuration | Replace the token placeholder with a real site-local PAT; verify both absolute paths and the site URL. |
+| Redirect refused | Configure the final site URL. The workflow transport does not forward the PAT through redirects. |
+| V2 compatibility / operation unavailable | Confirm matching builds and server capability readiness. Preview mode is not permission to bypass a missing feature. |
+| Authentication / permission denied | Check token validity, local operator membership and required scopes. Do not widen scopes merely to silence an error. |
+| JSON response missing / route not found | Verify the site path and REST configuration. Use `TAMRANK_REST_STYLE=query` only if that site's query-form routing is needed. |
+| TLS failure | Fix certificate trust for the owned test host. Do not disable TLS verification. |
+| Rate limit | Respect the returned wait guidance. No automatic retry loop or fresh token to evade the limit. |
+| Timeout / connection loss after a write | Read the original execution and reconcile; do not blindly repeat it. |
+
+HTTPS is required except for literal HTTP loopback hosts (`localhost`,
+`127.0.0.1`, `[::1]`) in tests. A `.local` hostname over HTTP is not an allowed
+loopback exception. Site URLs must not contain credentials, query parameters or
+fragments; a subdirectory site path is permitted.
+
+`TAMRANK_REST_STYLE` accepts `pretty` (default) or `query`.
+`TAMRANK_TIMEOUT` is an integer number of milliseconds from 1 to 120000
+(default 30000). These transport settings do not increase operation quotas.
+
+## More than one client site
+
+Keep one separately named server configuration per site, each with its own
+site-local PAT/operator and exact URL. Copy the template above under names such
+as `tamrank-client-a` and `tamrank-client-b`; do not share tokens between clients.
+Confirm the target site before each proposal. Shared conversation history does
+not transfer approval or permission between sites.
+
+This is the current setup pattern, not an Agency-first redesign. In-chat site
+switching, a shared keyring, portfolio briefings and cross-client bulk approval
+are not implemented by this branch. Customer rollout remains a separate step.
+
+## Verification and release boundary
+
+`npm test` checks the installed package identity, entry point and compatibility
+inventory without contacting a site. The source repository has additional
+development and native WordPress suites; those fixtures and internal evidence
+are intentionally not shipped. Passing a fixture is not live customer
+activation, an npm publication or proof of all hosting/privacy compatibility.
+
+MIT applies to this MCP package; site access remains subject to TamRank's current
+licence and permission checks. See [LICENSE](LICENSE).

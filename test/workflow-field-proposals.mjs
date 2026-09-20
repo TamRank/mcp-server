@@ -1,0 +1,91 @@
+import assert from 'node:assert/strict';
+import {registerWorkflowTools} from '../src/workflow-tools.js';
+import {createServer} from 'node:http';
+import {WorkflowClient} from '../src/workflow-rest.js';
+let calls=[];
+const caps={field_proposals:{available:true,read_available:true,contract_version:2,operations:['meta.update','image_alt.update'],origin_kinds:['user_request']}};
+const registry=(capabilities=caps)=>{const tools=new Map();registerWorkflowTools({registerTool:(n,c,h)=>tools.set(n,{c,h})},
+  {post:async(path,body)=>{calls.push({path,body});return {contract_version:2,execution_available:false};},get:async(path,query)=>{calls.push({path,query});return {contract_version:2};}},{capabilities});return tools;};
+const request={client_request_id:'field-unit-0001',origin:{kind:'user_request',reference:'synthetic',summary:'Synthetic explicit request'},items:[
+  {operation:'meta.update',target:{post_id:1},fields:{meta_title:{mode:'set',value:''},meta_description:{mode:'remove'}}},
+  {operation:'image_alt.update',target:{attachment_id:2},fields:{alt_text:{mode:'set',value:'Café'}}}]};
+const core=registry();assert.equal(core.get('plan_changes').c.annotations.readOnlyHint,false);
+assert.equal(core.get('plan_changes').c.annotations.destructiveHint,false);
+assert.equal(core.get('get_changes').c.annotations.readOnlyHint,true);
+assert.ok(!(await core.get('plan_changes').h(request)).isError);assert.deepEqual(calls.pop(),{path:'/changes/proposals',body:request});
+const actionRequest={...request,origin:{kind:'action',action_id:'12345678-1234-1234-1234-123456789abc',revision:2,snapshot_hash:'a'.repeat(64)}};
+assert.equal((await core.get('plan_changes').h(actionRequest)).isError,true);assert.equal(calls.length,0);
+const actionCore=registry({field_proposals:{...caps.field_proposals,origin_kinds:['user_request','action']}});
+assert.ok(!(await actionCore.get('plan_changes').h(actionRequest)).isError);assert.deepEqual(calls.pop(),{path:'/changes/proposals',body:actionRequest});
+for(const bad of [{...actionRequest.origin,revision:0},{...actionRequest.origin,summary:'injected'}, {...actionRequest.origin,snapshot_hash:'bad'}, {...actionRequest.origin,action_id:'grp_missing_titles'}]){
+  assert.equal((await actionCore.get('plan_changes').h({...actionRequest,origin:bad})).isError,true);assert.equal(calls.length,0);
+}
+const id='12345678-1234-1234-1234-123456789abc';await core.get('get_changes').h({change_set_id:id});assert.deepEqual(calls.pop(),{path:'/changes/'+id,query:{}});
+const socialCore=registry({field_proposals:{...caps.field_proposals,operations:[...caps.field_proposals.operations,'social.update']}});
+const social={...request,items:[{operation:'social.update',target:{post_id:1},fields:{social_title:{mode:'set',value:'Café'},social_description:{mode:'remove'},social_image:{mode:'set',value:'https://fixture.invalid/uploads/image.png'}}}]};
+assert.ok(!(await socialCore.get('plan_changes').h(social)).isError);assert.deepEqual(calls.pop(),{path:'/changes/proposals',body:social});
+assert.equal((await core.get('plan_changes').h(social)).isError,true);assert.equal(calls.length,0);
+for(const edit of [i=>i.fields.meta_title={mode:'set',value:'wrong'},i=>i.fields.social_title.value='é'.repeat(501),
+  i=>i.fields.social_image.value='https://fixture.invalid/x#fragment',i=>i.fields.social_image.value='https://u:p@fixture.invalid/x',
+  i=>i.fields.social_image.value='/relative.png',i=>i.fields.social_image.value='',i=>i.fields.social_image.value='https://fixture.invalid/a b.png',
+  i=>i.fields.social_image={mode:'remove',value:'x'},i=>i.target.attachment_id=2]){
+  const bad=structuredClone(social);edit(bad.items[0]);assert.equal((await socialCore.get('plan_changes').h(bad)).isError,true);assert.equal(calls.length,0);
+}
+const variants=[{...request,execute:true},{...request,origin:{...request.origin,kind:'action'}},{...request,items:[]},
+  {...request,items:Array(26).fill(request.items[0])},{...request,items:[request.items[0],request.items[0]]}];
+for(const edit of [i=>i.operation='body.update',i=>i.target.attachment_id=3,i=>i.fields={},i=>i.fields.alt_text={mode:'set',value:'wrong'},
+  i=>i.fields.meta_title={mode:'remove',value:''},i=>i.fields.meta_title={mode:'set'},i=>i.fields.meta_title={mode:'set',value:'<b>no</b>'},
+  i=>i.fields.meta_title={mode:'set',value:'é'.repeat(501)},i=>i.target.post_id='1',i=>i.fields.unknown={mode:'set',value:'x'}]){
+  const bad=structuredClone(request);edit(bad.items[0]);variants.push(bad);
+}
+for(const bad of variants){assert.equal((await core.get('plan_changes').h(bad)).isError,true);assert.equal(calls.length,0);}
+for(const unsupported of [null,{}, {field_proposals:{...caps.field_proposals,available:false}},
+  {field_proposals:{...caps.field_proposals,contract_version:1}},{field_proposals:{...caps.field_proposals,operations:['meta.update']}}]){
+  assert.equal((await registry(unsupported).get('plan_changes').h(request)).isError,true);assert.equal(calls.length,0);
+}
+for(const bad of [{},{change_set_id:id,list:true},{change_set_id:'../unsafe'}]){
+  assert.equal((await core.get('get_changes').h(bad)).isError,true);assert.equal(calls.length,0);
+}
+assert.equal((await registry({field_proposals:{...caps.field_proposals,read_available:false}}).get('get_changes').h({change_set_id:id})).isError,true);
+assert.equal(calls.length,0);
+console.log('PASS: exact typed field proposals/read mapping, scope gates, no execution, no invalid requests sent.');
+const redirectCore=registry({field_proposals:{...caps.field_proposals,operations:['redirect.create','redirect.update','redirect.delete','meta.update']}});
+const redirect={...request,items:[{operation:'redirect.create',target:{source_url:'/old?x=1'},fields:{target_url:{mode:'set',value:'/new'},redirect_type:{mode:'set',value:307}}}]};
+assert.ok(!(await redirectCore.get('plan_changes').h(redirect)).isError);assert.deepEqual(calls.pop(),{path:'/changes/proposals',body:redirect});
+assert.equal((await core.get('plan_changes').h(redirect)).isError,true);assert.equal(calls.length,0);
+for(const edit of [i=>i.target.post_id=1,i=>i.target.source_url='https://fixture.invalid/old',i=>i.target.source_url='//other.invalid/old',
+  i=>i.fields.redirect_type.value='301',i=>i.fields.redirect_type.value=308,i=>i.fields.redirect_type.value=true,
+  i=>i.fields.target_url.value='',i=>i.fields.target_url.value='/new#fragment',i=>i.fields.target_url.value='/other/../new',
+  i=>i.fields.target_url.value='/new%2Fhidden',i=>i.fields.target_url.value='https://u:p@fixture.invalid/new',
+  i=>i.fields.target_url.value='/'+ 'é'.repeat(128),i=>i.fields.target_url.mode='remove',i=>delete i.fields.redirect_type,
+  i=>i.fields.source_url={mode:'set',value:'/extra'}]){
+  const bad=structuredClone(redirect);edit(bad.items[0]);assert.equal((await redirectCore.get('plan_changes').h(bad)).isError,true);assert.equal(calls.length,0);
+}
+const gone=structuredClone(redirect);gone.items[0].fields.redirect_type.value=410;gone.items[0].fields.target_url.value='';
+assert.ok(!(await redirectCore.get('plan_changes').h(gone)).isError);calls.pop();
+gone.items[0].fields.target_url.value='/ignored';assert.equal((await redirectCore.get('plan_changes').h(gone)).isError,true);assert.equal(calls.length,0);
+const deletion={operation:'redirect.delete',target:{redirect_id:1},fields:{acknowledge_deletion:{mode:'set',value:true}}};
+const update={operation:'redirect.update',target:{redirect_id:2},fields:{source_url:{mode:'set',value:'/old'},target_url:{mode:'set',value:'/new'},redirect_type:{mode:'set',value:302}}};
+const mixed={...request,items:[deletion,request.items[0],update,redirect.items[0]]};
+assert.ok(!(await redirectCore.get('plan_changes').h(mixed)).isError);assert.deepEqual(calls.pop().body,mixed);
+const repeated={...mixed,items:[deletion,{...update,target:{redirect_id:1}}]};
+assert.equal((await redirectCore.get('plan_changes').h(repeated)).isError,true);assert.equal(calls.length,0);
+for(const value of [false,'true',1]){const bad=structuredClone(deletion);bad.fields.acknowledge_deletion.value=value;
+  assert.equal((await redirectCore.get('plan_changes').h({...request,items:[bad]})).isError,true);assert.equal(calls.length,0);}
+console.log('PASS: typed redirect proposals, exact status/URL/deletion fields, namespaced identities and unavailable operations.');
+let bytes=600000;
+const http=createServer((req,res)=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify({contract_version:2,value:'x'.repeat(bytes)}));});
+await new Promise(resolve=>http.listen(0,'127.0.0.1',resolve));
+try{
+  const client=new WorkflowClient({siteUrl:'http://127.0.0.1:'+http.address().port,pat:'synthetic-only'});
+  assert.equal((await client.get('/changes/'+id)).value.length,600000);
+  assert.equal((await client.post('/changes/proposals',request)).value.length,600000);
+  assert.equal((await client.post('/schema/preview',{})).value.length,600000);
+  await assert.rejects(client.get('/schema/preview'),e=>e.code==='workflow_response_limit');
+  await assert.rejects(client.get('/pages'),e=>e.code==='workflow_response_limit');
+  await assert.rejects(client.get('/changes/proposals'),e=>e.code==='workflow_response_limit');
+  await assert.rejects(client.post('/changes/'+id,{}),e=>e.code==='workflow_response_limit');
+  bytes=1048576;await assert.rejects(client.get('/changes/'+id),e=>e.code==='workflow_response_limit');
+  await assert.rejects(client.post('/schema/preview',{}),e=>e.code==='workflow_response_limit');
+  console.log('PASS: bounded private-draft Unicode wire budget; ordinary read limits unchanged.');
+}finally{await new Promise(resolve=>http.close(resolve));}
