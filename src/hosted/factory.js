@@ -33,8 +33,12 @@ function deepFreeze(value, seen = new WeakSet()) {
 function publicHttps(value) {
   requireValue(typeof value === 'string' && !/[\\\s]/.test(value), 'HTTPS URL');
   const url = new URL(value), host = url.hostname.replace(/^\[|\]$/g, '');
-  requireValue(url.protocol === 'https:' && !url.username && !url.password && !url.hash && !url.port
+  requireValue(url.protocol === 'https:' && !url.username && !url.password && !url.hash
     && !isIP(host) && host.includes('.') && !host.endsWith('.localhost') && !host.endsWith('.local'), 'HTTPS URL');
+  // Implicit 443 is the H0 installation contract, not a preference of this factory: PRO refuses a
+  // port at registration and the VPS transport refuses it again, so nothing with one reaches here.
+  // This is the last lock, and it has to say which rule it is rather than read as a malformed URL.
+  requireValue(!url.port, 'HTTPS URL without an explicit port');
   return url;
 }
 function validateContext(ctx) {

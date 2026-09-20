@@ -32,6 +32,14 @@ for (const edit of [
   c => c.receiptStore = {}, c => c.recovery = {}, c => c.preview = true,
   c => c.validatedInstallation.preview = true,
 ]) { const ctx = context(createStubVps()); edit(ctx); assert.throws(() => createWorkflowServer(ctx)); }
+// The port rule is its own refusal: an installation on :8443 is a contract question, not a typo.
+for (const [url, message] of [['https://site.example.invalid:8443/wp-json/tamrank/v2', /HTTPS URL without an explicit port$/],
+  ['http://site.example.invalid:8443/wp-json/tamrank/v2', /Invalid hosted context: HTTPS URL$/]]) {
+  const ctx = context(createStubVps()); ctx.validatedInstallation.rest_base_url = url;
+  assert.throws(() => createWorkflowServer(ctx), message);
+}
+{ const ctx = context(createStubVps()); ctx.validatedInstallation.canonical_home_url = 'https://site.example.invalid:8443/';
+  assert.throws(() => createWorkflowServer(ctx), /HTTPS URL without an explicit port$/); }
 {
   const ctx = context(createStubVps()), server = createWorkflowServer(ctx);
   assert.throws(() => ctx.validatedInstallation.rest_base_url = 'https://other.example.invalid/');
