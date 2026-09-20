@@ -36,6 +36,7 @@ for (const edit of [
   const stub = createStubVps(), ctx = context(stub);
   ctx.validatedInstallation.workflow_profile = 'workflow-v2-1';
   ctx.filteredCapabilities.mcp_bridge_compatibility = 'workflow-v2-1';
+  ctx.grantContext.scopes.push('redirects:write');
   const server = createWorkflowServer(ctx);
   await server.close();
 }
@@ -43,6 +44,11 @@ for (const edit of [
   const ctx = context(createStubVps());
   ctx.validatedInstallation.workflow_profile = 'workflow-v2-1';
   assert.throws(() => createWorkflowServer(ctx), /workflow_profile/);
+}
+{
+  const ctx = context(createStubVps());
+  ctx.grantContext.scopes.push('redirects:write');
+  assert.throws(() => createWorkflowServer(ctx), /grant scopes/);
 }
 {
   const ctx = context(createStubVps()), server = createWorkflowServer(ctx);

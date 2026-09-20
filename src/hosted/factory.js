@@ -58,6 +58,7 @@ function validateContext(ctx) {
   requireValue(uuid(grant.grant_id) && identifier(grant.account_id) && identifier(grant.client_id), 'grant binding');
   requireValue(Array.isArray(grant.scopes) && new Set(grant.scopes).size === grant.scopes.length
     && grant.scopes.every(scope => scopes.has(scope)), 'grant scopes');
+  requireValue(site.workflow_profile === 'workflow-v2-1' || !grant.scopes.includes('redirects:write'), 'grant scopes');
   requireValue(label(audit.grantLabel, 80) && audit.grantLabel === `grant:${grant.grant_id}`
     && label(audit.clientLabel, 80) && identifier(audit.request_id), 'audit context');
   requireValue(typeof ctx.transport.request === 'function', 'transport.request');
