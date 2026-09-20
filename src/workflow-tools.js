@@ -86,18 +86,18 @@ function validWork(a) {
 
 export function workflowDefinitions() {
   return {
-    get_site_context: { description: 'Site identity.', schema: { section: z.enum(['overview','schema_identity']).optional() }, path: () => '/site/context' },
-    get_capabilities: { description: 'Availability/scopes.', schema: {}, path: () => '/capabilities' },
-    get_work_queue: { description: 'Dashboard order and action_origin.', schema: { work_id: workId.optional(), section: z.enum(['overview','targets','administration']).optional(), status: z.enum(['open','completed','all']).optional(), kind: z.enum(['automatic','manual','research']).optional(), ...paging },
+    get_site_context: { description: 'Site.', schema: { section: z.enum(['overview','schema_identity']).optional() }, path: () => '/site/context' },
+    get_capabilities: { description: 'Capabilities.', schema: {}, path: () => '/capabilities' },
+    get_work_queue: { description: 'Work queue.', schema: { work_id: workId.optional(), section: z.enum(['overview','targets','administration']).optional(), status: z.enum(['open','completed','all']).optional(), kind: z.enum(['automatic','manual','research']).optional(), ...paging },
       path: a => a.section==='administration' ? '/work-items/'+a.work_id : '/work-queue' + (a.work_id ? '/' + a.work_id : ''),
       query: a => a.section==='administration' ? strip(a,['section']) : a, omit: ['work_id'],
       validate: a => a.section!=='administration' || (Boolean(a.work_id) && Object.keys(a).every(k=>['work_id','section'].includes(k))) },
-    get_signals: { description: 'Signals, not tasks.', schema: { signal_id: pageId.optional(), section: z.enum(['overview','targets','relations']).optional(), type: z.string().max(64).optional(), subject_id: pageId.optional(), ...paging },
+    get_signals: { description: 'Evidence.', schema: { signal_id: pageId.optional(), section: z.enum(['overview','targets','relations']).optional(), type: z.string().max(64).optional(), subject_id: pageId.optional(), ...paging },
       path: a => '/signals' + (a.signal_id ? '/' + a.signal_id : ''), omit: ['signal_id'] },
-    search_pages: { description: 'Published managed pages.', schema: { q: z.string().max(200).optional(), type: z.string().regex(/^[a-z0-9_-]{1,32}$/).optional(), missing: z.enum(['meta_title','meta_description']).optional(), ...paging }, path: () => '/pages' },
-    get_page: { description: 'Stored fields only.', schema: { post_id: pageId, section: z.enum(['overview','metadata','content','importance']).optional(), limit: z.number().int().min(1).max(4).optional(), cursor }, path: a => `/pages/${a.post_id}`, omit: ['post_id'] },
-    diagnose_page: { description: 'Keywords: adjacent available_windows. Missing=unknown.', schema: { post_id: pageId.optional(), url: z.string().min(1).max(2048).refine(validDiagnosisUrl).optional(), section: z.enum(['overview','metadata','gsc','index','pagespeed','stability','comparison','keywords']).optional(), query: z.string().min(1).max(512).refine(v=>Buffer.byteLength(v,'utf8')<=512 && !/[\x00-\x1f\x7f]/.test(v)).optional(), window: z.string().refine(validKeywordWindow).optional(), compare_to: z.string().refine(validKeywordWindow).optional(), ...paging }, path: a => a.url!==undefined?'/gsc/diagnosis':`/pages/${a.post_id}/diagnosis`, omit: ['post_id'], validate: validDiagnosis },
-    update_work_item: { description: 'work_revision; notes replace/empty clears.',
+    search_pages: { description: 'Pages.', schema: { q: z.string().max(200).optional(), type: z.string().regex(/^[a-z0-9_-]{1,32}$/).optional(), missing: z.enum(['meta_title','meta_description']).optional(), ...paging }, path: () => '/pages' },
+    get_page: { description: 'Stored fields.', schema: { post_id: pageId, section: z.enum(['overview','metadata','content','importance']).optional(), limit: z.number().int().min(1).max(4).optional(), cursor }, path: a => `/pages/${a.post_id}`, omit: ['post_id'] },
+    diagnose_page: { description: 'Diagnosis.', schema: { post_id: pageId.optional(), url: z.string().min(1).max(2048).refine(validDiagnosisUrl).optional(), section: z.enum(['overview','metadata','gsc','index','pagespeed','stability','comparison','keywords']).optional(), query: z.string().min(1).max(512).refine(v=>Buffer.byteLength(v,'utf8')<=512 && !/[\x00-\x1f\x7f]/.test(v)).optional(), window: z.string().refine(validKeywordWindow).optional(), compare_to: z.string().refine(validKeywordWindow).optional(), ...paging }, path: a => a.url!==undefined?'/gsc/diagnosis':`/pages/${a.post_id}/diagnosis`, omit: ['post_id'], validate: validDiagnosis },
+    update_work_item: { description: 'Update work.',
       write: true, path: () => '/work-items', schema: {
         client_request_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/),
         operation: z.enum(['work.review_target','work.complete','work.reopen','work.pickup','work.note','importance.update']), work_id: z.string().regex(/^(?:pickup_[a-f0-9]{32}|manual_[A-Za-z0-9][A-Za-z0-9_.:-]{0,151})$/).optional(),
@@ -115,7 +115,7 @@ export function workflowDefinitions() {
     get_changes: { description: 'Historical draft, not executable/revalidated.',
       schema:{change_set_id:scanId},fieldRead:true,path:a=>'/changes/'+a.change_set_id,omit:['change_set_id'] },
     rollback_change_set: { description: 'Unavailable.', schema: {} },
-    get_outcomes: { description: 'Observed GSC result; never causal proof.', schema: {
+    get_outcomes: { description: 'Observed outcome.', schema: {
       action_id: scanId.optional(), change_set_id: scanId.optional(),
       status: z.enum(['no_gsc','pending','measured','low_data','rolled_back']).optional(),
       page: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER).optional(),
@@ -161,7 +161,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   const schemaRecovery=schemaExecutionRead&&capability(schemaExecution,'recovery_available')
     &&schemaExecution.recovery_contract==='schema_journal_recovery_v1';
   if(!maintenanceOnly&&schemaExecutionRead)defs.get_changes={...defs.get_changes,
-    description:'kind=execution: reconcile; else draft.',schema:{...defs.get_changes.schema,kind:z.enum(['draft','execution']).optional()}};
+    description:'Read stored change.',schema:{...defs.get_changes.schema,kind:z.enum(['draft','execution']).optional()}};
   if(!maintenanceOnly&&execution?.contract_version===1){
     if(execution.available===true){
       defs.plan_changes={...defs.plan_changes,description:'Proposal; copy action_origin.'};
@@ -169,12 +169,12 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         schema:executionSchema,path:a=>'/changes/executions/'+a.change_set_id+'/execute',fieldExecution:'execute'};
     }
     if(execution.read_available===true)defs.get_changes={...defs.get_changes,
-      description:'kind=execution: reconcile; else draft.',
+      description:'Read stored change.',
       schema:{...defs.get_changes.schema,kind:z.enum(['draft','execution']).optional()}};
     if(execution.rollback_available===true)defs.rollback_change_set={description:'Preview; approve→execute_change_set.',
       schema:rollbackSchema,path:a=>'/changes/executions/'+a.change_set_id+'/rollback-proposals',fieldExecution:'rollback'};
     if(execution.recovery_available===true&&execution.read_available===true){
-      defs.get_changes={...defs.get_changes,description:'Execution: reconcile; recovery: stop preview.',
+      defs.get_changes={...defs.get_changes,description:'Read execution/recovery.',
         schema:{...defs.get_changes.schema,kind:z.enum(['draft','execution','recovery']).optional()}};
       const ordinary=execution.available===true;
       defs.execute_change_set={description:'NEW chat approval. Recovery: skip pending, retain applied.',
@@ -185,8 +185,8 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
     }
   }
   if(!maintenanceOnly&&redirects?.contract_version===1){
-    if(capability(redirects,'available'))defs.plan_changes={...defs.plan_changes,description:'Exact plan; copy action_origin.'};
-    if(capability(redirects,'read_available'))defs.get_changes={...defs.get_changes,description:'Status/recovery preview.',
+    if(capability(redirects,'available'))defs.plan_changes={...defs.plan_changes,description:'Plan exact change.'};
+    if(capability(redirects,'read_available'))defs.get_changes={...defs.get_changes,description:'Read status/recovery.',
       schema:{...defs.get_changes.schema,kind:z.enum(fieldRecovery||redirectRecovery?['draft','execution','recovery']:['draft','execution']).optional()}};
     if(capability(redirects,'rollback_available'))defs.rollback_change_set={description:'Preview; approve→execute_change_set.',
       schema:rollbackSchema,path:a=>'/changes/executions/'+a.change_set_id+'/rollback-proposals',fieldExecution:'rollback'};
@@ -202,7 +202,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   }
   if(!maintenanceOnly&&schemaExecutionRollback){
     const previous=defs.rollback_change_set;
-    defs.rollback_change_set={description:'Schema: source_jobs→compare; copy revision + request ID→plan. Then new chat approval.',
+    defs.rollback_change_set={description:'Plan rollback.',
       schema:schemaRollbackShape,fieldExecution:'rollback',
       path:a=>'/changes/executions/'+a.change_set_id+(isSchemaRollbackPreview(a)?'/rollback-preview':'/rollback-proposals'),
       validate:a=>isSchemaRollback(a)?validSchemaRollbackInput(a)
@@ -211,14 +211,14 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   if(!maintenanceOnly&&(schemaExecutionWrite||schemaExecutionRollback||schemaRecovery)){
     if(schemaExecutionWrite&&!defs.plan_changes.schema.schema_preview)defs.plan_changes={...defs.plan_changes,schema:proposalSchema,validate:validFieldProposal};
     const previous=defs.execute_change_set;
-    defs.execute_change_set={description:'Exact chat approval; copy acknowledgements.',schema:schemaMixedExecutionSchema,
+    defs.execute_change_set={description:'Execute approved.',schema:schemaMixedExecutionSchema,
       path:a=>'/changes/executions/'+a.change_set_id+(a.recovery_plan!==undefined?'/recover':'/execute'),fieldExecution:'execute',
       validate:a=>schemaRecoveryToken(a.change_token)?schemaRecovery&&a.recovery_plan?.change_set_id===a.change_set_id&&validSchemaRecoveryInput(recoveryInput(a))
         :schemaForwardToken(a.change_token)?schemaExecutionWrite&&z.object(schemaForwardExecutionSchema).strict().safeParse(a).success
         :schemaInverseToken(a.change_token)?schemaExecutionRollback&&z.object(schemaInverseExecutionSchema).strict().safeParse(a).success
         :Boolean(previous.fieldExecution)&&z.object(previous.schema).strict().safeParse(a).success&&(!previous.validate||previous.validate(a))};
   }
-  if(!maintenanceOnly&&schemaRecovery)defs.get_changes={...defs.get_changes,description:'Status/recovery preview.',
+  if(!maintenanceOnly&&schemaRecovery)defs.get_changes={...defs.get_changes,description:'Read status/recovery.',
     schema:{...defs.get_changes.schema,kind:z.enum(['draft','execution','recovery']).optional()}};
   if(maintenanceOnly) defs.get_capabilities.path=()=>'/scans/maintenance/capabilities';
   // Hidden hosted tools keep their real closed argument schemas so direct calls
@@ -498,34 +498,34 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   for (const [name, def] of Object.entries(defs)) register(name, def);
   if (profile === 'specialist') for (const name of ['get_site_diagnostics','get_gsc_pages','get_redirects','get_images_missing_alt','get_topical_authority','start_scan','get_scan_status']) {
     register(name, name==='get_site_diagnostics'?{
-      description:'Stored. 404_events:url; q:case-sensitive.',
+      description:'Diagnostics.',
       specialist:true,path:()=>'/site/diagnostics',schema:{section:z.enum(['overview','metadata','index','schema','404_urls','404_events']).optional(),
         q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),
         url:z.string().min(1).max(4096).refine(v=>Buffer.byteLength(v,'utf8')<=4096).optional(),...paging},
       validate:a=>(a.section || 'overview')==='overview'?Object.keys(a).every(k=>k==='section'):!Object.hasOwn(a,'url') || (a.section==='404_events' && !Object.hasOwn(a,'q')),
     }:name==='get_gsc_pages'?{
-      description:'Stored GSC; q case-sensitive.',
+      description:'Stored GSC.',
       specialist:true, path:()=>'/gsc/pages', schema:{
         q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),
         order:z.enum(['clicks_desc','impressions_desc','ctr_asc','position_asc','url_asc']).optional(),
         period:z.union([z.literal(7),z.literal(28),z.literal(90)]).optional(),...paging,
       }
     }:name==='get_redirects'?{
-      description:'Stored rules; trace is not live.',
+      description:'Rules.',
       specialist:true,path:()=>'/redirects',schema:{section:z.enum(['rules','chains','trace']).optional(),redirect_id:pageId.optional(),
         q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),
         state:z.enum(['all','active','inactive']).optional(),match_type:z.enum(['exact','regex']).optional(),...paging},
       validate:a=>a.section==='trace'?a.redirect_id!==undefined && !['q','state','match_type'].some(k=>Object.hasOwn(a,k)):a.redirect_id===undefined,
     }:name==='get_images_missing_alt'?{
-      description:'Alt may be decorative; usage unverified.',
+      description:'Missing alt.',
       specialist:true,path:()=>'/images/missing-alt',schema:{
         q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),...paging},
     }:name==='get_topical_authority'?{
-      description:'Topics, not demand/tasks.',
+      description:'Topics.',
       specialist:true,path:()=>'/site/topical-authority',schema:{section:z.enum(['overview','clusters','pages','topics','gaps','recommendations']).optional(),cluster:z.number().int().min(1).max(10000).optional(),...paging},
       validate:a=>(a.section || 'overview')==='overview'?Object.keys(a).every(k=>k==='section'):['pages','topics'].includes(a.section)?a.cluster!==undefined:a.cluster===undefined,
     }:name==='get_scan_status'?{
-      description:'schema_source+proposal_id:own; other IDs:admin.',
+      description:'Scan status.',
       specialist:true,path:a=>a.source_job_id?'/scans/maintenance/sources/'+a.source_job_id:a.execution_id?'/scans/maintenance/'+a.execution_id:a.proposal_id?'/scans/proposals/'+a.proposal_id:'/scans/status',omit:['proposal_id','execution_id','source_job_id'],
       schema:{type:z.enum(['index','pagespeed','schema_source']).optional(),expected_ref:z.string().regex(/^stored:[a-f0-9]{32}$/).optional(),
         proposal_id:scanId.optional(),execution_id:scanId.optional(),source_job_id:scanId.optional(),receipt_reference:receiptReference.optional()},
@@ -533,7 +533,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         :a.type==='pagespeed'&&(a.proposal_id!==undefined||a.execution_id!==undefined)?Object.keys(a).length===2
         :a.receipt_reference!==undefined?a.execution_id!==undefined && Object.keys(a).length===2:a.proposal_id!==undefined || a.execution_id!==undefined || a.source_job_id!==undefined?Object.keys(a).length===1:a.type!==undefined,
     }:{
-      description:'Preview→plan→show all URLs/warnings→chat→run. No retry. PageSpeed: proposal_id; source: source_job_id. Index: preview only.',
+      description:'Plan/run scan; no retry.',
       specialist:true,scanPlan:true,path:a=>a.mode==='plan'?'/scans/proposals':'/scans/preview',schema:{mode:z.enum(['preview','plan','run']),type:z.enum(['pagespeed','schema_source','index']),
         post_ids:z.array(pageId).min(1).max(25).refine(ids=>new Set(ids).size===ids.length).optional(),expected_revision:z.string().regex(/^[a-f0-9]{64}$/).optional(),
         source_job_id:scanId.optional(),proposal_id:scanId.optional(),confirmation:scanConfirmation.optional(),
@@ -547,7 +547,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
     });
   }
   if(profile==='specialist') register('close_scan',{
-    description:'Review+chat/acks; closure is not success. No retry.',
+    description:'Close scan; not success.',
     specialist:true,maintenanceWrite:true,schema:{...closeScanSchema,execution_id:scanId.optional(),source_job_id:scanId.optional(),
       expected_runtime_hash:closeScanSchema.expected_runtime_hash.optional(),expected_revision:closeScanSchema.expected_runtime_hash.optional(),receipt_reference:receiptReference.optional(),
       confirmation:closeScanSchema.confirmation.extend({acknowledgements:z.array(z.string()).length(4)})},
