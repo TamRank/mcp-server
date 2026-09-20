@@ -5,7 +5,8 @@ import { validateRestBase } from './rest-base.js';
 import { isIP } from 'node:net';
 export { discoverWorkflows } from '../scan-maintenance.js';
 
-const scopes = new Set(['site:read','meta:write','audit:read','rollback','changes:write','tasks:write','importance:write']);
+const scopes = new Set(['site:read','meta:write','redirects:write','audit:read','rollback','changes:write','tasks:write','importance:write']);
+const workflowProfiles = new Set(['safe-beta-1','workflow-v2-1']);
 const uuid = value => typeof value === 'string' && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(value);
 const label = (value, max) => typeof value === 'string' && value.trim() !== ''
   && Buffer.byteLength(value, 'utf8') <= max && !/[<>\p{C}]/u.test(value);
@@ -43,10 +44,12 @@ function validateContext(ctx) {
   for (const name of fields) requireValue(plain(ctx[name]), name);
   for (const name of ['validatedInstallation','grantContext','filteredCapabilities','auditContext']) assertData(ctx[name]);
   const site = ctx.validatedInstallation, grant = ctx.grantContext, audit = ctx.auditContext;
-  requireValue(ctx.filteredCapabilities.contract_version === 2 && (ctx.filteredCapabilities.mcp_bridge_compatibility === 'safe-beta-1'
+  requireValue(ctx.filteredCapabilities.contract_version === 2 && (workflowProfiles.has(ctx.filteredCapabilities.mcp_bridge_compatibility)
     || ctx.filteredCapabilities.full_v2_compatible === true), 'capability contract');
   requireValue(uuid(site.installation_id) && positive(site.blog_id) && identifier(site.link_id) && positive(site.generation), 'installation binding');
-  requireValue(site.workflow_profile === 'safe-beta-1', 'workflow_profile');
+  requireValue(workflowProfiles.has(site.workflow_profile)
+    && (ctx.filteredCapabilities.full_v2_compatible === true
+      || ctx.filteredCapabilities.mcp_bridge_compatibility === site.workflow_profile), 'workflow_profile');
   requireValue(['pretty','query'].includes(site.rest_style), 'rest_style');
   const home = publicHttps(site.canonical_home_url), rest = publicHttps(site.rest_base_url);
   requireValue(!home.search && home.origin === rest.origin, 'installation origin');

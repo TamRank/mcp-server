@@ -33,6 +33,18 @@ for (const edit of [
   c => c.validatedInstallation.preview = true,
 ]) { const ctx = context(createStubVps()); edit(ctx); assert.throws(() => createWorkflowServer(ctx)); }
 {
+  const stub = createStubVps(), ctx = context(stub);
+  ctx.validatedInstallation.workflow_profile = 'workflow-v2-1';
+  ctx.filteredCapabilities.mcp_bridge_compatibility = 'workflow-v2-1';
+  const server = createWorkflowServer(ctx);
+  await server.close();
+}
+{
+  const ctx = context(createStubVps());
+  ctx.validatedInstallation.workflow_profile = 'workflow-v2-1';
+  assert.throws(() => createWorkflowServer(ctx), /workflow_profile/);
+}
+{
   const ctx = context(createStubVps()), server = createWorkflowServer(ctx);
   assert.throws(() => ctx.validatedInstallation.rest_base_url = 'https://other.example.invalid/');
   assert.throws(() => ctx.grantContext.scopes.push('root'));
