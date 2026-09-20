@@ -42,6 +42,6 @@ try {
   const opened=await call(client,'update_work_item',{client_request_id:'manual-reopen-0009',operation:'work.reopen',work_id:config.work_id,expected_revision:final.revision});
   assert.equal(opened.status,'open');assert.equal((await state(client)).note,'Final manual note');
   const current=await state(client);assert.deepEqual(await call(query,'update_work_item',first),note);assert.deepEqual(await state(read),current);
-  const listing=await client.listTools();assert.equal(listing.tools.length,12);assert.ok(JSON.stringify(listing).length<16000);
+  const listing=await client.listTools();assert.equal(listing.tools.length,13);assert.ok(JSON.stringify(listing).length<16000);
   console.log(`WORKFLOW MANUAL E2E OK: existing tasks, shared notes, 4000 bytes/clear, complete/reopen, exact version/replay and both REST styles; ${JSON.stringify(listing).length} core surface chars.`);
 } finally {for(const client of clients) await client.close();}

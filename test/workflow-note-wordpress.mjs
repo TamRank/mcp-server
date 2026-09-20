@@ -52,7 +52,7 @@ try {
   assert.equal(opened.status,'open'); assert.equal(opened.reviewed_count,before.reviewed_count);
   const current=await state(query); assert.equal(current.note,'Final shared note');
   assert.deepEqual(await call(query,'update_work_item',first),changed); assert.deepEqual(await state(client),current);
-  const listing=await client.listTools(); assert.equal(listing.tools.length,12);
+  const listing=await client.listTools(); assert.equal(listing.tools.length,13);
   const chars=JSON.stringify(listing).length; assert.ok(chars<16000); assert.ok(client.getInstructions().length<1500);
   console.log(`WORKFLOW NOTE E2E OK: shared note, exact revision/replay, same-value no-op, 4000 UTF-8 bytes, explicit clear, completed-state preservation and both REST styles; ${chars} core surface chars.`);
 } finally { for(const client of clients) await client.close(); }

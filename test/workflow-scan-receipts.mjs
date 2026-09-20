@@ -180,7 +180,7 @@ await test('transport capture and redaction', async t => {
       const { client, directory } = await fixture(), tools = new Map(); provider();
       registerWorkflowTools({ registerTool: (name, config, handler) => tools.set(name, handler) }, client);
       const result = await tools.get('get_site_context')({}); privateAbsent(result); assert.equal(result.isError, true);
-      assert.equal(tools.size, 12); assert.deepEqual(await readdir(directory), []);
+      assert.equal(tools.size, 13); assert.deepEqual(await readdir(directory), []);
     });
     await t.test('malformed private packet is withheld even when echoed without its usual prefix', async () => {
       const { client, directory } = await fixture();

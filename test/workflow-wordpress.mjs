@@ -31,7 +31,7 @@ async function call(client,name,args={}) {
 }
 try {
   const client=await connect(); const listing=await client.listTools();
-  assert.equal(listing.tools.length,12);
+  assert.equal(listing.tools.length,13);
   const surface=JSON.stringify(listing).length; assert.ok(surface<16000,`Core tools/list too large: ${surface}`);
   assert.ok(client.getInstructions().length<1500);
   const caps=await call(client,'get_capabilities'); assert.equal(caps.contract_version,2); assert.equal(caps.execution_enabled,false);

@@ -9,9 +9,18 @@ const fake = { get: async (path, query) => { calls.push({ path, query }); return
   post: async (path,body) => { calls.push({path,body}); return {contract_version:2,website_changed:false}; } };
 function registry(profile,capabilities=null) { const tools = new Map(); registerWorkflowTools({ registerTool: (n,c,h) => tools.set(n,{c,h}) },fake,{profile,capabilities}); return tools; }
 const core = registry('core'), legacy = registry('legacy'), specialist = registry('specialist');
-assert.equal(core.size,12); assert.equal(legacy.size,42); assert.equal(specialist.size,20);
+assert.equal(core.size,13); assert.equal(legacy.size,42); assert.equal(specialist.size,21);
 assert.ok(WORKFLOW_INSTRUCTIONS.length<1500);
 assert.equal(core.has('get_gsc_pages'),false);
+const outcomeId='11111111-1111-4111-8111-111111111111';
+await core.get('get_outcomes').h({action_id:outcomeId,status:'measured',page:2,per_page:50});
+assert.deepEqual(calls.pop(),{path:'/outcomes',query:{action_id:outcomeId,status:'measured',page:2,per_page:50}});
+assert.equal(core.get('get_outcomes').c.annotations.readOnlyHint,true);
+for(const args of [{action_id:'not-a-uuid'},{change_set_id:outcomeId,status:'unknown'},{page:0},{per_page:101},{limit:1},{cursor:'opaque'}]) {
+  assert.equal((await core.get('get_outcomes').h(args)).isError,true);assert.equal(calls.length,0);
+}
+assert.equal((await registry('core',{reads:{get_outcomes:{available:false}}}).get('get_outcomes').h({})).isError,true);
+assert.equal(calls.length,0);
 await specialist.get('get_gsc_pages').h({q:'/category/?x=%2B',order:'impressions_desc',period:28,limit:50,cursor:'opaque'});
 assert.deepEqual(calls.pop(),{path:'/gsc/pages',query:{q:'/category/?x=%2B',order:'impressions_desc',period:28,limit:50,cursor:'opaque'}});
 assert.equal(specialist.get('get_gsc_pages').c.annotations.readOnlyHint,true);

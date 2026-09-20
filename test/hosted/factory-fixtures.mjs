@@ -7,7 +7,7 @@ export const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 export const other = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 export const hash = 'a'.repeat(64);
 export const fullCaps = () => ({ contract_version: 2, mcp_bridge_compatibility: 'safe-beta-1',
-  reads: Object.fromEntries(['get_site_context','get_capabilities','get_work_queue','get_signals','search_pages','get_page','diagnose_page']
+  reads: Object.fromEntries(['get_site_context','get_capabilities','get_work_queue','get_signals','search_pages','get_page','diagnose_page','get_outcomes']
     .map(name => [name, { available: true }])),
   field_execution: { contract_version: 1, available: true, read_available: true, rollback_available: true,
     operations: ['meta.update','social.update','image_alt.update'] },
@@ -30,6 +30,7 @@ export const toolCases = () => [
   ['search_pages', {}, { contract_version: 2 }],
   ['get_page', { post_id: 1 }, { contract_version: 2 }],
   ['diagnose_page', { post_id: 1 }, { contract_version: 2 }],
+  ['get_outcomes', { change_set_id: id, status: 'measured' }, { contract_version: 1, items: [], pagination: { total: 0 } }],
   ['update_work_item', { client_request_id: 'synthetic-work-001', operation: 'work.note', work_id: 'manual_fixture',
     expected_revision: hash, note: 'Synthetic note' }, { contract_version: 2 }],
   ['plan_changes', planArgs(), nativeReply()],
