@@ -30,7 +30,6 @@ export const toolCases = () => [
   ['search_pages', {}, { contract_version: 2 }],
   ['get_page', { post_id: 1 }, { contract_version: 2 }],
   ['diagnose_page', { post_id: 1 }, { contract_version: 2 }],
-  ['get_outcomes', { change_set_id: id, status: 'measured' }, { contract_version: 1, items: [], pagination: { total: 0 } }],
   ['update_work_item', { client_request_id: 'synthetic-work-001', operation: 'work.note', work_id: 'manual_fixture',
     expected_revision: hash, note: 'Synthetic note' }, { contract_version: 2 }],
   ['plan_changes', planArgs(), nativeReply()],
@@ -38,6 +37,7 @@ export const toolCases = () => [
   ['get_changes', { change_set_id: id, kind: 'execution' }, nativeReply('executed')],
   ['rollback_change_set', { change_set_id: id, client_request_id: 'synthetic-rollback-001', item_ids: [other] },
     nativeReply('planned', 'workflow-field-rollback-1')],
+  ['get_outcomes', { change_set_id: id, status: 'measured' }, { contract_version: 2, items: [], pagination: { total: 0 } }],
 ];
 export function context(stub, { host = 'site.example.invalid', grant = '22222222-2222-4222-8222-222222222222', capabilities = fullCaps(),
   scopes = ['site:read','meta:write','audit:read','rollback','changes:write','tasks:write','importance:write'] } = {}) {
