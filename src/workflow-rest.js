@@ -145,6 +145,8 @@ export class WorkflowClient {
       if (error instanceof ApiError) {
         if (this.#hosted && ['invalid_response', 'workflow_upgrade_required'].includes(error.code)) {
           const mapped = mapHostedOutcome({status:error.status, code:error.code, validWpEnvelope:error.code==='workflow_upgrade_required', kind:method==='GET'?'read':'write'});
+          // Only a 2xx raises workflow_upgrade_required here: the site accepted the write, so its outcome is unknown.
+          if (error.code === 'workflow_upgrade_required' && method !== 'GET') mapped.outcome_unknown = true;
           throw new ApiError(error.status, mapped.code, 'The site returned an unavailable or incompatible workflow response.', mapped);
         }
         throw error;

@@ -48,6 +48,9 @@ get_capabilities, get_work_queue, get_signals, search_pages, get_page,
 diagnose_page, update_work_item, plan_changes, execute_change_set, get_changes,
 rollback_change_set. Reduced capabilities hide unavailable tools in tools/list,
 but a direct call still passes argument validation and current authorization.
+A read is listed and dispatched only when filteredCapabilities.reads.<tool>
+.available is true; a missing entry counts as unavailable (stdio still
+refuses only an explicit false).
 
 ## Full REST base and route binding
 
@@ -149,10 +152,11 @@ outcome_unknown, optionally retry_after. It never changes persistent state.
 | 403 workflow_operator_unavailable | site_owner_unavailable |
 | 409 workflow_profile_required | site_profile_required |
 | workflow_upgrade_required | site_upgrade_required |
+| 2xx with an unreadable contract_version | site_upgrade_required; writes outcome_unknown:true |
 | 401 cloud_link_pending | site_link_unavailable |
 | 401 cloud_link_revoked | site_reconnect_required |
-| 429 | rate_limited; bounded advice only |
-| Unknown JSON 401/403, HTML, network, timeout, 404/5xx | site_unavailable; writes outcome_unknown:true |
+| 429 in a valid WP envelope (any code) | rate_limited; retry_after only from data.retry_after 1..3600 |
+| Unknown JSON 401/403, HTML, network, timeout, 404/5xx, 429 without a valid envelope | site_unavailable; writes outcome_unknown:true |
 
 A WP code alone is insufficient: code/message/data.status must match the HTTP
 error before known-code mapping is trusted. Unknown JSON/HTML401 produces no

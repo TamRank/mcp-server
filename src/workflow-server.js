@@ -18,7 +18,8 @@ function visible(name, caps) {
   if (name === 'get_changes') return caps.field_execution?.contract_version === 1 && caps.field_execution.read_available === true
     || caps.field_proposals?.contract_version === 2 && caps.field_proposals.read_available === true;
   if (name === 'update_work_item') return caps.work_administration?.available === true;
-  return caps.reads?.[name]?.available !== false;
+  // Hosted listing is positive: a read the capabilities do not advertise is absent.
+  return caps.reads?.[name]?.available === true;
 }
 
 export function buildWorkflowServer(client, options = {}) {
