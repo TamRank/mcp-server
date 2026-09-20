@@ -12,7 +12,7 @@ function registry(capabilities=support,options={}){
 }
 const args={mode:'preview',type:'index',post_ids:[205,1]};
 test('Exact index preview uses the existing specialist tool and only GET',async()=>{
-  const r=registry();assert.equal(r.tools.size,20);
+  const r=registry();assert.equal(r.tools.size,21);
   const out=await r.tools.get('start_scan').h(args);assert.ok(!out.isError);
   assert.deepEqual(r.calls,[['GET','/scans/preview',{type:'index',post_ids:'205,1'}]]);
   assert.equal(JSON.parse(out.content[0].text).execution_enabled,false);

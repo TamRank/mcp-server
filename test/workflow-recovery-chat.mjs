@@ -12,7 +12,7 @@ function registry(options={}){const calls=[],tools=new Map();registerWorkflowToo
   {profile:'specialist',capabilities:{scan_recovery:support},recovery:{reviewChat:async a=>{calls.push(['review',a]);return {review:{}};},
     settle:async a=>{calls.push(['settle',a]);return {view:'result_settlement'};}},...options});return {tools,calls};}
 test('Receipt recovery uses the existing read and closure tools; never maintenance rights or provider dispatch',async()=>{
-  const {tools,calls}=registry();assert.equal(tools.size,20);assert.equal(tools.get('get_scan_status').c.annotations.readOnlyHint,true);
+  const {tools,calls}=registry();assert.equal(tools.size,21);assert.equal(tools.get('get_scan_status').c.annotations.readOnlyHint,true);
   assert.equal(tools.get('close_scan').c.annotations.destructiveHint,true);
   assert.ok(!(await tools.get('get_scan_status').h(ctx)).isError);assert.ok(!(await tools.get('close_scan').h(input)).isError);
   assert.deepEqual(calls[0],['review',ctx]);assert.equal(calls[1][1].confirmation.review_hash,input.confirmation.review_hash);

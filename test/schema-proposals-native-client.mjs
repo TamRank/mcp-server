@@ -22,7 +22,7 @@ for(const style of styles){
   const ok=async(name,args)=>{const r=await call(name,args);check(!r.isError,`${name}: ${r.isError?r.content[0]?.text:''}`);return JSON.parse(r.content[0].text);};
   try{
     await client.connect(transport);const listing=await client.listTools();
-    check(listing.tools.length===20&&JSON.stringify(listing).length<16000,'Complete schema-storage tool surface under budget');
+    check(listing.tools.length===21&&JSON.stringify(listing).length<16000,'Complete schema-storage tool surface under budget');
     const caps=await ok('get_capabilities',{});
     check(caps.schema_preview.schema_proposals_available===true&&caps.field_proposals.operations.length===3,'Only native schema storage granted');
     for(const request of f.requests){

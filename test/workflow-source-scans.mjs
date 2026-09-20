@@ -19,7 +19,7 @@ function registry(opts={}){
     {profile:'specialist',capabilities:{schema_source_jobs:support},...opts});return {calls,tools};
 }
 test('Existing tools support preview, plan, one-shot run and private own read',async()=>{
-  const {tools,calls}=registry();assert.equal(tools.size,20);assert.equal(tools.get('start_scan').c.annotations.readOnlyHint,false);
+  const {tools,calls}=registry();assert.equal(tools.size,21);assert.equal(tools.get('start_scan').c.annotations.readOnlyHint,false);
   assert.equal(tools.get('get_scan_status').c.annotations.readOnlyHint,true);
   for(const a of [preview,plan,run])assert.ok(!(await tools.get('start_scan').h(a)).isError);
   assert.ok(!(await tools.get('get_scan_status').h({type:'schema_source',proposal_id:id})).isError);
@@ -121,7 +121,7 @@ test('Actual stdio -> HTTP: both URL styles, bound client identity and no uncert
       await client.connect(new StdioClientTransport({command:process.execPath,args:['index-workflow.js'],cwd:process.cwd(),stderr:'pipe',
         env:{PATH:process.env.PATH,TAMRANK_PAT:pat,TAMRANK_SITE_URL:'http://127.0.0.1:'+server.address().port,TAMRANK_WORKFLOW_PREVIEW:'1',TAMRANK_TOOL_PROFILE:'specialist',TAMRANK_REST_STYLE:style}}));
       assert.deepEqual(client.getServerVersion(),workflowIdentity);
-      const listing=await client.listTools();assert.equal(listing.tools.length,20);assert.ok(JSON.stringify(listing).length<16000);
+      const listing=await client.listTools();assert.equal(listing.tools.length,21);assert.ok(JSON.stringify(listing).length<16000);
       for(const a of [expectedPreview,expectedPlan])assert.ok(!(await client.callTool({name:'start_scan',arguments:a})).isError);
       const before=requests.length;const uncertain=await client.callTool({name:'start_scan',arguments:expectedRun});
       assert.equal(uncertain.isError,true);assert.equal(requests.length,before+1,'No second send or hidden reconciliation read');

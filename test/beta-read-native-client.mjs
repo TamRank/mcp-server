@@ -38,7 +38,7 @@ export async function runBetaReadClient({origin,fixture:f,inspect,tlsRoot}){
         }while(cursor);
         equal(items.length,first.total,'No truncated result list');return items;
       };
-      const listing=await client.listTools();equal(listing.tools.length,{core:12,specialist:20,legacy:42}[profile]);
+      const listing=await client.listTools();equal(listing.tools.length,{core:13,specialist:21,legacy:42}[profile]);
       if(profile!=='legacy')ok(JSON.stringify(listing).length<16000,'Catalog remains bounded');
       if(profile==='legacy'){
         const alias=await call('get_priority_actions',{work_id:f.group,section:'targets',limit:1});

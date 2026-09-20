@@ -74,7 +74,7 @@ try{for(const routeStyle of ['pretty','query']){
     env:{PATH:process.env.PATH,TAMRANK_PAT:'tamrank_pat_synthetic_preview',TAMRANK_SITE_URL:'http://127.0.0.1:'+http.address().port,
       TAMRANK_WORKFLOW_PREVIEW:'1',TAMRANK_TOOL_PROFILE:'core',TAMRANK_REST_STYLE:routeStyle}}));
   try{
-    const listing=await client.listTools();check(listing.tools.length===12,'No additional tool');
+    const listing=await client.listTools();check(listing.tools.length===13,'No additional tool');
     check(JSON.stringify(listing).length<16000,'Core surface within budget');
     for(const item of [detect,select,identity])check(!(await client.callTool({name:'plan_changes',arguments:{schema_preview:item}})).isError,'SDK to HTTP comparison');
     status=409;const n=requests.length;check((await client.callTool({name:'plan_changes',arguments:{schema_preview:detect}})).isError,'Expired source refusal passed through');

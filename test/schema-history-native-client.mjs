@@ -40,7 +40,7 @@ for(const profile of ['core','specialist'])for(const style of ['pretty','query']
   const call=(name,args)=>client.callTool({name,arguments:args}),read=()=>call('get_changes',{kind:'execution',change_set_id:id});
   const decode=(r,label)=>{check(!r.isError,label+(r.isError?': '+r.content[0]?.text:''));return JSON.parse(r.content[0].text);};
   try{
-    await client.connect(transport);const list=await client.listTools();check(list.tools.length===(profile==='core'?12:20),'No additional tools');
+    await client.connect(transport);const list=await client.listTools();check(list.tools.length===(profile==='core'?13:21),'No additional tools');
     const first=decode(await read(),'Read schema history');checks++;assert.deepEqual(first,expected);
     const replay=decode(await call('execute_change_set',args),'Exact old schema approval returns non-executable history');checks++;assert.deepEqual(replay,first);
     check((await call('execute_change_set',{...args,confirmation:{...args.confirmation,plan_hash:'0'.repeat(64)}})).isError,'Changed approval refused');

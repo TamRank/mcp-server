@@ -97,7 +97,7 @@ equal(calls.length,1);check(!uncertain.content[0].text.includes('private detail'
 for(const profile of ['core','specialist']){
   const server=new McpServer({name:'owned-redirect-bridge',version:'1'}),client=new Client({name:'Owned redirect client',version:'2'});
   registerWorkflowTools(server,transport,{capabilities:caps,profile});const [a,b]=InMemoryTransport.createLinkedPair();await server.connect(a);await client.connect(b);
-  try{const listing=await client.listTools();equal(listing.tools.length,profile==='core'?12:20);check(JSON.stringify(listing).length<16000,'Existing catalog budget');
+  try{const listing=await client.listTools();equal(listing.tools.length,profile==='core'?13:21);check(JSON.stringify(listing).length<16000,'Existing catalog budget');
     response=reply('executed');check(!(await client.callTool({name:'execute_change_set',arguments:input})).isError,'Real SDK invocation');
     const sent=calls.pop();equal(sent.body.confirmation.client,{name:'Owned redirect client',version:'2'});equal(sent.body.confirmation.acknowledgements,['redirect_deletion']);
   }finally{await client.close();await server.close();}

@@ -15,7 +15,7 @@ export async function runFieldProposalClient({origin,fixture:f,maximum}){
     try{
       await client.connect(new StdioClientTransport({command:process.execPath,args:['index-workflow.js'],cwd,stderr:'pipe',
         env:{PATH:process.env.PATH,TAMRANK_PAT:f.tokens.owner.token,TAMRANK_SITE_URL:origin,TAMRANK_TOOL_PROFILE:profile,TAMRANK_REST_STYLE:style,TAMRANK_WORKFLOW_PREVIEW:'1'}}));
-      const listing=await client.listTools();assert.equal(listing.tools.length,profile==='core'?12:20);checks++;
+      const listing=await client.listTools();assert.equal(listing.tools.length,profile==='core'?13:21);checks++;
       assert.ok(JSON.stringify(listing).length<16000);checks++;
       const raw=async(name,args)=>{
         // Exercise the real limits. A longer suite must wait, not raise quotas or

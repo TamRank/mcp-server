@@ -177,7 +177,7 @@ try {
     const client=new Client({name:'tamrank-package-fixture',version:'1.0.0'});
     try {
       await client.connect(transport);
-      const listed=await client.listTools();assert.equal(listed.tools.length,{core:12,specialist:20,legacy:42}[profile]);
+      const listed=await client.listTools();assert.equal(listed.tools.length,{core:13,specialist:21,legacy:42}[profile]);
       assert.ok(!JSON.stringify(listed).includes(pat));assert.ok(!(client.getInstructions() || '').includes(pat));
       let n=requests.length;
       const blocked=await client.callTool({name:profile==='legacy'?'update_meta':'execute_change_set',arguments:{}});

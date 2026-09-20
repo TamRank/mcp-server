@@ -43,7 +43,7 @@ for(const profile of ['core','specialist','legacy'])for(const enabled of [false,
       operations:['meta.update','social.update','image_alt.update','redirect.create','redirect.update','redirect.delete']}}:{})}:null});
   const [a,b]=InMemoryTransport.createLinkedPair();await server.connect(a);await client.connect(b);
   try{
-    const listing=await client.listTools();equal(listing.tools.length,{core:12,specialist:20,legacy:42}[profile],'Tool names/count preserved');
+    const listing=await client.listTools();equal(listing.tools.length,{core:13,specialist:21,legacy:42}[profile],'Tool names/count preserved');
     const size=JSON.stringify(listing).length;if(profile!=='legacy')assert.ok(size<16000,`${profile} ${enabled}: ${size}`);
     console.log(`${profile}, schema preview ${enabled}: ${size} characters`);
     for(const tool of listing.tools){
@@ -60,7 +60,7 @@ for(const profile of ['core','specialist','legacy'])for(const enabled of [false,
     }
     if(profile==='core'){
       const handle=handles.get('get_site_context');handle.disable();equal((await client.listTools()).tools.some(t=>t.name==='get_site_context'),false,'Disabled handle stays hidden');
-      handle.enable();equal((await client.listTools()).tools.length,12,'Re-enabled handle restored');
+      handle.enable();equal((await client.listTools()).tools.length,13,'Re-enabled handle restored');
       const invalid=await client.callTool({name:'get_capabilities',arguments:{execute:true}});equal(invalid.isError,true,'SDK original strict input validation stays active');
     }
   }finally{await client.close();await server.close();}

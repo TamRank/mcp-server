@@ -12,7 +12,7 @@ for(const style of ['pretty','query']) {
       env:{PATH:process.env.PATH,TAMRANK_PAT:fixture.tokens.admin.token,TAMRANK_SITE_URL:fixture.origin,
         TAMRANK_TOOL_PROFILE:'specialist',TAMRANK_WORKFLOW_PREVIEW:'1',TAMRANK_REST_STYLE:style}}));
     const call=async(name,args={})=>{const r=await client.callTool({name,arguments:args});assert.ok(!r.isError,`${name}: ${JSON.stringify(r)}`);return JSON.parse(r.content[0].text);};
-    const listing=await client.listTools();assert.equal(listing.tools.length,20);assert.ok(JSON.stringify(listing).length<16000);
+    const listing=await client.listTools();assert.equal(listing.tools.length,21);assert.ok(JSON.stringify(listing).length<16000);
     const caps=await call('get_capabilities');assert.equal(caps.scan_maintenance.available,true);
     assert.equal((await client.callTool({name:'get_site_context',arguments:{}})).isError,true,'Unpaid maintenance grants no general access');
     const review=await call('get_scan_status',{execution_id:fixture.execution_id});

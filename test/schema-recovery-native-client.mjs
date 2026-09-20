@@ -26,7 +26,7 @@ const transport=new StdioClientTransport({command:process.execPath,args:['--impo
 const call=(name,args)=>client.callTool({name,arguments:args});
 const decode=(r,label)=>{check(!r.isError,label+': '+(r.isError?JSON.parse(r.content[0].text).code:''));return JSON.parse(r.content[0].text);};
 try{
-  await client.connect(transport);const list=await client.listTools();check(list.tools.length===(f.profile==='core'?12:20)&&JSON.stringify(list).length<16000,'Bounded existing tools');
+  await client.connect(transport);const list=await client.listTools();check(list.tools.length===(f.profile==='core'?13:21)&&JSON.stringify(list).length<16000,'Bounded existing tools');
   const c=decode(await call('get_capabilities',{}),'Capabilities').schema_execution;
   check(c.recovery_available&&c.read_available&&c.recovery_contract==='schema_journal_recovery_v1','Separate actual recovery capability');
   check(!c.available&&!c.rollback_available,'Recovery enabled with forward/inverse website writers still disabled');

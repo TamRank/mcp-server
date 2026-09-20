@@ -112,7 +112,7 @@ equal(JSON.parse(uncertain.content[0].text).automatic_retry,false);equal(calls.s
 for(const profile of ['core','specialist']){
   const server=new McpServer({name:'owned-schema-read',version:'1'}),client=new Client({name:'Owned client',version:'1'});
   registerWorkflowTools(server,transport,{capabilities:caps,profile});const [a,b]=InMemoryTransport.createLinkedPair();await server.connect(a);await client.connect(b);
-  try{const listing=await client.listTools();equal(listing.tools.length,profile==='core'?12:20);check(JSON.stringify(listing).length<16000,'Existing catalog budget');
+  try{const listing=await client.listTools();equal(listing.tools.length,profile==='core'?13:21);check(JSON.stringify(listing).length<16000,'Existing catalog budget');
     check(!(await client.callTool({name:'get_changes',arguments:read})).isError,'Real SDK accepts existing read selector');equal(calls.splice(0).length,1);
     check((await client.callTool({name:'get_changes',arguments:{...read,include_private_proofs:true}})).isError,'Real SDK rejects extra arguments');equal(calls,[]);
   }finally{await client.close();await server.close();}

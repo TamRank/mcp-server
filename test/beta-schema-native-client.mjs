@@ -54,7 +54,7 @@ export async function runBetaSchemaClient({origin,fixture:f,tlsRoot,inspect}){
     // the core workflow. No private PHP source/approval helper substitutes for it.
     const acquisition=profile==='specialist'?c:await connect('specialist',style,access.token);
     try{
-      equal((await c.client.listTools()).tools.length,profile==='core'?12:20);
+      equal((await c.client.listTools()).tools.length,profile==='core'?13:21);
       const caps=await c.call('get_capabilities',{});ok(caps.schema_execution.available&&caps.schema_execution.rollback_available&&caps.schema_preview.available,'Actual post-upgrade capabilities');
       async function capture(label){
         const before=inspect(),count=sends();

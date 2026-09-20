@@ -43,7 +43,7 @@ export async function runBetaWorkClient({origin,fixture:f,tlsRoot,inspect,contro
       equal(new Set(rows.map(r=>r.key)).size,rows.length);return {rows,hash};
     }
     try{
-      const listing=await c.client.listTools();equal(listing.tools.length,profile==='core'?12:20);ok(JSON.stringify(listing).length<16000);
+      const listing=await c.client.listTools();equal(listing.tools.length,profile==='core'?13:21);ok(JSON.stringify(listing).length<16000);
       const caps=await c.call('get_capabilities');equal(caps.execution_enabled,false);ok(caps.work_administration.manual.available);
       equal((await i.call('get_capabilities')).write_operations,['importance.update']);
       equal((await read.call('get_capabilities')).work_administration.available,false);

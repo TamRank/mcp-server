@@ -13,7 +13,7 @@ export async function runRedirectProposalClient({origin,fixture:f}){
     try{
       await client.connect(new StdioClientTransport({command:process.execPath,args:['index-workflow.js'],cwd,stderr:'pipe',env:{
         PATH:process.env.PATH,TAMRANK_PAT:f.tokens.redirect.token,TAMRANK_SITE_URL:origin,TAMRANK_TOOL_PROFILE:profile,TAMRANK_REST_STYLE:style,TAMRANK_WORKFLOW_PREVIEW:'1'}}));
-      const tools=await client.listTools();assert.equal(tools.tools.length,profile==='core'?12:20);checks++;
+      const tools=await client.listTools();assert.equal(tools.tools.length,profile==='core'?13:21);checks++;
       assert.ok(JSON.stringify(tools).length<16000);checks++;
       const raw=async(name,args)=>{
         for(let attempt=0;attempt<8;attempt++){

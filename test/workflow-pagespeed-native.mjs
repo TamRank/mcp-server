@@ -48,7 +48,7 @@ for(const network of [false,true]){
         try{
           await client.connect(new StdioClientTransport({command:process.execPath,args:[path.join(runtime,'index-workflow.js')],cwd:runtime,stderr:'pipe',
             env:{PATH:process.env.PATH,TAMRANK_PAT:f.token,TAMRANK_SITE_URL:site,TAMRANK_WORKFLOW_PREVIEW:'1',TAMRANK_TOOL_PROFILE:'specialist',TAMRANK_REST_STYLE:style}}));
-          equal((await client.listTools()).tools.length,20,'No extra tool names');
+          equal((await client.listTools()).tools.length,21,'No extra tool names');
           const caps=await call('get_capabilities',{});equal(caps.pagespeed_execution.available,true,'Real native capabilities');
           if(journalMode){
             equal(caps.scan_recovery.retained_receipt_review_available,true,'Server evidence needs no local receipt directory');

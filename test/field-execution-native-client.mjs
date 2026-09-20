@@ -44,7 +44,7 @@ export async function runFieldExecutionClient({origin,fixture:f,inspect,tlsRoot=
         }
       };
       const call=async(name,args)=>{const r=await raw(name,args);ok(!r.isError,JSON.stringify(r));return JSON.parse(r.content[0].text);};
-      const listing=await client.listTools();equal(listing.tools.length,profile==='core'?12:20,'Stable tool count');
+      const listing=await client.listTools();equal(listing.tools.length,profile==='core'?13:21,'Stable tool count');
       ok(JSON.stringify(listing).length<16000,'Catalog remains bounded');
       const caps=await call('get_capabilities',{});
       ok(caps.field_execution.available&&caps.field_execution.read_available&&caps.field_execution.rollback_available,'Native readiness/scopes advertised');

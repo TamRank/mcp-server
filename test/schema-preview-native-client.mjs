@@ -20,7 +20,7 @@ for(const profile of ['core','specialist'])for(const style of ['pretty','query']
   let errors='';transport.stderr?.on('data',chunk=>{errors=(errors+chunk.toString()).slice(-2000);});
   try{
     await client.connect(transport);
-    const listing=await client.listTools();check(listing.tools.length===(profile==='core'?12:20),'Canonical tool count');
+    const listing=await client.listTools();check(listing.tools.length===(profile==='core'?13:21),'Canonical tool count');
     check(JSON.stringify(listing).length<16000,'Complete native-enabled catalog stays under budget');
     const caps=JSON.parse((await client.callTool({name:'get_capabilities',arguments:{}})).content[0].text);
     check(caps.schema_preview?.available===true&&caps.schema_preview.schema_proposals_available===false,'Actual native capabilities advertise comparison only');

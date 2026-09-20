@@ -60,7 +60,7 @@ test('Completed and cancelled scans are terminal, not dispatch-enabled',()=>{
   assert.ok(validPageSpeedProgress(d));r.reservation_state='held';assert.equal(validPageSpeedProgress(d),false);
 });
 test('Plan/run/private status use their own route and real MCP client label, not administrative grants',async()=>{
-  const {calls,tools}=registry();assert.equal(tools.size,20);
+  const {calls,tools}=registry();assert.equal(tools.size,21);
   assert.equal(tools.get('start_scan').c.annotations.destructiveHint,true);assert.equal(tools.get('get_scan_status').c.annotations.readOnlyHint,true);
   for(const a of [plan,run])assert.ok(!(await tools.get('start_scan').h(a)).isError);
   for(const a of [{type:'pagespeed',proposal_id:id},{type:'pagespeed',execution_id:execution}])assert.ok(!(await tools.get('get_scan_status').h(a)).isError);

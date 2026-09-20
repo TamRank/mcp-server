@@ -155,7 +155,7 @@ for(const profile of ['core','specialist']){
   const server=new McpServer({name:'owned-inverse',version:'1'}),client=new Client({name:'Owned rollback client',version:'1'});
   registerWorkflowTools(server,transport,{capabilities:caps,profile});const [a,b]=InMemoryTransport.createLinkedPair();await server.connect(a);await client.connect(b);
   try{
-    const listing=await client.listTools();equal(listing.tools.length,profile==='core'?12:20);check(JSON.stringify(listing).length<16000,'Bounded SDK catalog');
+    const listing=await client.listTools();equal(listing.tools.length,profile==='core'?13:21);check(JSON.stringify(listing).length<16000,'Bounded SDK catalog');
     for(const chosen of [f,fixture(['meta.update'])]){
       response=chosen.preview;check(!(await client.callTool({name:'rollback_change_set',arguments:chosen.input})).isError,'SDK comparison includes empty source_jobs object');calls=[];
       response=record(chosen);check(!(await client.callTool({name:'rollback_change_set',arguments:chosen.proposal})).isError,'SDK inverse proposal');calls=[];

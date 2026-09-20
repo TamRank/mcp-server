@@ -31,7 +31,7 @@ try {
   await mcp.connect(new StdioClientTransport({command:process.execPath,args:['index-workflow.js'],cwd:process.cwd(),stderr:'pipe',
     env:{PATH:process.env.PATH,TAMRANK_PAT:f.tokens.replacement.token,TAMRANK_SITE_URL:origin,TAMRANK_TOOL_PROFILE:'specialist',
       TAMRANK_WORKFLOW_PREVIEW:'1',TAMRANK_REST_STYLE:style,TAMRANK_SCAN_RECEIPT_DIR:directory}}));
-  const tools=await mcp.listTools();assert.equal(tools.tools.length,20);assert.ok(JSON.stringify(tools).length<16000);
+  const tools=await mcp.listTools();assert.equal(tools.tools.length,21);assert.ok(JSON.stringify(tools).length<16000);
   const call=async(name,args)=>{const out=await mcp.callTool({name,arguments:args});safe(out);assert.ok(!out.isError,JSON.stringify(out));return JSON.parse(out.content[0].text);};
   const chatReview=await call('get_scan_status',ctx);assert.equal(chatReview.review.proposal.targets.length,50);
   const close={...ctx,client_request_id:'native-chat-settle-'+style,expected_runtime_hash:chatReview.review.expected_runtime_hash,
