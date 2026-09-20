@@ -33,7 +33,7 @@
     "test:hosted": "node test/hosted/error-map.mjs && node test/hosted/stub-vps-test.mjs && node test/hosted/transport.mjs && node test/hosted/factory.mjs && node test/hosted/package.mjs && node test/hosted/voor-h3a.mjs",
     "start": "node index-workflow.js",
     "test": "node scripts/package-smoke.mjs",
-    "test:dev": "node test/workflow-onboarding.mjs && node test/workflow-surface.mjs",
+    "test:dev": "node test/workflow-onboarding.mjs && node test/workflow-surface.mjs && node --test test/workflow-startup-probes.mjs",
     "test:smoke": "node scripts/package-smoke.mjs",
     "test:onboarding": "node test/workflow-onboarding.mjs",
     "test:surface": "node test/workflow-surface.mjs",

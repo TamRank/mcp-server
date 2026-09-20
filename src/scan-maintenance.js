@@ -1,6 +1,7 @@
 /** Administrative closure is separate from scan starts and all read tools. */
 import { z } from 'zod';
 import { rateLimitAdvice } from './workflow-rest.js';
+import {discoverRecovery} from './scan-recovery-chat.js';
 export const scanId=z.string().regex(/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/);
 export const maintenanceAcks=['outcome_remains_unknown','inflight_provider_request_may_continue',
   'release_only_this_reservation_without_retry','preserve_original_results_and_approval'];
@@ -46,10 +47,18 @@ export async function discoverWorkflows(client,{preview=false,profile='core'}={}
         preflight={ok:false,code:'scan_maintenance_rate_limit',message:'Administrative maintenance is rate-limited. Wait before restarting; no automatic retry.',...rateLimitAdvice(err.data)};
     }
   }
+  let recoverySupport=null;
   if(preview && profile==='specialist' && preflight.ok && !maintenanceOnly){
     // Load after this module's shared schemas initialize (source confirmations reuse them).
     const {discoverPageSpeedScans}=await import('./pagespeed-scans.js');
-    capabilities={...capabilities,schema_source_jobs:await discoverSourceScans(client),pagespeed_execution:await discoverPageSpeedScans(client)};
+    // The gate above is the only thing these three optional lanes share: separate routes, no common
+    // state, and each one already answers its own failure with a closed fallback. One startup window
+    // instead of the sum of three request timeouts; Promise.all can only settle as they already did.
+    const [schema_source_jobs,pagespeed_execution,recovery]=await Promise.all([
+      discoverSourceScans(client),discoverPageSpeedScans(client),
+      discoverRecovery(client,{preview,profile,preflight,maintenanceOnly})]);
+    capabilities={...capabilities,schema_source_jobs,pagespeed_execution};
+    recoverySupport=recovery;
   }
-  return {capabilities,preflight,maintenanceOnly};
+  return {capabilities,preflight,maintenanceOnly,recoverySupport};
 }
