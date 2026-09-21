@@ -85,6 +85,7 @@ assert.ok(process.argv.slice(2).every(arg=>['--allow-network','--native-reads','
 if(nativeBetaUpgrade||nativeBetaReads||nativeBetaRedirects||nativeBetaSchema||nativeBetaPageSpeed||nativeBetaWork)assert.ok(process.env.TAMRANK_TEST_BETA_ZIP,'Exact distributed beta path required');
 let nativePro;
 if(nativeCases.length){
+  assert.ok(!process.env.TAMRANK_SCHEMA_CASE_FILTER,'A filtered diagnostic cannot count as complete native package acceptance');
   for(const key of ['TAMRANK_MAINT_PRO','TAMRANK_MAINT_CORE','TAMRANK_MAINT_FREE','TAMRANK_SCAN_TEST_SOCKET'])assert.ok(process.env[key],`Explicit owned native setting required: ${key}`);
   nativePro=await realpath(process.env.TAMRANK_MAINT_PRO);
   assert.match(process.env.TAMRANK_SCAN_TEST_SOCKET,/^\/private\/tmp\/tr-scan-mysql\.[A-Za-z0-9]{6}\/mysql.sock$/);
