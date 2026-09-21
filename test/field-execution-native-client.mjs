@@ -68,7 +68,8 @@ export async function runFieldExecutionClient({origin,fixture:f,inspect,tlsRoot=
       if(faults&&profile==='core'&&style==='pretty'){
         faults.arm(id);
         const lost=await raw('execute_change_set',args),error=JSON.parse(lost.content[0].text);
-        ok(lost.isError&&error.code==='network_error'&&error.automatic_retry===false,'Lost committed result requires explicit reconciliation');
+        ok(lost.isError&&error.code==='network_error'&&error.automatic_retry===false,
+          'Lost committed result requires explicit reconciliation: '+JSON.stringify({isError:lost.isError,code:error.code,automatic_retry:error.automatic_retry,attempts:faults.attempts(),state:error.record?.state,delivery_errors:error.record?.item_results?.map(item=>item.delivery?.error_code)}));
         equal(faults.attempts(),1,'Bridge sends the write only once despite the lost result');
         equal(inspect().audits.length-before.audits.length,3,'Lost reply follows a real committed batch');
         done=(await call('get_changes',{change_set_id:id,kind:'execution'})).record;
