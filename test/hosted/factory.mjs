@@ -32,11 +32,11 @@ for (const edit of [
   c => c.receiptStore = {}, c => c.recovery = {}, c => c.preview = true,
   c => c.validatedInstallation.preview = true,
 ]) { const ctx = context(createStubVps()); edit(ctx); assert.throws(() => createWorkflowServer(ctx)); }
-{
+for (const scope of ['redirects:write','schema:write','scans:plan','scans:execute','scans:recover','scans:maintain']) {
   const stub = createStubVps(), ctx = context(stub);
   ctx.validatedInstallation.workflow_profile = 'workflow-v2-1';
   ctx.filteredCapabilities.mcp_bridge_compatibility = 'workflow-v2-1';
-  ctx.grantContext.scopes.push('redirects:write');
+  ctx.grantContext.scopes.push(scope);
   const server = createWorkflowServer(ctx);
   await server.close();
 }
@@ -45,9 +45,9 @@ for (const edit of [
   ctx.validatedInstallation.workflow_profile = 'workflow-v2-1';
   assert.throws(() => createWorkflowServer(ctx), /workflow_profile/);
 }
-{
+for (const scope of ['redirects:write','schema:write','scans:plan','scans:execute','scans:recover','scans:maintain']) {
   const ctx = context(createStubVps());
-  ctx.grantContext.scopes.push('redirects:write');
+  ctx.grantContext.scopes.push(scope);
   assert.throws(() => createWorkflowServer(ctx), /grant scopes/);
 }
 {
