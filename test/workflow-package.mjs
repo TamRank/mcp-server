@@ -10,12 +10,14 @@ import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
 import { randomBytes, createHash } from 'node:crypto';
 import { ownedInstalledRuntime } from './owned-installed-entry.mjs';
+import { nativePackageDeadline } from './native-package-deadline.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const run=promisify(execFile);
 const npm=resolve(dirname(process.execPath),'../lib/node_modules/npm/bin/npm-cli.js');
 const pkg=JSON.parse(await readFile(join(root,'package.json'),'utf8'));
 await run(process.execPath,[join(root,'test/workflow-onboarding.mjs')],{cwd:root,timeout:30000,maxBuffer:1048576});
+await run(process.execPath,[join(root,'test/workflow-native-deadline.mjs')],{cwd:root,timeout:30000,maxBuffer:1048576});
 const online=process.argv.includes('--allow-network');
 const nativeFields=process.argv.includes('--native-fields');
 const nativeFieldHistoryRecovery=process.argv.includes('--native-field-history-recovery');
@@ -222,10 +224,9 @@ try {
       const nativeArgs=beta?[join(nativePro,'docs/mcp-phase4e-beta-upgrade-wordpress.mjs'),'--installed-mcp',...(source095?['--baseline-095']:[]),...(betaMode==='beta-reads'?['--stored-reads']:betaMode==='beta-redirects'?['--redirects']:betaMode==='beta-schema'?['--schema']:betaMode==='beta-pagespeed'?['--pagespeed']:betaMode==='beta-work'?['--work']:[])]:scans?[join(root,'test/workflow-pagespeed-native.mjs'),...(mode==='pagespeed-receipts'?['--result-journal']:[])]:reads?[join(nativePro,mode==='stored-reads-multisite'?'docs/mcp-phase4e-read-network-wordpress.mjs':'docs/mcp-phase4e-read-wordpress.mjs')]:[join(nativePro,'docs/mcp-phase4c-change-store-wordpress.mjs'),'--'+mode];
       const nativeRun=run(process.execPath,nativeArgs,
         {cwd:nativePro,env:{...process.env,TAMRANK_MAINT_MCP:root,TAMRANK_TEST_PACKED_ROOT:installed},
-          // The mixed maximum lane retains the original three 75-minute
-          // per-site deadlines and real hourly source quotas, plus setup time.
-          // This is a parent test deadline, not a product request timeout.
-          timeout:mode==='schema-mixed-execution-mcp'?13800000:betaMode==='beta-schema'?5400000:1800000,maxBuffer:2097152});
+          // Whole-lane deadlines include every site's existing allowance and
+          // cleanup. Product quotas, request timeouts and assertions are unchanged.
+          timeout:nativePackageDeadline(mode,betaMode),maxBuffer:2097152});
       nativeRun.child.stdout.pipe(process.stdout,{end:false});
       const native=await nativeRun;
       assert.ok(scans||beta?native.stdout.split('\n').some(line=>/^PASS: \d+ /.test(line)&&line.includes(expected+'; installed entry;')&&line.endsWith('owned databases removed.')):
