@@ -75,6 +75,6 @@ export function createWorkflowServer(ctx) {
   const site = ctx.validatedInstallation;
   const client = new WorkflowClient({ rest_base_url: site.rest_base_url, rest_style: site.rest_style,
     transport: ctx.transport, timeoutMs: 30000, hosted: true });
-  return buildWorkflowServer(client, { profile: 'core', capabilities: ctx.filteredCapabilities,
+  return buildWorkflowServer(client, { profile: 'specialist', capabilities: ctx.filteredCapabilities,
     hostedContext: ctx, preflight: { ok: true } });
 }

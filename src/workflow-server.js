@@ -18,6 +18,9 @@ function visible(name, caps) {
   if (name === 'get_changes') return caps.field_execution?.contract_version === 1 && caps.field_execution.read_available === true
     || caps.field_proposals?.contract_version === 2 && caps.field_proposals.read_available === true;
   if (name === 'update_work_item') return caps.work_administration?.available === true;
+  if (name === 'start_scan') return caps.index_scan_execution?.plan_available === true || caps.index_scan_execution?.available === true;
+  if (name === 'get_scan_status') return caps.index_scan_execution?.read_available === true;
+  if (name === 'close_scan') return caps.index_scan_execution?.available === true;
   // Hosted listing is positive: a read the capabilities do not advertise is absent.
   return caps.reads?.[name]?.available === true;
 }
@@ -27,7 +30,7 @@ export function buildWorkflowServer(client, options = {}) {
   const instructions = hosted ? WORKFLOW_INSTRUCTIONS
     .replace('agent label is unknown.', 'agent label identifies the server-validated grant.')
     .replace(/ Recovery: get_changes\(kind=recovery\)[\s\S]*?No automatic retries or legacy writers\./,
-      ' Hosted recovery and specialist modes are unavailable. No automatic retries or legacy writers.') : WORKFLOW_INSTRUCTIONS;
+      ' Hosted recovery remains unavailable. Hosted index jobs require their separately advertised capability and explicit chat approval. No automatic retries or legacy writers.') : WORKFLOW_INSTRUCTIONS;
   const server = new (hosted ? HostedWorkflowServer : McpServer)(workflowIdentity,
     { instructions: instructions + (options.preflight?.ok === false ? '\nStartup: ' + options.preflight.message : '') });
   const setHandler = server.server.setRequestHandler;
