@@ -49,7 +49,10 @@ export async function discoverWorkflows(client,{preview=false,profile='core'}={}
   if(preview && profile==='specialist' && preflight.ok && !maintenanceOnly){
     // Load after this module's shared schemas initialize (source confirmations reuse them).
     const {discoverPageSpeedScans}=await import('./pagespeed-scans.js');
-    capabilities={...capabilities,schema_source_jobs:await discoverSourceScans(client),pagespeed_execution:await discoverPageSpeedScans(client)};
+    const {discoverIndexScans}=await import('./index-scans.js');
+    capabilities={...capabilities,schema_source_jobs:await discoverSourceScans(client),pagespeed_execution:await discoverPageSpeedScans(client),
+      index_scan_execution:capabilities?.index_scan_execution?.server_contract_required===true
+        ?await discoverIndexScans(client):{available:false,plan_available:false,read_available:false}};
   }
   return {capabilities,preflight,maintenanceOnly};
 }

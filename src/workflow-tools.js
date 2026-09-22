@@ -11,6 +11,8 @@ import {workflowCatalog} from './workflow-catalog.js';
 import {sourceConfirmation,validSourceStart,sourcePath,sourceArgs} from './source-scans.js';
 import {scanConfirmation,pagespeedRoute,pagespeedSupport,discoverPageSpeedScans,validPageSpeedStart,
   validPageSpeedProposal,validPageSpeedProgress,pageSpeedStartBody,pageSpeedProgress} from './pagespeed-scans.js';
+import {indexRoute,indexConfirmation,indexCloseConfirmation,indexSupport,discoverIndexScans,validIndexStart,
+  validIndexReceipt,indexStartBody,indexRequestId} from './index-scans.js';
 import {executionSchema,rollbackSchema,confirmationBody,isFieldExecutionPlan,validExecutionResponse,fieldOperations} from './field-execution.js';
 import {validSchemaExecutionResponse,schemaForwardToken,schemaInverseToken,schemaForwardExecutionSchema,schemaInverseExecutionSchema,schemaMixedExecutionSchema,
   schemaConfirmationBody,isSchemaExecutionPlan,matchesSchemaExecutionRequest} from './schema-execution.js';
@@ -274,13 +276,34 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         && (parsed.data.proposal_id!==undefined || parsed.data.execution_id!==undefined);
       const pagespeedStart=canonical==='start_scan' && parsed.data.type==='pagespeed'
         && (parsed.data.mode==='run'||(parsed.data.mode==='plan'&&pagespeedSupport(capabilities?.pagespeed_execution)));
+      const indexRead=canonical==='get_scan_status'&&parsed.data.type==='index'&&parsed.data.proposal_id!==undefined;
+      const indexStart=canonical==='start_scan'&&parsed.data.type==='index'&&['plan','run'].includes(parsed.data.mode);
+      const indexClose=canonical==='close_scan'&&parsed.data.type==='index';
       const maintenanceRead=canonical==='get_scan_status' && !pagespeedRead && (parsed.data.execution_id!==undefined || sourceMaintenance);
       if(maintenanceOnly && canonical!=='get_capabilities' && !maintenanceRead && !def.maintenanceWrite)
         return failure('workflow_operation_unavailable','Only administrative scan review/closure is available without PRO access. Nothing was sent.');
       const maintenanceCapabilities=sourceMaintenance?capabilities?.scan_maintenance?.schema_source:capabilities?.scan_maintenance;
-      if((maintenanceRead || def.maintenanceWrite) && maintenanceCapabilities?.[def.maintenanceWrite?'available':'read_available']!==true)
+      if((maintenanceRead || (def.maintenanceWrite&&!indexClose)) && maintenanceCapabilities?.[def.maintenanceWrite?'available':'read_available']!==true)
         return failure('workflow_operation_unavailable','Administrative scan maintenance requires explicit site support and scans:maintain. Nothing was sent.');
       if (!def.path) return failure('workflow_operation_unavailable',`${canonical} has no verified implementation in this preview. No request or mutation was sent.`);
+      if(indexStart||indexRead||indexClose){
+        const a=parsed.data,support=capabilities?.index_scan_execution,run=indexStart&&a.mode==='run';
+        const grant=indexClose||run?'available':indexRead?'read_available':'plan_available';
+        if(!indexSupport(support)||support[grant]!==true)
+          return failure('workflow_operation_unavailable','Hosted index jobs require explicit site support and current scan rights. Nothing was sent.');
+        try{
+          if(run){const draft=await client.get(indexRoute+'/proposals/'+a.proposal_id);
+            if(!validIndexReceipt(draft,a)||draft.proposal_hash!==a.confirmation.plan_hash)
+              return failure('index_proposal_mismatch','The exact approved index proposal could not be verified. Nothing was sent.');}
+          const data=indexRead?await client.get(indexRoute+'/'+a.proposal_id):indexClose
+            ?await client.post(indexRoute+'/'+a.proposal_id+'/close',{client_request_id:a.client_request_id,expected_status_version:a.expected_status_version})
+            :await client.post(indexRoute+(run?'':'/proposals'),run?indexStartBody(a,clientInfo(),hostedContext?.auditContext?.grantLabel):strip(a,['mode']));
+          if(!validIndexReceipt(data,a))return failure('index_job_incompatible_response','The stored index job could not be verified. Read the same proposal; never start a replacement automatically.',
+            {automatic_retry:false,proposal_id:a.proposal_id,client_request_id:a.client_request_id});
+          return result(data);
+        }catch(err){return failure(err.code||'index_job_request_uncertain','The hosted index request was refused or uncertain. Read the same proposal; never start a replacement automatically.',
+          {automatic_retry:false,proposal_id:a.proposal_id,client_request_id:a.client_request_id,...(err.status===429?rateLimitAdvice(err.data):{})});}
+      }
       if(pagespeedStart || pagespeedRead){
         const a=parsed.data,support=capabilities?.pagespeed_execution,run=pagespeedStart&&a.mode==='run';
         const grant=run?'available':a.execution_id?'read_available':'plan_available';
@@ -450,9 +473,11 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         const args = def.query ? def.query(parsed.data) : parsed.data;
         const path=def.path(parsed.data);
         const data = def.write || scanPlan || def.maintenanceWrite || def.fieldPlan ? await client.post(path,args) : await client.get(path, strip(args, def.omit || []));
-        if(canonical==='get_capabilities' && profile==='specialist' && !maintenanceOnly) {
+        if(canonical==='get_capabilities' && profile==='specialist' && !maintenanceOnly && !hostedContext) {
           data.schema_source_jobs=await discoverSourceScans(client);
           data.pagespeed_execution=await discoverPageSpeedScans(client);
+          data.index_scan_execution=data.index_scan_execution?.server_contract_required===true
+            ?await discoverIndexScans(client):{available:false,plan_available:false,read_available:false};
           try { data.scan_maintenance=(await client.get('/scans/maintenance/capabilities')).scan_maintenance || {available:false,read_available:false}; }
           catch { data.scan_maintenance={available:false,read_available:false}; }
           if(recovery){try{data.scan_recovery=(await client.get('/scans/recovery/capabilities')).scan_recovery || {receipt_review_available:false,settlement_available:false};}
@@ -526,21 +551,21 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       validate:a=>(a.section || 'overview')==='overview'?Object.keys(a).every(k=>k==='section'):['pages','topics'].includes(a.section)?a.cluster!==undefined:a.cluster===undefined,
     }:name==='get_scan_status'?{
       description:'Scan status.',
-      specialist:true,path:a=>a.source_job_id?'/scans/maintenance/sources/'+a.source_job_id:a.execution_id?'/scans/maintenance/'+a.execution_id:a.proposal_id?'/scans/proposals/'+a.proposal_id:'/scans/status',omit:['proposal_id','execution_id','source_job_id'],
+      specialist:true,path:a=>a.source_job_id?'/scans/maintenance/sources/'+a.source_job_id:a.execution_id?'/scans/maintenance/'+a.execution_id:a.type==='index'&&a.proposal_id?indexRoute+'/'+a.proposal_id:a.proposal_id?'/scans/proposals/'+a.proposal_id:'/scans/status',omit:['proposal_id','execution_id','source_job_id'],
       schema:{type:z.enum(['index','pagespeed','schema_source']).optional(),expected_ref:z.string().regex(/^stored:[a-f0-9]{32}$/).optional(),
         proposal_id:scanId.optional(),execution_id:scanId.optional(),source_job_id:scanId.optional(),receipt_reference:receiptReference.optional()},
       validate:a=>a.type==='schema_source'?a.proposal_id!==undefined && Object.keys(a).length===2
+        :a.type==='index'&&a.proposal_id!==undefined?Object.keys(a).length===2
         :a.type==='pagespeed'&&(a.proposal_id!==undefined||a.execution_id!==undefined)?Object.keys(a).length===2
         :a.receipt_reference!==undefined?a.execution_id!==undefined && Object.keys(a).length===2:a.proposal_id!==undefined || a.execution_id!==undefined || a.source_job_id!==undefined?Object.keys(a).length===1:a.type!==undefined,
     }:{
       description:'Plan/run scan; no retry.',
       specialist:true,scanPlan:true,path:a=>a.mode==='plan'?'/scans/proposals':'/scans/preview',schema:{mode:z.enum(['preview','plan','run']),type:z.enum(['pagespeed','schema_source','index']),
         post_ids:z.array(pageId).min(1).max(25).refine(ids=>new Set(ids).size===ids.length).optional(),expected_revision:z.string().regex(/^[a-f0-9]{64}$/).optional(),
-        source_job_id:scanId.optional(),proposal_id:scanId.optional(),confirmation:scanConfirmation.optional(),
+        source_job_id:scanId.optional(),proposal_id:scanId.optional(),confirmation:z.union([scanConfirmation,indexConfirmation]).optional(),
         capture_mode:z.literal('native_render').optional(),probe_content:z.literal(true).optional(),
         client_request_id:z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/).optional()},
-      validate:a=>a.type==='index'?a.mode==='preview' && a.post_ids!==undefined
-        && Object.keys(a).every(k=>['mode','type','post_ids','expected_revision'].includes(k))
+      validate:a=>a.type==='index'?validIndexStart(a)
         :a.type==='schema_source'?a.proposal_id===undefined&&validSourceStart(a)
         &&(a.confirmation===undefined||sourceConfirmation.safeParse(a.confirmation).success):validPageSpeedStart(a),
       query:a=>a.mode==='plan'?strip(a,['mode']):({...strip(a,['mode']),post_ids:a.post_ids.join(',')}),
@@ -548,13 +573,16 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   }
   if(profile==='specialist') register('close_scan',{
     description:'Close scan; not success.',
-    specialist:true,maintenanceWrite:true,schema:{...closeScanSchema,execution_id:scanId.optional(),source_job_id:scanId.optional(),
+    specialist:true,maintenanceWrite:true,schema:{...closeScanSchema,type:z.literal('index').optional(),proposal_id:scanId.optional(),execution_id:scanId.optional(),source_job_id:scanId.optional(),
+      expected_status_version:z.number().int().min(1).max(Number.MAX_SAFE_INTEGER).optional(),
       expected_runtime_hash:closeScanSchema.expected_runtime_hash.optional(),expected_revision:closeScanSchema.expected_runtime_hash.optional(),receipt_reference:receiptReference.optional(),
-      confirmation:closeScanSchema.confirmation.extend({acknowledgements:z.array(z.string()).length(4)})},
-    validate:a=>(a.source_job_id!==undefined?a.expected_revision!==undefined && a.execution_id===undefined && a.expected_runtime_hash===undefined && a.receipt_reference===undefined
+      confirmation:z.union([closeScanSchema.confirmation.extend({acknowledgements:z.array(z.string()).length(4)}),indexCloseConfirmation])},
+    validate:a=>a.type==='index'?a.proposal_id!==undefined&&a.execution_id===undefined&&a.source_job_id===undefined&&a.receipt_reference===undefined
+      &&a.expected_status_version!==undefined&&indexRequestId.safeParse(a.client_request_id).success&&indexCloseConfirmation.safeParse(a.confirmation).success
+      :(a.source_job_id!==undefined?a.expected_revision!==undefined && a.execution_id===undefined && a.expected_runtime_hash===undefined && a.receipt_reference===undefined
       :a.execution_id!==undefined && a.expected_runtime_hash!==undefined && a.expected_revision===undefined)
       &&a.confirmation.acknowledgements.every((v,i)=>v===(a.source_job_id?sourceMaintenanceAcks:a.receipt_reference?recoveryAcks:maintenanceAcks)[i]),
-    path:a=>a.source_job_id?'/scans/maintenance/sources/'+a.source_job_id:'/scans/maintenance/'+a.execution_id,
+    path:a=>a.type==='index'?indexRoute+'/'+a.proposal_id+'/close':a.source_job_id?'/scans/maintenance/sources/'+a.source_job_id:'/scans/maintenance/'+a.execution_id,
   });
   catalog.publish();
 }
