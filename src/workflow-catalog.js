@@ -125,12 +125,28 @@ export function compactWorkflowSchema(root){
 export function compactWorkflowExecution(value){
   return value&&Object.keys(value).length===1&&value.taskSupport==='forbidden'?undefined:value;
 }
-export function workflowCatalog(server){
+export function workflowCatalog(server,{trackExternal=false}={}){
   if(!server.server?.setRequestHandler)return {server,publish(){}};
   const entries=[];
+  const nativeRegister=server.registerTool.bind(server);
+  const register=(name,config,handler)=>{
+    const tool=nativeRegister(name,config,handler),entry={name,tool};
+    const update=tool.update.bind(tool);
+    tool.update=updates=>{
+      // SDK 1.29 may retain a renamed alias when removing a handle. Disable
+      // first so no stale alias can execute a catalog-removed handler.
+      if(updates.name===null)update({enabled:false});
+      update(updates);if(typeof updates.name!=='undefined')entry.name=updates.name;
+    };
+    entries.push(entry);return tool;
+  };
+  // A hosted owner may compose server-only tools after the factory returns or
+  // after initialize. Track those through the same live, filtered catalog. The
+  // owner still provides their authorization and advertises them in reads.
+  if(trackExternal)server.registerTool=register;
   return {
-    server:{registerTool(name,config,handler){const tool=server.registerTool(name,config,handler);entries.push({name,tool});return tool;}},
-    publish(){server.server.setRequestHandler(ListToolsRequestSchema,()=>({tools:entries.filter(({tool})=>tool.enabled).map(({name,tool})=>{
+    server:{registerTool:register},
+    publish(){server.server.setRequestHandler(ListToolsRequestSchema,()=>({tools:entries.filter(({name,tool})=>name!==null&&tool.enabled).map(({name,tool})=>{
       const input=normalizeObjectSchema(tool.inputSchema);
       const result={name,title:tool.title,description:tool.description,
         inputSchema:input?compactWorkflowSchema(toJsonSchemaCompat(input,{strictUnions:true,pipeStrategy:'input'})):{type:'object'},

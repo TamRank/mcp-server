@@ -147,7 +147,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
     field_execution:capabilities?.field_execution?{...capabilities.field_execution,recovery_available:false}:undefined};
   const serverOriginal=server;
   const clientInfo=()=>serverOriginal.server?.getClientVersion?.();
-  const catalog=workflowCatalog(server);server=catalog.server;
+  const catalog=workflowCatalog(server,{trackExternal:!!hostedContext});server=catalog.server;
   const defs = workflowDefinitions();
   const schemaExecution=capabilities?.schema_execution;
   const schemaExecutionWrite=capability(schemaExecution,'available')&&schemaExecution.record_contract==='schema_execution_view_v1'
