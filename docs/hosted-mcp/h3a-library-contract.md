@@ -179,3 +179,14 @@ Run npm run test:hosted and the unchanged test:dev, test:workflow,
 test:workflow-package and npm test suites. The synthetic tests cover library
 halves of SET01, SET02, CTX01, WRITE01, SCOPE01, PROTO01 and ERR02. They do not
 prove the deployed VPS/PRO lifecycle, real customer data, OAuth, or live clients.
+# Hosted composition after initialization
+
+The returned server supports additional VPS-owned `registerTool` calls before
+or after MCP initialization. Its live compact catalog includes these tools only
+when their names were advertised in the immutable `filteredCapabilities.reads`.
+The VPS owns their argument schema, current OAuth/account/site authorization,
+rate limits and result audit; registering a tool does not supply these guards.
+Disable, enable and removal use the same handles as the SDK. No local client,
+keyring, credential store or additional WordPress connection is created.
+`node test/hosted/extensions.mjs` checks list/call behavior through a real SDK
+connection, including post-initialize registration and removed aliases.
