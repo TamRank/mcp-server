@@ -9,9 +9,9 @@ import {fieldProposalSchema,fieldProposalItem,validFieldProposal} from './field-
 import {schemaPreviewItem,validSchemaPreviewResponse} from './schema-preview.js';
 import {workflowCatalog} from './workflow-catalog.js';
 import {sourceConfirmation,validSourceStart,sourcePath,sourceArgs} from './source-scans.js';
-import {scanConfirmation,pagespeedRoute,pagespeedSupport,discoverPageSpeedScans,validPageSpeedStart,
+import {pagespeedRoute,pagespeedSupport,discoverPageSpeedScans,validPageSpeedStart,
   validPageSpeedProposal,validPageSpeedProgress,pageSpeedStartBody,pageSpeedProgress} from './pagespeed-scans.js';
-import {indexRoute,indexConfirmation,indexCloseConfirmation,indexSupport,discoverIndexScans,validIndexStart,
+import {indexRoute,indexCloseConfirmation,indexSupport,discoverIndexScans,validIndexStart,
   validIndexReceipt,indexStartBody,indexRequestId} from './index-scans.js';
 import {executionSchema,rollbackSchema,confirmationBody,isFieldExecutionPlan,validExecutionResponse,fieldOperations} from './field-execution.js';
 import {validSchemaExecutionResponse,schemaForwardToken,schemaInverseToken,schemaForwardExecutionSchema,schemaInverseExecutionSchema,schemaMixedExecutionSchema,
@@ -33,6 +33,21 @@ Read execution results with get_changes(kind=execution), especially after timeou
 const pageId = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
 const workId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}$/);
 const cursor = z.string().min(1).max(2048).optional();
+// Keep one bounded public shape in the SDK catalog. Lane-specific acknowledgement
+// sets remain fail-closed in validPageSpeedStart() and validIndexStart().
+const scanStartConfirmation=z.object({
+  plan_hash:z.string().regex(/^[a-f0-9]{64}$/),confirmed:z.literal(true),
+  agent:z.string().min(1).max(80).refine(v=>v.trim().length>0&&Buffer.byteLength(v,'utf8')<=80&&!/[\x00-\x1f\x7f<>]/.test(v)),
+  acknowledgements:z.array(z.string()).min(4).max(5),
+}).strict();
+// The public close shape is deliberately compact; each lane validates the exact
+// attestation object and acknowledgement order before any request is sent.
+const scanCloseConfirmation=z.object({
+  confirmed:z.literal(true),mode:z.literal('chat_attested').optional(),review_hash:z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  client:z.object({name:z.string(),version:z.string().nullable()}).strict().optional(),
+  agent:z.union([z.string(),z.object({name:z.string()}).strict()]),
+  acknowledgements:z.array(z.string()).length(4).optional(),acknowledgement:z.literal('stop_unstarted_targets_without_retry').optional(),
+}).strict();
 const paging = { limit: z.number().int().min(1).max(50).optional(), cursor };
 const strip = (args, keys) => Object.fromEntries(Object.entries(args).filter(([key]) => !keys.includes(key)));
 const result = data => ({ content: [{ type: 'text', text: JSON.stringify(data) }] });
@@ -562,7 +577,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       description:'Plan/run scan; no retry.',
       specialist:true,scanPlan:true,path:a=>a.mode==='plan'?'/scans/proposals':'/scans/preview',schema:{mode:z.enum(['preview','plan','run']),type:z.enum(['pagespeed','schema_source','index']),
         post_ids:z.array(pageId).min(1).max(25).refine(ids=>new Set(ids).size===ids.length).optional(),expected_revision:z.string().regex(/^[a-f0-9]{64}$/).optional(),
-        source_job_id:scanId.optional(),proposal_id:scanId.optional(),confirmation:z.union([scanConfirmation,indexConfirmation]).optional(),
+        source_job_id:scanId.optional(),proposal_id:scanId.optional(),confirmation:scanStartConfirmation.optional(),
         capture_mode:z.literal('native_render').optional(),probe_content:z.literal(true).optional(),
         client_request_id:z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/).optional()},
       validate:a=>a.type==='index'?validIndexStart(a)
@@ -576,11 +591,12 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
     specialist:true,maintenanceWrite:true,schema:{...closeScanSchema,type:z.literal('index').optional(),proposal_id:scanId.optional(),execution_id:scanId.optional(),source_job_id:scanId.optional(),
       expected_status_version:z.number().int().min(1).max(Number.MAX_SAFE_INTEGER).optional(),
       expected_runtime_hash:closeScanSchema.expected_runtime_hash.optional(),expected_revision:closeScanSchema.expected_runtime_hash.optional(),receipt_reference:receiptReference.optional(),
-      confirmation:z.union([closeScanSchema.confirmation.extend({acknowledgements:z.array(z.string()).length(4)}),indexCloseConfirmation])},
+      confirmation:scanCloseConfirmation},
     validate:a=>a.type==='index'?a.proposal_id!==undefined&&a.execution_id===undefined&&a.source_job_id===undefined&&a.receipt_reference===undefined
       &&a.expected_status_version!==undefined&&indexRequestId.safeParse(a.client_request_id).success&&indexCloseConfirmation.safeParse(a.confirmation).success
       :(a.source_job_id!==undefined?a.expected_revision!==undefined && a.execution_id===undefined && a.expected_runtime_hash===undefined && a.receipt_reference===undefined
       :a.execution_id!==undefined && a.expected_runtime_hash!==undefined && a.expected_revision===undefined)
+      &&closeScanSchema.confirmation.safeParse({...a.confirmation,acknowledgements:maintenanceAcks}).success
       &&a.confirmation.acknowledgements.every((v,i)=>v===(a.source_job_id?sourceMaintenanceAcks:a.receipt_reference?recoveryAcks:maintenanceAcks)[i]),
     path:a=>a.type==='index'?indexRoute+'/'+a.proposal_id+'/close':a.source_job_id?'/scans/maintenance/sources/'+a.source_job_id:'/scans/maintenance/'+a.execution_id,
   });

@@ -30,7 +30,7 @@ export function validIndexStart(a){if(a.type!=='index')return false;
   if(a.mode==='preview')return Array.isArray(a.post_ids)&&only(['mode','type','post_ids','expected_revision']);
   if(a.mode==='plan')return Array.isArray(a.post_ids)&&a.expected_revision!==undefined&&indexRequestId.safeParse(a.client_request_id).success
     &&only(['mode','type','post_ids','expected_revision','client_request_id']);
-  return a.mode==='run'&&a.proposal_id!==undefined&&indexRequestId.safeParse(a.client_request_id).success&&a.confirmation!==undefined
+  return a.mode==='run'&&a.proposal_id!==undefined&&indexRequestId.safeParse(a.client_request_id).success&&indexConfirmation.safeParse(a.confirmation).success
     &&only(['mode','type','proposal_id','client_request_id','confirmation']);
 }
 function validPlan(p,id,hashValue){if(!object(p)||p.contract_version!==2||p.lane!=='hosted_index_scan'||p.type!=='index'
