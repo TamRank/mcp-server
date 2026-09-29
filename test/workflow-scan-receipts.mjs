@@ -166,7 +166,7 @@ await test('transport capture and redaction', async t => {
       assert.equal(calls.length, 1); assert.equal(error.code, 'scan_attempt_uncertain'); privateAbsent(error);
       assert.deepEqual((await store.load(error.data.receipt_reference, context)).receipt, input);
       assert.equal(error.data.receipt_retained, true); assert.equal((await readdir(directory)).length, 1);
-      assert.deepEqual(JSON.parse(calls[0][1].body), attempt); assert.equal(calls[0][1].headers.Authorization, 'Bearer ' + pat);
+      assert.deepEqual(JSON.parse(new TextDecoder().decode(calls[0][1].body)), attempt); assert.equal(calls[0][1].headers.Authorization, 'Bearer ' + pat);
       assert.equal(calls[0][1].redirect, 'manual');
     });
     await t.test('configured storage alone does not capture; passive reads write nothing', async () => {
@@ -230,7 +230,7 @@ await test('transport capture and redaction', async t => {
       provider(() => { mutable.execution_id = otherExecution; client.base = 'https://other.invalid'; client.pat = 'changed'; return response(); });
       try { await client.request('POST', '/fixture/attempt', { body: mutable, retainScanReceipt: true }); } catch (e) { error = e; }
       privateAbsent(error); assert.deepEqual((await store.load(error.data.receipt_reference, context)).receipt, input);
-      assert.deepEqual(JSON.parse(calls[0][1].body), attempt); assert.ok(calls[0][0].href.startsWith(site + '/'));
+      assert.deepEqual(JSON.parse(new TextDecoder().decode(calls[0][1].body)), attempt); assert.ok(String(calls[0][0]).startsWith(site + '/'));
     });
     await t.test('successful ordinary result does not save a second private copy', async () => {
       const { client, directory } = await fixture(); provider(() => response({ contract_version: 2, result: { performance_score: 50 } }, 200));
