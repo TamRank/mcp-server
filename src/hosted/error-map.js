@@ -1,4 +1,12 @@
 /** Pure hosted classification. Persistent link/grant decisions belong to H3b. */
+// A read the site refused with its own reason: pass that reason on, never an outage to retry.
+// Auth/payment statuses and credential codes only count at their exact mapped status below;
+// rest_* is WordPress itself (no route, forbidden), not a TamRank decision.
+export function isSiteReadRefusal({ status = 0, code, validWpEnvelope = false, kind = 'read' } = {}) {
+  return kind === 'read' && validWpEnvelope === true && status >= 400 && status < 500 && ![401, 402, 403, 407, 429].includes(status)
+    && typeof code === 'string' && !/^(rest|agent|cloud|pro)_/.test(code);
+}
+
 export function mapHostedOutcome({ status = 0, code, validWpEnvelope = false, kind = 'read', retryAfter } = {}) {
   const known = {
     '402:pro_required': 'site_entitlement_required',
@@ -18,5 +26,6 @@ export function mapHostedOutcome({ status = 0, code, validWpEnvelope = false, ki
   const mapped = validWpEnvelope && (known[`${status}:${code}`]
     || (code === 'workflow_upgrade_required' ? 'site_upgrade_required' : undefined));
   if (mapped) return { code: mapped, retryable: false, outcome_unknown: false };
+  if (isSiteReadRefusal({ status, code, validWpEnvelope, kind })) return { code, retryable: false, outcome_unknown: false };
   return { code: 'site_unavailable', retryable: kind === 'read', outcome_unknown: kind === 'write' };
 }
