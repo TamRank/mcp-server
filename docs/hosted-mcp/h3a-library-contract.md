@@ -156,7 +156,8 @@ outcome_unknown, optionally retry_after. It never changes persistent state.
 | 401 cloud_link_pending | site_link_unavailable |
 | 401 cloud_link_revoked | site_reconnect_required |
 | 429 in a valid WP envelope (any code) | rate_limited; retry_after only from data.retry_after 1..3600 |
-| Unknown JSON 401/403, HTML, network, timeout, 404/5xx, 429 without a valid envelope | site_unavailable; writes outcome_unknown:true |
+| Read refused in a valid WP envelope: 4xx other than 401/402/403/407/408/425/429, the site's code unchanged (not a client replacement) and not rest_/agent_/cloud_/pro_ | the site's own code and message; retryable:false, outcome_unknown:false |
+| Unknown JSON 401/403, rest_* (rest_no_route, rest_forbidden), HTML, network, timeout, 5xx, a write's 4xx, 429 without a valid envelope | site_unavailable; writes outcome_unknown:true |
 
 A WP code alone is insufficient: code/message/data.status must match the HTTP
 error before known-code mapping is trusted. Unknown JSON/HTML401 produces no

@@ -2,7 +2,7 @@
 import { ApiError } from './workflow-error.js';
 import { validateRestBase, workflowUrl, legacyRestBase } from './hosted/rest-base.js';
 import { createFetchTransport } from './hosted/fetch-transport.js';
-import { mapHostedOutcome } from './hosted/error-map.js';
+import { isSiteReadRefusal, mapHostedOutcome } from './hosted/error-map.js';
 import { isScanReceipt } from './scan-receipt-store.js';
 
 // Only bounded operational advice crosses the error boundary; never arbitrary server data.
@@ -119,14 +119,17 @@ export class WorkflowClient {
         const privatePacketPresent = Object.hasOwn(data.data || {}, 'result_receipt');
         const validWpEnvelope = typeof data.code === 'string' && typeof data.message === 'string' && data.data?.status === response.status;
         data = scrubResponse(data, requestPat, null, redact);
-        const code = typeof data.code === 'string' && /^[a-z][a-z0-9_]{0,79}$/.test(data.code) ? data.code : 'workflow_request_failed';
+        const siteCode = typeof data.code === 'string' && /^[a-z][a-z0-9_]{0,79}$/.test(data.code) ? data.code : undefined;
+        const code = siteCode ?? 'workflow_request_failed';
         const message = retained ? 'The result was not confirmed as stored. A private recovery receipt was retained locally. Reconcile before any new measurement.'
           : privatePacketPresent ? 'The site returned a private recovery receipt that was not retained. Reconcile the request outcome; do not repeat the measurement.'
           : typeof data.message === 'string' ? data.message.slice(0,500) : 'The site refused this workflow request.';
         const advice=response.status===429?rateLimitAdvice(data.data):undefined;
         if (this.#hosted) {
-          const mapped = mapHostedOutcome({status: response.status, code, validWpEnvelope, kind: method === 'GET' ? 'read' : 'write', retryAfter: advice?.retry_after});
-          throw new ApiError(response.status, mapped.code, 'The site refused this workflow request.', mapped);
+          // Only the site's own code classifies; a replaced code is no evidence of a site decision.
+          const outcome = {status: response.status, code: siteCode, validWpEnvelope, kind: method === 'GET' ? 'read' : 'write'};
+          const mapped = mapHostedOutcome({...outcome, retryAfter: advice?.retry_after});
+          throw new ApiError(response.status, mapped.code, mapped.code === siteCode && isSiteReadRefusal(outcome) ? message : 'The site refused this workflow request.', mapped);
         }
         throw new ApiError(response.status, code, message, retained ? { receipt_reference: retained.receipt_reference, receipt_retained: true } : advice);
       }

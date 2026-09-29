@@ -98,7 +98,11 @@ export function workflowDefinitions() {
         const missing=!a.work_id, extra=Object.keys(a).some(k=>!['work_id','section'].includes(k));
         return missing && extra ? 'section administration requires work_id and accepts only work_id and section; nothing was sent.'
           : missing ? 'section administration requires work_id (one work item per call); nothing was sent.'
-          : 'section administration accepts only work_id and section; nothing was sent.'; } },
+          : 'section administration accepts only work_id and section; nothing was sent.'; },
+      // Added after the site's own text, which is generic for this code. Only the code is known here, not
+      // whether the work_id is in the queue, so the hint claims no membership.
+      refused: (a, code) => a.section==='administration' && code==='workflow_work_unavailable'
+        ? 'No administration state exists for this work_id: only picked-up research work and manual tasks have one. If this is a dashboard group from the queue, read it with section targets.' : undefined },
     get_signals: { description: 'Signals, not tasks.', schema: { signal_id: pageId.optional(), section: z.enum(['overview','targets','relations']).optional(), type: z.string().max(64).optional(), subject_id: pageId.optional(), ...paging },
       path: a => '/signals' + (a.signal_id ? '/' + a.signal_id : ''), omit: ['signal_id'] },
     search_pages: { description: 'Published managed pages.', schema: { q: z.string().max(200).optional(), type: z.string().regex(/^[a-z0-9_-]{1,32}$/).optional(), missing: z.enum(['meta_title','meta_description']).optional(), ...paging }, path: () => '/pages' },
@@ -463,7 +467,8 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         }
         return result(hostedContext&&canonical==='get_capabilities'?hostedContext.filteredCapabilities
           :deprecated ? { deprecated: true, replacement: canonical, remove_in: '0.5.0', data } : data);
-      } catch (err) { return failure(typeof err.code === 'string' ? err.code : 'workflow_request_failed', err.status ? `Site refused the request (${err.status}). ${err.message}` : err.message,
+      } catch (err) { const refused=typeof err.code==='string'&&def.refused?.(parsed.data,err.code);
+        return failure(typeof err.code === 'string' ? err.code : 'workflow_request_failed', err.status ? `Site refused the request (${err.status}). ${err.message}${refused?' '+refused:''}` : err.message,
         hostedContext?err.data:err.status===429?rateLimitAdvice(err.data):undefined); }
       };
       const output=await dispatch();
