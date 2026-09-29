@@ -36,7 +36,7 @@ for (const [status, code] of [[400, 'workflow_invalid_query'], [404, 'workflow_w
   assert.deepEqual(mapHostedOutcome({ status, code, validWpEnvelope: true, kind: 'write' }), { code: 'site_unavailable', retryable: false, outcome_unknown: true });
 }
 for (const [status, code] of [[404, 'rest_no_route'], [403, 'rest_forbidden'], [400, 'rest_invalid_param'], [401, 'workflow_x'],
-  [402, 'workflow_x'], [403, 'workflow_x'], [407, 'workflow_x'], [404, 'agent_token_revoked'], [404, 'cloud_link_revoked'],
+  [402, 'workflow_x'], [403, 'workflow_x'], [407, 'workflow_x'], [408, 'workflow_x'], [425, 'workflow_x'], [404, 'agent_token_revoked'], [404, 'cloud_link_revoked'],
   [404, 'pro_required'], [500, 'workflow_store_unavailable'], [503, 'workflow_store_unavailable'], [404, undefined]]) {
   assert.deepEqual(mapHostedOutcome({ status, code, validWpEnvelope: true }), { code: 'site_unavailable', retryable: true, outcome_unknown: false }, `${status}:${code}`);
   assert.equal(isSiteReadRefusal({ status, code, validWpEnvelope: true }), false);

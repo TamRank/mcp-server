@@ -24,7 +24,7 @@ const unavailable = { code: 'site_unavailable', message: 'Site refused the reque
     wp(404, 'workflow_work_unavailable', 'The work operation could not be completed.'));
   assert.equal(url, 'https://site.example.invalid/wp-json/tamrank/v2/work-items/grp_alt_images');
   assert.deepEqual(output, { code: 'workflow_work_unavailable',
-    message: 'Site refused the request (404). This work item is in the queue but has no administration state; only picked-up research work and manual tasks have one. Read it with section targets instead.',
+    message: 'Site refused the request (404). The work operation could not be completed. No administration state exists for this work_id: only picked-up research work and manual tasks have one. If this is a dashboard group from the queue, read it with section targets.',
     retryable: false, outcome_unknown: false });
 }
 // The same code outside administration keeps the site's own text.
@@ -55,6 +55,24 @@ for (const [status, code] of [[403, 'rest_forbidden'], [401, 'workflow_session_i
   [404, 'agent_token_revoked'], [404, 'cloud_link_revoked'], [404, 'pro_required'], [400, 'rest_invalid_param']]) {
   assert.deepEqual((({ url, ...o }) => o)(await call('get_site_context', {}, wp(status, code, 'Synthetic'))),
     { ...unavailable, message: `Site refused the request (${status}). The site refused this workflow request.` }, `${status}:${code}`);
+}
+// Greptile PR #7 (1): a timeout (408) or too-early (425) in a valid WP envelope stays a retryable outage.
+for (const status of [408, 425]) {
+  assert.deepEqual((({ url, ...o }) => o)(await call('get_work_queue', { section: 'targets', work_id: 'grp_alt_images' },
+    wp(status, 'workflow_request_timeout', 'Synthetic'))),
+    { ...unavailable, message: `Site refused the request (${status}). The site refused this workflow request.` }, `transient ${status} stays retryable`);
+}
+// Greptile PR #7 (2): a code the client had to replace is no site decision, even in a valid envelope.
+for (const code of ['Workflow-Work-Unavailable', 'x'.repeat(81), '9workflow']) {
+  assert.deepEqual((({ url, ...o }) => o)(await call('get_work_queue', { section: 'administration', work_id: 'grp_alt_images' },
+    wp(404, code, 'Site text that must not be forwarded'))), unavailable, `replaced code ${code.slice(0, 20)} is not passed through`);
+}
+// Greptile PR #7 (3): the administration hint follows the site's own text and claims no queue membership.
+{
+  const { url, ...output } = await call('get_work_queue', { section: 'administration', work_id: 'manual_never_existed' },
+    wp(404, 'workflow_work_unavailable', 'Synthetic site reason.'));
+  assert.ok(output.message.startsWith('Site refused the request (404). Synthetic site reason. No administration state exists for this work_id:'), output.message);
+  assert.doesNotMatch(output.message, /in the queue but|This work item is/);
 }
 // Writes are out of scope: a refused write still reports an unknown outcome.
 {
