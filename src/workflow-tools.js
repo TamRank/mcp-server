@@ -91,7 +91,14 @@ export function workflowDefinitions() {
     get_work_queue: { description: 'Dashboard order and action_origin.', schema: { work_id: workId.optional(), section: z.enum(['overview','targets','administration']).optional(), status: z.enum(['open','completed','all']).optional(), kind: z.enum(['automatic','manual','research']).optional(), ...paging },
       path: a => a.section==='administration' ? '/work-items/'+a.work_id : '/work-queue' + (a.work_id ? '/' + a.work_id : ''),
       query: a => a.section==='administration' ? strip(a,['section']) : a, omit: ['work_id'],
-      validate: a => a.section!=='administration' || (Boolean(a.work_id) && Object.keys(a).every(k=>['work_id','section'].includes(k))) },
+      validate: a => a.section!=='administration' || (Boolean(a.work_id) && Object.keys(a).every(k=>['work_id','section'].includes(k))),
+      // Say which rule refused, so an agent can fix the call instead of guessing at its schema.
+      // Name every rule that refused, so one retry is enough.
+      invalid: a => { if(a.section!=='administration') return undefined;
+        const missing=!a.work_id, extra=Object.keys(a).some(k=>!['work_id','section'].includes(k));
+        return missing && extra ? 'section administration requires work_id and accepts only work_id and section; nothing was sent.'
+          : missing ? 'section administration requires work_id (one work item per call); nothing was sent.'
+          : 'section administration accepts only work_id and section; nothing was sent.'; } },
     get_signals: { description: 'Signals, not tasks.', schema: { signal_id: pageId.optional(), section: z.enum(['overview','targets','relations']).optional(), type: z.string().max(64).optional(), subject_id: pageId.optional(), ...paging },
       path: a => '/signals' + (a.signal_id ? '/' + a.signal_id : ''), omit: ['signal_id'] },
     search_pages: { description: 'Published managed pages.', schema: { q: z.string().max(200).optional(), type: z.string().regex(/^[a-z0-9_-]{1,32}$/).optional(), missing: z.enum(['meta_title','meta_description']).optional(), ...paging }, path: () => '/pages' },
@@ -232,7 +239,9 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         ...(!readOnly&&def.path?{idempotentHint:true}:{}) } }, async input => {
       if (!hostedContext && !preflight.ok) return failure(preflight.code || 'workflow_unavailable', preflight.message || 'Workflow startup refused; restart after correcting the configuration.',rateLimitAdvice(preflight));
       const parsed = schema.safeParse(input || {});
-      if (!parsed.success || (def.validate && !def.validate(parsed.data))) return failure('invalid_request','Invalid or unknown tool arguments; nothing was sent.');
+      if (!parsed.success) return failure('invalid_request','Invalid or unknown tool arguments; nothing was sent.');
+      if (def.validate && !def.validate(parsed.data))
+        return failure('invalid_request',def.invalid?.(parsed.data) || 'Invalid or unknown tool arguments; nothing was sent.');
       const authorizedArgs=hostedContext?structuredClone(parsed.data):null;
       if(hostedContext){
         let permission;
