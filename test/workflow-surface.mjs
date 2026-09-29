@@ -184,7 +184,14 @@ await core.get('get_work_queue').h({work_id:'pickup_'+'a'.repeat(32),section:'ad
 assert.deepEqual(calls.pop(),{path:'/work-items/pickup_'+'a'.repeat(32),query:{}});
 await legacy.get('get_next_action').h({work_id:'pickup_'+'a'.repeat(32),section:'administration'});
 assert.deepEqual(calls.pop(),{path:'/work-items/pickup_'+'a'.repeat(32),query:{}});
-await core.get('get_work_queue').h({section:'administration'}); assert.equal(calls.length,0);
+{ const refused=await core.get('get_work_queue').h({section:'administration'}); assert.equal(calls.length,0);
+  assert.equal(refused.isError,true);
+  assert.deepEqual(JSON.parse(refused.content[0].text),{code:'invalid_request',
+    message:'section administration requires work_id (one work item per call); nothing was sent.'});
+  const extra=await legacy.get('get_next_action').h({work_id:'pickup_'+'a'.repeat(32),section:'administration',limit:5}); assert.equal(calls.length,0);
+  assert.equal(JSON.parse(extra.content[0].text).message,'section administration accepts only work_id and section; nothing was sent.');
+  const other=await core.get('get_signals').h({signal_id:1,bogus:true}); assert.equal(calls.length,0);
+  assert.equal(JSON.parse(other.content[0].text).message,'Invalid or unknown tool arguments; nothing was sent.'); }
 const work={client_request_id:'fixture-request-1',operation:'work.review_target',work_id:'pickup_'+'a'.repeat(32),expected_revision:'a'.repeat(64),target_key:'relation:1',reviewed:true};
 assert.equal((await core.get('update_work_item').h(work)).isError,true); assert.equal(calls.length,0);
 const enabled=registry('core',{work_administration:{available:true,operations:['work.review_target','work.complete','work.reopen']}});

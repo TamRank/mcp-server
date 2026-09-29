@@ -101,7 +101,9 @@ for (const [name, args] of [ ['get_page', {}], ['get_work_queue', { section: 'ad
   ...['agent','agent_name','grant_label'].map(key => ['execute_change_set', { ...executeArgs(), [key]: 'spoof' }]) ]) {
   const fixture = await connect();
   try {
-    assert.equal(value(await fixture.client.callTool({ name, arguments: args })).code, 'invalid_request');
+    const refused = value(await fixture.client.callTool({ name, arguments: args }));
+    assert.equal(refused.code, 'invalid_request');
+    if (name === 'get_work_queue') assert.equal(refused.message, 'section administration requires work_id (one work item per call); nothing was sent.');
     assert.equal(fixture.stub.events.length, 0); assert.equal(fixture.stub.calls.length, 0);
   } finally { await fixture.close(); }
 }
