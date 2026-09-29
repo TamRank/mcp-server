@@ -93,9 +93,12 @@ export function workflowDefinitions() {
       query: a => a.section==='administration' ? strip(a,['section']) : a, omit: ['work_id'],
       validate: a => a.section!=='administration' || (Boolean(a.work_id) && Object.keys(a).every(k=>['work_id','section'].includes(k))),
       // Say which rule refused, so an agent can fix the call instead of guessing at its schema.
-      invalid: a => a.section!=='administration' ? undefined : !a.work_id
-        ? 'section administration requires work_id (one work item per call); nothing was sent.'
-        : 'section administration accepts only work_id and section; nothing was sent.' },
+      // Name every rule that refused, so one retry is enough.
+      invalid: a => { if(a.section!=='administration') return undefined;
+        const missing=!a.work_id, extra=Object.keys(a).some(k=>!['work_id','section'].includes(k));
+        return missing && extra ? 'section administration requires work_id and accepts only work_id and section; nothing was sent.'
+          : missing ? 'section administration requires work_id (one work item per call); nothing was sent.'
+          : 'section administration accepts only work_id and section; nothing was sent.'; } },
     get_signals: { description: 'Signals, not tasks.', schema: { signal_id: pageId.optional(), section: z.enum(['overview','targets','relations']).optional(), type: z.string().max(64).optional(), subject_id: pageId.optional(), ...paging },
       path: a => '/signals' + (a.signal_id ? '/' + a.signal_id : ''), omit: ['signal_id'] },
     search_pages: { description: 'Published managed pages.', schema: { q: z.string().max(200).optional(), type: z.string().regex(/^[a-z0-9_-]{1,32}$/).optional(), missing: z.enum(['meta_title','meta_description']).optional(), ...paging }, path: () => '/pages' },

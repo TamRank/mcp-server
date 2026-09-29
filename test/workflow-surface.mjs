@@ -190,6 +190,8 @@ assert.deepEqual(calls.pop(),{path:'/work-items/pickup_'+'a'.repeat(32),query:{}
     message:'section administration requires work_id (one work item per call); nothing was sent.'});
   const extra=await legacy.get('get_next_action').h({work_id:'pickup_'+'a'.repeat(32),section:'administration',limit:5}); assert.equal(calls.length,0);
   assert.equal(JSON.parse(extra.content[0].text).message,'section administration accepts only work_id and section; nothing was sent.');
+  const both=await core.get('get_work_queue').h({section:'administration',status:'open'}); assert.equal(calls.length,0);
+  assert.equal(JSON.parse(both.content[0].text).message,'section administration requires work_id and accepts only work_id and section; nothing was sent.');
   const other=await core.get('get_signals').h({signal_id:1,bogus:true}); assert.equal(calls.length,0);
   assert.equal(JSON.parse(other.content[0].text).message,'Invalid or unknown tool arguments; nothing was sent.'); }
 const work={client_request_id:'fixture-request-1',operation:'work.review_target',work_id:'pickup_'+'a'.repeat(32),expected_revision:'a'.repeat(64),target_key:'relation:1',reviewed:true};

@@ -97,13 +97,19 @@ for (const [name, args] of calls) {
 }
 
 // Invalid shape AND invalid semantic combinations never call authorization.
-for (const [name, args] of [ ['get_page', {}], ['get_work_queue', { section: 'administration' }],
+const administration = {
+  'section administration requires work_id (one work item per call); nothing was sent.': { section: 'administration' },
+  'section administration accepts only work_id and section; nothing was sent.': { section: 'administration', work_id: 'pickup_' + 'a'.repeat(32), status: 'open' },
+  'section administration requires work_id and accepts only work_id and section; nothing was sent.': { section: 'administration', status: 'open' },
+};
+for (const [name, args, message] of [ ['get_page', {}],
+  ...Object.entries(administration).map(([message, args]) => ['get_work_queue', args, message]),
   ...['agent','agent_name','grant_label'].map(key => ['execute_change_set', { ...executeArgs(), [key]: 'spoof' }]) ]) {
   const fixture = await connect();
   try {
     const refused = value(await fixture.client.callTool({ name, arguments: args }));
     assert.equal(refused.code, 'invalid_request');
-    if (name === 'get_work_queue') assert.equal(refused.message, 'section administration requires work_id (one work item per call); nothing was sent.');
+    if (message) assert.equal(refused.message, message);
     assert.equal(fixture.stub.events.length, 0); assert.equal(fixture.stub.calls.length, 0);
   } finally { await fixture.close(); }
 }
