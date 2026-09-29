@@ -107,7 +107,7 @@ export async function runFieldExecutionClient({origin,fixture:f,inspect,tlsRoot,
       const undone=await reverse(call,done,label),restored=inspect(),restoredRow=rowAt(restored,'/redirect-old');
       equal(undone.envelope.plan.items.map(i=>i.operation),['meta.update','redirect.delete','redirect.restore'],'Reverse original order with private restore');
       equal(restored.fields,before.fields,'Exact original field absence restored');
-      equal({...restoredRow,id:original.id},original,'All original native row attributes restored, except new auto ID');
+      {const stable=r=>{const{hits,hit_count,first_hit_at,last_hit_at,...rest}=r;return rest;};equal({...stable(restoredRow),id:original.id},stable(original),'All original stable row attributes restored, except new auto ID');equal(restoredRow.hits,'0','Restored redirect starts counting again (PRO e97f83f/faff077)');}
       ok(Number(restoredRow.id)!==Number(original.id),'Restoring deleted redirect never reuses an old ID');
       equal(restored.audits.length-before.audits.length,6,'One audit per forward and inverse item');
       const linked=(await call('get_changes',{change_set_id:id,kind:'execution'})).record;
