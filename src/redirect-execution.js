@@ -14,15 +14,22 @@ export const mixedExecutionSchema={...executionSchema,change_token:z.string().re
 export const redirectToken=v=>typeof v==='string'&&/^tr(?:cx|xr)1\./.test(v);
 export const redirectRecoveryToken=v=>typeof v==='string'&&v.startsWith('trrr1.');
 export const capability=(v,key)=>v?.contract_version===1&&v[key]===true;
+// Hosted serves redirect-only sets: no recovery, no mixed field+redirect sets, and only
+// the redirect operations the VPS left in its filtered capability.
+export function hostedRedirectCapability(v){
+  if(v?.contract_version!==1)return undefined;
+  return {...v,mixed_available:false,recovery_available:false,recovery_delivery_available:false,
+    operations:Array.isArray(v.operations)?v.operations.filter(op=>redirectOperations.includes(op)):[]};
+}
 export function isRedirectExecutionPlan(input,support){
   return capability(support,'available')&&Array.isArray(input.items)&&input.items.some(i=>redirectOperations.includes(i.operation))
     &&input.items.every(i=>[...fieldOperations,...redirectOperations].includes(i.operation)&&support.operations?.includes(i.operation))
     &&(input.items.every(i=>redirectOperations.includes(i.operation))||support.mixed_available===true);
 }
-export function redirectConfirmationBody(input,clientInfo){
+export function redirectConfirmationBody(input,clientInfo,auditContext){
   // Never manufacture the deletion acknowledgement; the tool input must copy it
   // after the exact proposal/warnings were shown and approved in chat.
-  const body=confirmationBody(input,clientInfo);
+  const body=confirmationBody(input,clientInfo,auditContext);
   return {...body,confirmation:{...body.confirmation,
     acknowledgements:input.confirmation.acknowledgements}};
 }

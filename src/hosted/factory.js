@@ -5,7 +5,10 @@ import { validateRestBase } from './rest-base.js';
 import { isIP } from 'node:net';
 export { discoverWorkflows } from '../scan-maintenance.js';
 
-const scopes = new Set(['site:read','meta:write','audit:read','rollback','changes:write','tasks:write','importance:write']);
+// redirects:write must be known here before the VPS may issue it: a grant carrying an unknown scope
+// fails every session of that grant ('grant scopes'). Knowing it grants nothing by itself; hosted
+// redirects stay governed by the VPS-filtered redirect_execution capability and its authorizer.
+const scopes = new Set(['site:read','meta:write','audit:read','rollback','changes:write','tasks:write','importance:write','redirects:write']);
 const uuid = value => typeof value === 'string' && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(value);
 const label = (value, max) => typeof value === 'string' && value.trim() !== ''
   && Buffer.byteLength(value, 'utf8') <= max && !/[<>\p{C}]/u.test(value);
