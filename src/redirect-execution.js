@@ -21,6 +21,13 @@ export function hostedRedirectCapability(v){
   return {...v,mixed_available:false,recovery_available:false,recovery_delivery_available:false,
     operations:Array.isArray(v.operations)?v.operations.filter(op=>redirectOperations.includes(op)):[]};
 }
+// A hosted result is released only when its frozen items stay inside that redirect-only set:
+// forward items are listed operations, inverse items are redirect operations or restores.
+export function hostedRedirectItems(data,support){
+  const p=data?.record?.envelope?.plan;if(!p)return true;
+  const inverse=p.policy_version==='workflow-redirect-rollback-1',allowed=inverse?[...redirectOperations,'redirect.restore']:support?.operations??[];
+  return Array.isArray(p.items)&&p.items.every(i=>allowed.includes(i.operation));
+}
 export function isRedirectExecutionPlan(input,support){
   return capability(support,'available')&&Array.isArray(input.items)&&input.items.some(i=>redirectOperations.includes(i.operation))
     &&input.items.every(i=>[...fieldOperations,...redirectOperations].includes(i.operation)&&support.operations?.includes(i.operation))

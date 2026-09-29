@@ -113,6 +113,41 @@ eq(hostedRedirectCapability(siteRedirects()), { ...siteRedirects(), mixed_availa
 eq(hostedRedirectCapability({ ...siteRedirects(), contract_version: 2 }), undefined, 'Unknown contract is dropped');
 eq(hostedRedirectCapability(undefined), undefined, 'Absent stays absent');
 
+// Greptile round 1: a site answer whose frozen items leave the redirect-only set is not released.
+for (const [label, items, token] of [['field item in a redirect plan', [{ item_id: other, operation: 'meta.update' }], null],
+  ['unlisted delete in a redirect plan', [{ item_id: other, operation: 'redirect.delete' }], null],
+  ['field item in an executed redirect set', [{ item_id: other, operation: 'meta.update' }], 'trcx1.']]) {
+  const answer = reply(token ? 'executed' : 'planned'); answer.record.envelope.plan.items = items;
+  answer.record.envelope.plan.required_acknowledgements = items[0].operation === 'redirect.delete' ? ['redirect_deletion'] : [];
+  const caps = redirectOnlyCaps(); caps.redirect_execution.operations = ['redirect.create','redirect.update'];
+  const fixture = await connect({ responses: [{ body: answer }] }, { scopes: eightScopes, capabilities: caps });
+  try {
+    const output = await fixture.client.callTool(token ? { name: 'execute_change_set', arguments: execute(token) } : { name: 'plan_changes', arguments: plan([create]) });
+    eq(value(output).code, 'field_execution_incompatible_response', label);
+    eq(fixture.stub.recorded.length, 0, `${label}: not recorded`);
+    ok(!JSON.stringify(output).includes(id), `${label}: set ID not released`);
+  } finally { await fixture.close(); }
+}
+// Inverse sets may carry restores and deletes (the inverse of a create), never field items.
+{
+  const answer = reply('planned', { inverse: true, operation: 'redirect.restore' });
+  const fixture = await connect({ responses: [{ body: answer }] }, { scopes: eightScopes, capabilities: redirectOnlyCaps() });
+  try {
+    eq((await fixture.client.callTool({ name: 'rollback_change_set', arguments: { change_set_id: id, client_request_id: 'synthetic-rollback-002', item_ids: [other] } })).isError,
+      undefined, 'Inverse restore released');
+  } finally { await fixture.close(); }
+}
+// Greptile round 1: a listed stored-data read is callable even if an ordinary reads entry says false.
+{
+  const caps = { ...fullCaps(), specialist_reads: { get_gsc_pages: { available: true } } };
+  caps.reads.get_gsc_pages = { available: false };
+  const fixture = await connect({ responses: [{ body: { contract_version: 2, items: [] } }] }, { capabilities: caps });
+  try {
+    ok((await fixture.client.listTools()).tools.some(t => t.name === 'get_gsc_pages'), 'Listed by its specialist entry');
+    eq((await fixture.client.callTool({ name: 'get_gsc_pages', arguments: {} })).isError, undefined, 'Listing and dispatch agree');
+  } finally { await fixture.close(); }
+}
+
 // 6. Stored-data specialist reads: listed and dispatched only with a filtered entry; scans never.
 const specialist = { get_site_diagnostics: [{ section: '404_urls' }, '/site/diagnostics'], get_gsc_pages: [{ order: 'ctr_asc' }, '/gsc/pages'],
   get_redirects: [{ section: 'rules' }, '/redirects'], get_images_missing_alt: [{}, '/images/missing-alt'],
