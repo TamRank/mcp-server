@@ -10,14 +10,19 @@ class HostedWorkflowServer extends McpServer {
   // validation while returning our bounded error instead of schema internals.
   createToolError() { return invalidRequest(); }
 }
+const native = (caps, key) => [caps.field_execution, caps.redirect_execution].some(v => v?.contract_version === 1 && v[key] === true);
+// Stored-data specialist reads a hosted connection may list; scans and schema stay specialist-only.
+export const HOSTED_SPECIALIST_READS = ['get_site_diagnostics','get_gsc_pages','get_redirects','get_images_missing_alt','get_topical_authority'];
+const specialistReadVisible = (name, caps) => HOSTED_SPECIALIST_READS.includes(name) && caps.specialist_reads?.[name]?.available === true;
 function visible(name, caps) {
-  if (name === 'execute_change_set') return caps.field_execution?.contract_version === 1 && caps.field_execution.available === true;
-  if (name === 'rollback_change_set') return caps.field_execution?.contract_version === 1 && caps.field_execution.rollback_available === true;
-  if (name === 'plan_changes') return caps.field_execution?.contract_version === 1 && caps.field_execution.available === true
+  if (name === 'execute_change_set') return native(caps, 'available');
+  if (name === 'rollback_change_set') return native(caps, 'rollback_available');
+  if (name === 'plan_changes') return native(caps, 'available')
     || caps.field_proposals?.contract_version === 2 && caps.field_proposals.available === true;
-  if (name === 'get_changes') return caps.field_execution?.contract_version === 1 && caps.field_execution.read_available === true
+  if (name === 'get_changes') return native(caps, 'read_available')
     || caps.field_proposals?.contract_version === 2 && caps.field_proposals.read_available === true;
   if (name === 'update_work_item') return caps.work_administration?.available === true;
+  if (HOSTED_SPECIALIST_READS.includes(name)) return specialistReadVisible(name, caps);
   // Hosted listing is positive: a read the capabilities do not advertise is absent.
   return caps.reads?.[name]?.available === true;
 }
@@ -27,7 +32,8 @@ export function buildWorkflowServer(client, options = {}) {
   const instructions = hosted ? WORKFLOW_INSTRUCTIONS
     .replace('agent label is unknown.', 'agent label identifies the server-validated grant.')
     .replace(/ Recovery: get_changes\(kind=recovery\)[\s\S]*?No automatic retries or legacy writers\./,
-      ' Hosted recovery and specialist modes are unavailable. No automatic retries or legacy writers.') : WORKFLOW_INSTRUCTIONS;
+      ' Hosted recovery and specialist modes are unavailable' + (HOSTED_SPECIALIST_READS.some(name => specialistReadVisible(name, hosted.filteredCapabilities))
+        ? ', except the listed stored-data reads' : '') + '. No automatic retries or legacy writers.') : WORKFLOW_INSTRUCTIONS;
   const server = new (hosted ? HostedWorkflowServer : McpServer)(workflowIdentity,
     { instructions: instructions + (options.preflight?.ok === false ? '\nStartup: ' + options.preflight.message : '') });
   const setHandler = server.server.setRequestHandler;
