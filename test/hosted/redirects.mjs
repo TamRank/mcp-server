@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { createWorkflowServer } from '../../src/hosted/factory.js';
 import { createStubVps } from './stub-vps.mjs';
-import { hostedRedirectCapability } from '../../src/redirect-execution.js';
+import { hostedRedirectCapability, hostedRedirectItems, validRedirectExecutionResponse } from '../../src/redirect-execution.js';
 import { context, connect, fullCaps, planArgs, id, other, hash } from './factory-fixtures.mjs';
 const value = output => JSON.parse(output.content[0].text);
 const grant = '22222222-2222-4222-8222-222222222222';
@@ -137,6 +137,54 @@ for (const [label, items, token] of [['field item in a redirect plan', [{ item_i
       undefined, 'Inverse restore released');
   } finally { await fixture.close(); }
 }
+// Greptile round 2: a history-only answer (no frozen plan) is held to the same redirect-only set.
+const now = 1800000000, executionId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const row = { id: 1, source_url: '/old', target_url: '/new', redirect_type: '301', match_type: 'exact', active: 1, auto_generated: 0, created_at: '2026-01-01 00:00:00' };
+const historyItem = (n, operation) => {
+  const item_id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb' + n, field = operation === 'meta.update', create = operation === 'redirect.create';
+  const before = field ? { meta_title: { exists: true, value: 'Old title' } } : create ? null : row;
+  const after = field ? { meta_title: { exists: true, value: 'New title' } } : create ? row : null;
+  return { item_id, operation, target: field ? { post_id: 1 } : create ? { source_url: '/old' } : { redirect_id: 1 }, ...(field ? { url: 'https://owned.invalid/page' } : {}),
+    before, after, fields: field ? { meta_title: { mode: 'set', value: 'New title' } } : create ? { target_url: { mode: 'set', value: '/new' } } : { acknowledge_deletion: { mode: 'set', value: true } },
+    result: { version: 1, execution_id: executionId, item_id, state: 'applied', attempts: 1, committed_at: now + 1, audit_id: 4, changed: true, invalidation: 'delivered',
+      ...(field ? {} : { redirect_result: { redirect_id: 1, before, after } }) } };
+};
+const historyOnly = operations => {
+  const items = operations.map((op, n) => historyItem(n, op)), acks = operations.includes('redirect.delete') ? ['redirect_deletion'] : [];
+  const h = { contract_version: 1, kind: 'field_execution_history', change_set_id: id, change_kind: 'forward', source_policy: 'workflow-redirect-execution-1', original_plan_hash: hash,
+    site: { installation_id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', blog_id: 1, site_origin: 'https://owned.invalid' }, attribution: { removed_at: now + 10 },
+    created_at: now, expires_at: now + 86400, state: 'executed', action_id: null, approval_recorded: true, execution_available: false,
+    origin: { kind: 'user_request', reference: 'owned-history', summary: 'Reviewed change' }, items,
+    execution: { execution_id: executionId, state: 'executed', registered_at: now, lease_until: now + 120, finished_at: now + 1,
+      attestation: { mode: 'chat_attested', received_at: '2027-01-15T08:00:00+00:00', plan_hash: hash, statement: 'user approved in chat', acknowledgements: acks,
+        provenance_asserted: true, human_verified: false, attribution_removed_at: now + 10 }, budget: { version: 1, window_start: now, operation_count: items.length, operator_limit: 30 } } };
+  return { contract_version: 1, record: { state: 'executed', history: h, approval_recorded: true, execution_available: false,
+    projection: { contract: 'execution_history_view_v1', private_proofs_omitted: true, plan_hash_scope: 'complete_stored_plan' } } };
+};
+for (const [label, operations, released] of [['history-only field item beside a redirect', ['meta.update', 'redirect.create'], false],
+  ['history-only unlisted delete', ['redirect.delete'], false], ['history-only redirect-only set', ['redirect.create'], true]]) {
+  const answer = historyOnly(operations);
+  ok(validRedirectExecutionResponse(answer, id, hash), `${label}: a well-formed history the generic validator accepts`);
+  const caps = redirectOnlyCaps(); caps.redirect_execution.operations = ['redirect.create', 'redirect.update'];
+  for (const [name, args] of [['get_changes', { kind: 'execution', change_set_id: id }], ['execute_change_set', execute('trcx1.', operations.includes('redirect.delete') ? ['redirect_deletion'] : [])]]) {
+    const fixture = await connect({ responses: [{ body: answer }] }, { scopes: eightScopes, capabilities: caps });
+    try {
+      const output = await fixture.client.callTool({ name, arguments: args });
+      eq(fixture.stub.calls.length, 1, `${label}/${name}: the site answered`);
+      if (released) {
+        eq(output.isError, undefined, `${label}/${name}: released: ${JSON.stringify(output)}`);
+        eq(value(output), answer, `${label}/${name}: released unchanged`);
+        eq(fixture.stub.recorded.map(r => r.toolName), [name], `${label}/${name}: recorded`);
+      } else {
+        eq(value(output).code, 'field_execution_incompatible_response', `${label}/${name}`);
+        eq(fixture.stub.recorded.length, 0, `${label}/${name}: not recorded`);
+        ok(!JSON.stringify(output).includes(id), `${label}/${name}: set ID not released`);
+      }
+    } finally { await fixture.close(); }
+  }
+}
+// An answer carrying neither a plan nor a history is never released.
+ok(!hostedRedirectItems({ contract_version: 1, record: { state: 'executed' } }, siteRedirects()), 'Neither plan nor history: not released');
 // Greptile round 1: a listed stored-data read is callable even if an ordinary reads entry says false.
 {
   const caps = { ...fullCaps(), specialist_reads: { get_gsc_pages: { available: true } } };

@@ -23,10 +23,13 @@ export function hostedRedirectCapability(v){
 }
 // A hosted result is released only when its frozen items stay inside that redirect-only set:
 // forward items are listed operations, inverse items are redirect operations or restores.
+// A history-only answer is held to the same set; an answer carrying neither is never released.
 export function hostedRedirectItems(data,support){
-  const p=data?.record?.envelope?.plan;if(!p)return true;
-  const inverse=p.policy_version==='workflow-redirect-rollback-1',allowed=inverse?[...redirectOperations,'redirect.restore']:support?.operations??[];
-  return Array.isArray(p.items)&&p.items.every(i=>allowed.includes(i.operation));
+  const r=data?.record,p=r?.envelope?.plan,h=p?undefined:r?.history??r?.history_record?.record?.history;
+  if(!p&&!h)return false;
+  const inverse=(p?p.policy_version:h.source_policy)==='workflow-redirect-rollback-1',items=(p??h).items;
+  const allowed=inverse?[...redirectOperations,'redirect.restore']:support?.operations??[];
+  return Array.isArray(items)&&items.every(i=>allowed.includes(i.operation));
 }
 export function isRedirectExecutionPlan(input,support){
   return capability(support,'available')&&Array.isArray(input.items)&&input.items.some(i=>redirectOperations.includes(i.operation))
