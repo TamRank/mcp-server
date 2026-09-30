@@ -8,6 +8,7 @@ import { rateLimitAdvice } from './workflow-rest.js';
 import {fieldProposalSchema,fieldProposalItem,validFieldProposal} from './field-proposals.js';
 import {schemaPreviewItem,validSchemaPreviewResponse} from './schema-preview.js';
 import {workflowCatalog} from './workflow-catalog.js';
+import {clampToToolProfile} from './workflow-profile.js';
 import {sourceConfirmation,validSourceStart,sourcePath,sourceArgs} from './source-scans.js';
 import {scanConfirmation,pagespeedRoute,pagespeedSupport,discoverPageSpeedScans,validPageSpeedStart,
   validPageSpeedProposal,validPageSpeedProgress,pageSpeedStartBody,pageSpeedProgress} from './pagespeed-scans.js';
@@ -130,7 +131,7 @@ export function workflowDefinitions() {
   };
 }
 
-export function registerWorkflowTools(server, client, { profile = 'core', preflight = { ok: true }, capabilities = null, maintenanceOnly = false, recovery = null, hostedContext = null } = {}) {
+export function registerWorkflowTools(server, client, { profile = 'core', preflight = { ok: true }, capabilities = null, maintenanceOnly = false, recovery = null, hostedContext = null, profileClamp = false } = {}) {
   if (!['core','legacy','specialist'].includes(profile)) throw new Error('Unknown workflow tool profile.');
   if(hostedContext)capabilities={...capabilities,schema_execution:undefined,schema_preview:undefined,
     redirect_execution:hostedRedirectCapability(capabilities?.redirect_execution),
@@ -472,8 +473,10 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
           if(recovery){try{data.scan_recovery=(await client.get('/scans/recovery/capabilities')).scan_recovery || {receipt_review_available:false,settlement_available:false};}
             catch{data.scan_recovery={receipt_review_available:false,settlement_available:false};}}
         }
+        // A clamped profile reports the live site through the same clamp that chose its tools.
+        const shown=profileClamp&&canonical==='get_capabilities'?clampToToolProfile(data):data;
         return result(hostedContext&&canonical==='get_capabilities'?hostedContext.filteredCapabilities
-          :deprecated ? { deprecated: true, replacement: canonical, remove_in: '0.5.0', data } : data);
+          :deprecated ? { deprecated: true, replacement: canonical, remove_in: '0.5.0', data:shown } : shown);
       } catch (err) { const refused=typeof err.code==='string'&&def.refused?.(parsed.data,err.code);
         return failure(typeof err.code === 'string' ? err.code : 'workflow_request_failed', err.status ? `Site refused the request (${err.status}). ${err.message}${refused?' '+refused:''}` : err.message,
         hostedContext?err.data:err.status===429?rateLimitAdvice(err.data):undefined); }
@@ -511,9 +514,9 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
     catalog.publish();return;
   }
   for (const [name, def] of Object.entries(defs)) register(name, def);
-  // Stored-data specialist reads. The specialist profile registers all of them; hosted core
-  // registers them too, but listing and dispatch need the VPS-filtered specialist_reads entry and
-  // the authorizer decides every call. Scans (start_scan/get_scan_status/close_scan) stay specialist-only.
+  // Stored-data specialist reads. The specialist profile registers all of them; hosted core and a
+  // clamped (workflow-v2-1) stdio core register them too, but listing and dispatch need a positive
+  // specialist_reads entry, and hosted the authorizer decides every call. Scans (start_scan/get_scan_status/close_scan) stay specialist-only.
   const specialistReads={
     get_site_diagnostics:{
       description:'Stored. 404_events:url; q:case-sensitive.',
@@ -548,7 +551,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       validate:a=>(a.section || 'overview')==='overview'?Object.keys(a).every(k=>k==='section'):['pages','topics'].includes(a.section)?a.cluster!==undefined:a.cluster===undefined
     },
   };
-  if (hostedContext && profile === 'core') for (const [name, def] of Object.entries(specialistReads)) register(name, def);
+  if ((hostedContext || profileClamp) && profile === 'core') for (const [name, def] of Object.entries(specialistReads)) register(name, def);
   if (profile === 'specialist') for (const name of ['get_site_diagnostics','get_gsc_pages','get_redirects','get_images_missing_alt','get_topical_authority','start_scan','get_scan_status']) {
     register(name, specialistReads[name]??(name==='get_scan_status'?{
       description:'schema_source+proposal_id:own; other IDs:admin.',

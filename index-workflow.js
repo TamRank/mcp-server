@@ -31,11 +31,11 @@ if(process.env.TAMRANK_SCAN_RECEIPT_DIR){
     await receiptStore.checkReadable();
   } catch {console.error('Private recovery storage is unavailable. Check the configured private directory; no files were created or changed.');process.exit(1);}
 }
-const {capabilities,preflight,maintenanceOnly,recoverySupport:support}=await discoverWorkflows(client,{profile,preview:process.env.TAMRANK_WORKFLOW_PREVIEW==='1'});
+const {capabilities,preflight,maintenanceOnly,recoverySupport:support,profileClamp}=await discoverWorkflows(client,{profile,preview:process.env.TAMRANK_WORKFLOW_PREVIEW==='1'});
 if(support&&capabilities&&(receiptStore||support.retained_receipt_review_available===true)){
   capabilities.scan_recovery=support;recovery=new ScanReceiptRecovery({siteUrl:process.env.TAMRANK_SITE_URL,
     pat:process.env.TAMRANK_PAT,receiptStore,allowServerReceipts:support.retained_receipt_review_available===true,
     timeoutMs:Number(process.env.TAMRANK_TIMEOUT||30000),routeStyle:process.env.TAMRANK_REST_STYLE||'pretty'});
 }
-const server = buildWorkflowServer(client, { profile, capabilities, preflight, maintenanceOnly, recovery });
+const server = buildWorkflowServer(client, { profile, capabilities, preflight, maintenanceOnly, recovery, profileClamp });
 await server.connect(new StdioServerTransport());

@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import { rateLimitAdvice } from './workflow-rest.js';
 import {discoverRecovery} from './scan-recovery-chat.js';
+import {bridgeCompatible,needsProfileClamp,clampToToolProfile} from './workflow-profile.js';
 export const scanId=z.string().regex(/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/);
 export const maintenanceAcks=['outcome_remains_unknown','inflight_provider_request_may_continue',
   'release_only_this_reservation_without_retry','preserve_original_results_and_approval'];
@@ -22,12 +23,14 @@ export async function discoverSourceScans(client){
  * A licence denial may enter maintenance-only mode; auth/network failures may not.
  */
 export async function discoverWorkflows(client,{preview=false,profile='core'}={}) {
-  let capabilities=null,preflight={ok:true},maintenanceOnly=false;
+  let capabilities=null,preflight={ok:true},maintenanceOnly=false,profileClamp=false;
   try {
     capabilities=await client.get('/capabilities');
-    const compatible=capabilities.full_v2_compatible===true || capabilities.mcp_bridge_compatibility==='safe-beta-1';
-    if(!compatible && !preview)
+    if(!bridgeCompatible(capabilities) && !preview)
       preflight={ok:false,code:'workflow_upgrade_required',message:'This site has not activated a compatible TamRank workflow profile. Activate the safe beta profile in WordPress or use an explicit development preview; no legacy writer fallback.'};
+    // workflow-v2-1 is served with the safe-beta-1 tool profile, as hosted. An explicit development
+    // preview keeps the full site capabilities it already had before this profile was admitted.
+    else if(!preview && needsProfileClamp(capabilities)){capabilities=clampToToolProfile(capabilities);profileClamp=true;}
   } catch(err) {
     preflight={ok:false,code:err.code || 'workflow_unavailable',message:'Workflow connection check failed. Check site, token and readiness, then restart.'};
     if(err.status===429)preflight={...preflight,message:'Connection check rate-limited. Wait before restarting; no automatic retry.',...rateLimitAdvice(err.data)};
@@ -60,5 +63,5 @@ export async function discoverWorkflows(client,{preview=false,profile='core'}={}
     capabilities={...capabilities,schema_source_jobs,pagespeed_execution};
     recoverySupport=recovery;
   }
-  return {capabilities,preflight,maintenanceOnly,recoverySupport};
+  return {capabilities,preflight,maintenanceOnly,recoverySupport,profileClamp};
 }
