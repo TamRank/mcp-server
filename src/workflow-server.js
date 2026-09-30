@@ -33,8 +33,10 @@ const withoutRecovery = (prefix, caps) => WORKFLOW_INSTRUCTIONS.replace(/ Recove
 
 export function buildWorkflowServer(client, options = {}) {
   const hosted = options.hostedContext;
-  // A stdio core session on a clamped profile (workflow-v2-1) lists exactly what hosted lists for it.
-  const clamped = !hosted && options.profileClamp === true && (options.profile ?? 'core') === 'core' && options.capabilities;
+  // A stdio session on a clamped profile (workflow-v2-1) lists exactly what hosted lists for it. The
+  // clamp removes scans and recovery, so a specialist session gets the core toolset; legacy keeps its
+  // deprecated inventory, which a positive capability listing would hide wholesale.
+  const clamped = !hosted && options.profileClamp === true && (options.profile ?? 'core') !== 'legacy' && options.capabilities;
   const listed = hosted ? hosted.filteredCapabilities : clamped ? options.capabilities : null;
   const instructions = hosted ? withoutRecovery('Hosted', hosted.filteredCapabilities)
     .replace('agent label is unknown.', 'agent label identifies the server-validated grant.')
@@ -50,7 +52,7 @@ export function buildWorkflowServer(client, options = {}) {
     } : handler;
     return setHandler.call(this, schema, guarded);
   };
-  try { registerWorkflowTools(server, client, options); }
+  try { registerWorkflowTools(server, client, clamped ? { ...options, profile: 'core' } : options); }
   finally { if (listed) server.server.setRequestHandler = setHandler; }
   return server;
 }

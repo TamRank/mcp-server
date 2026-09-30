@@ -61,8 +61,8 @@ async function listed(server){
   return {tools,client,async close(){await client.close();await server.close();}};
 }
 async function stdio(caps,options={}){
-  const wire=site(caps),found=await discoverWorkflows(wire,{profile:'core',...options});
-  const server=buildWorkflowServer(wire,{profile:'core',capabilities:found.capabilities,preflight:found.preflight,
+  const profile=options.profile??'core',wire=site(caps),found=await discoverWorkflows(wire,{profile,...options});
+  const server=buildWorkflowServer(wire,{profile,capabilities:found.capabilities,preflight:found.preflight,
     maintenanceOnly:found.maintenanceOnly,profileClamp:found.profileClamp});
   return {found,wire,...await listed(server)};
 }
@@ -156,4 +156,33 @@ test('full v2 and explicit development preview keep their unclamped capabilities
   assert.equal(fullFound.profileClamp,false);assert.deepEqual(fullFound.capabilities,full);
   const previewFound=await discoverWorkflows(site(v21()),{profile:'core',preview:true});
   assert.equal(previewFound.profileClamp,false);assert.deepEqual(previewFound.capabilities,v21());
+});
+
+test('a specialist session on workflow-v2-1 gets the clamped core toolset and instructions',async()=>{
+  const core=await stdio(v21()),specialist=await stdio(v21(),{profile:'specialist'});
+  try{
+    assert.equal(specialist.found.profileClamp,true);
+    assert.deepEqual(specialist.found.capabilities,hostedFiltered());
+    assert.deepEqual(specialist.tools,core.tools);
+    for(const hidden of ['start_scan','get_scan_status','close_scan'])assert.equal(specialist.tools.includes(hidden),false,hidden);
+    assert.equal(specialist.client.getInstructions(),core.client.getInstructions());
+    assert.equal(specialist.client.getInstructions().includes('Recovery: get_changes(kind=recovery)'),false);
+    // Not registered, so not callable either: the SDK refuses an unknown tool before any request.
+    const scan=await specialist.client.callTool({name:'start_scan',arguments:{mode:'preview',type:'index',post_ids:[1]}}).catch(err=>({thrown:err}));
+    assert.ok(scan.thrown||scan.isError===true);
+    const result=await specialist.client.callTool({name:'get_capabilities',arguments:{}});
+    assert.deepEqual(JSON.parse(result.content[0].text),hostedFiltered());
+    assert.deepEqual(specialist.wire.calls,['/capabilities','/capabilities']);
+  }finally{await core.close();await specialist.close();}
+});
+
+test('a specialist session on safe-beta-1 is unchanged: raw capabilities, scan tools, recovery instructions',async()=>{
+  const raw=v21({mcp_bridge_compatibility:'safe-beta-1'});
+  const local=await stdio(raw,{profile:'specialist'});
+  try{
+    assert.equal(local.found.profileClamp,false);
+    assert.deepEqual(local.found.capabilities,raw);
+    for(const tool of [...specialistNames,'start_scan','get_scan_status','close_scan'])assert.equal(local.tools.includes(tool),true,tool);
+    assert.equal(local.client.getInstructions().includes('Recovery: get_changes(kind=recovery)'),true);
+  }finally{await local.close();}
 });

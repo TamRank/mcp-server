@@ -18,6 +18,9 @@ project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html
   served with the `safe-beta-1` tool profile: its capabilities pass the hosted allowlist
   (no schema execution or preview, scans, recovery or mixed sets), `tools/list` shows
   what hosted shows for that site, and `get_capabilities` reports the clamped view.
+  A `specialist` session on such a site gets the same clamped toolset and instructions
+  as `core` (no scan tools that the clamp would refuse); `legacy` is unchanged. The
+  profile gate in `WORKFLOW-PREVIEW.md` now describes this admission.
   `safe-beta-1` sites, full v2 sites and explicit development previews are unchanged;
   any other profile still needs an upgrade.
 

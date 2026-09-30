@@ -628,7 +628,11 @@ site-local `TAMRANK_PAT` and `TAMRANK_SITE_URL`. HTTPS is required except litera
 `TAMRANK_TIMEOUT` is milliseconds, 1–120000, default 30000.
 
 The plugin must expose contract 2 and either full V2 compatibility or the exact
-`safe-beta-1` MCP bridge compatibility. Other incomplete profiles are refused.
+`safe-beta-1` or `workflow-v2-1` MCP bridge compatibility. A `workflow-v2-1` site
+(TamRank PRO 0.9.22+) is served with the `safe-beta-1` tool profile, as the hosted
+bridge serves it: no schema execution or preview, scans, recovery or mixed sets,
+and `core` and `specialist` both get that clamped toolset. Other incomplete
+profiles are refused with `workflow_upgrade_required`.
 `TAMRANK_WORKFLOW_PREVIEW=1` remains only for explicit development fixtures; it
 does not belong in normal beta setup and cannot enable server-side capabilities.
 
