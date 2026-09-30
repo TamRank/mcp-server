@@ -8,6 +8,19 @@ project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 > This package has not been published by these repository changes. The reviewed
 > first beta version is `0.4.0-beta.1`; a stable release remains a later decision.
 
+## [Unreleased]
+
+### Changed
+
+- A site on the `workflow-v2-1` release profile (TamRank PRO 0.9.22+, reporting
+  `full_v2_compatible: false`) now connects over stdio instead of getting
+  `workflow_upgrade_required`, as the hosted bridge has since 28 September 2026. It is
+  served with the `safe-beta-1` tool profile: its capabilities pass the hosted allowlist
+  (no schema execution or preview, scans, recovery or mixed sets), `tools/list` shows
+  what hosted shows for that site, and `get_capabilities` reports the clamped view.
+  `safe-beta-1` sites, full v2 sites and explicit development previews are unchanged;
+  any other profile still needs an upgrade.
+
 ## [0.4.0-beta.1] - 2026-09-15
 
 ### Changed

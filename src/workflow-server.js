@@ -27,25 +27,30 @@ function visible(name, caps) {
   return caps.reads?.[name]?.available === true;
 }
 
+const withoutRecovery = (prefix, caps) => WORKFLOW_INSTRUCTIONS.replace(/ Recovery: get_changes\(kind=recovery\)[\s\S]*?No automatic retries or legacy writers\./,
+  ` ${prefix} recovery and specialist modes are unavailable` + (HOSTED_SPECIALIST_READS.some(name => specialistReadVisible(name, caps))
+    ? ', except the listed stored-data reads' : '') + '. No automatic retries or legacy writers.');
+
 export function buildWorkflowServer(client, options = {}) {
   const hosted = options.hostedContext;
-  const instructions = hosted ? WORKFLOW_INSTRUCTIONS
+  // A stdio core session on a clamped profile (workflow-v2-1) lists exactly what hosted lists for it.
+  const clamped = !hosted && options.profileClamp === true && (options.profile ?? 'core') === 'core' && options.capabilities;
+  const listed = hosted ? hosted.filteredCapabilities : clamped ? options.capabilities : null;
+  const instructions = hosted ? withoutRecovery('Hosted', hosted.filteredCapabilities)
     .replace('agent label is unknown.', 'agent label identifies the server-validated grant.')
-    .replace(/ Recovery: get_changes\(kind=recovery\)[\s\S]*?No automatic retries or legacy writers\./,
-      ' Hosted recovery and specialist modes are unavailable' + (HOSTED_SPECIALIST_READS.some(name => specialistReadVisible(name, hosted.filteredCapabilities))
-        ? ', except the listed stored-data reads' : '') + '. No automatic retries or legacy writers.') : WORKFLOW_INSTRUCTIONS;
+    : clamped ? withoutRecovery('For this site profile,', options.capabilities) : WORKFLOW_INSTRUCTIONS;
   const server = new (hosted ? HostedWorkflowServer : McpServer)(workflowIdentity,
     { instructions: instructions + (options.preflight?.ok === false ? '\nStartup: ' + options.preflight.message : '') });
   const setHandler = server.server.setRequestHandler;
-  if (hosted) server.server.setRequestHandler = function(schema, handler) {
+  if (listed) server.server.setRequestHandler = function(schema, handler) {
     const method = schema.shape?.method?.value;
     const guarded = method === 'tools/list' ? async (...args) => {
       const listing = await handler(...args);
-      return { ...listing, tools: listing.tools.filter(tool => visible(tool.name, hosted.filteredCapabilities)) };
+      return { ...listing, tools: listing.tools.filter(tool => visible(tool.name, listed)) };
     } : handler;
     return setHandler.call(this, schema, guarded);
   };
   try { registerWorkflowTools(server, client, options); }
-  finally { if (hosted) server.server.setRequestHandler = setHandler; }
+  finally { if (listed) server.server.setRequestHandler = setHandler; }
   return server;
 }
