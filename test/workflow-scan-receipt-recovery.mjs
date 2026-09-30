@@ -29,7 +29,7 @@ await test('Internal recovery bridge: explicit exact review, no private leakage 
   const original=await readFile(join(directory,receipt_reference+'.json'));
   const realFetch=globalThis.fetch;let calls=[],review=fresh(),responseFault=null;
   globalThis.fetch=async(url,options)=>{
-    calls.push({url:String(url),body:JSON.parse(options.body)});
+    calls.push({url:String(url),body:JSON.parse(new TextDecoder().decode(options.body))});
     if(responseFault)return responseFault();
     return reply(String(url).endsWith('/receipt-review')?review:{contract_version:2,view:'result_settlement',execution_enabled:false,
       provider_requested_this_call:false,replayed:false,settlement_recorded:true,progress:{execution_id:id,runtime:{settlement:{result_receipt:packet}}}});
