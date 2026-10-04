@@ -49,6 +49,23 @@ for(const status of [301,302,307,308]) {
 for(const response of [{failure:'timeout'},{failure:'network'},{status:401,html:'<html>WAF</html>'},{status:401,body:{code:'unknown',message:'no',data:{status:401}}}]) {
  const {client,stub}=fresh([response]);await assert.rejects(client.post('/changes/proposals',{}),e=>e.code==='site_unavailable'&&e.data.outcome_unknown===true&&e.data.retryable===false);assert.equal(stub.calls.length,1);
 }
+for(const path of ['/changes/proposals','/changes/executions']) {
+ const {client,stub}=fresh([{status:404,body:{code:'change_plan_target_unavailable',message:'Target unavailable.',data:{status:404}}}]);
+ await assert.rejects(client.post(path,{}),e=>e.code==='change_plan_target_unavailable'&&e.data.outcome_unknown===false
+   &&e.data.retryable===false&&e.message==='Target unavailable.');
+ assert.equal(stub.calls.length,1);
+}
+for(const response of [
+ {status:404,body:{code:'change_plan_target_unavailable',message:'Target unavailable.',data:{status:500}}},
+ {status:404,body:{code:'rest_no_route',message:'Route missing.',data:{status:404}}},
+]) {
+ const {client}=fresh([response]);
+ await assert.rejects(client.post('/changes/executions',{}),e=>e.code==='site_unavailable'&&e.data.outcome_unknown===true);
+}
+{
+ const {client}=fresh([{status:404,body:{code:'change_plan_target_unavailable',message:'Target unavailable.',data:{status:404}}}]);
+ await assert.rejects(client.post('/changes/executions/'+id+'/execute',{}),e=>e.code==='site_unavailable'&&e.data.outcome_unknown===true);
+}
 {
  let calls=0;const client=new WorkflowClient({rest_base_url:pretty,rest_style:'pretty',hosted:true,timeoutMs:10,
  transport:{request(){calls++;return new Promise(()=>{});}}});
