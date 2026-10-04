@@ -125,15 +125,21 @@ export function compactWorkflowSchema(root){
 export function compactWorkflowExecution(value){
   return value&&Object.keys(value).length===1&&value.taskSupport==='forbidden'?undefined:value;
 }
-export function workflowCatalog(server){
+export function workflowCatalog(server,{hosted=false}={}){
   if(!server.server?.setRequestHandler)return {server,publish(){}};
   const entries=[];
   return {
     server:{registerTool(name,config,handler){const tool=server.registerTool(name,config,handler);entries.push({name,tool});return tool;}},
     publish(){server.server.setRequestHandler(ListToolsRequestSchema,()=>({tools:entries.filter(({tool})=>tool.enabled).map(({name,tool})=>{
       const input=normalizeObjectSchema(tool.inputSchema);
+      const published=input?compactWorkflowSchema(toJsonSchemaCompat(input,{strictUnions:true,pipeStrategy:'input'})):{type:'object'};
+      // Some hosted connectors add one private argument while validating the
+      // advertised schema, even for a zero-argument tool. This is a listing-only
+      // allowance; the SDK's registered Zod schema remains strict at invocation.
+      const inputSchema=hosted&&name==='get_capabilities'&&published.type==='object'&&published.maxProperties===0
+        ?{type:'object',maxProperties:1}:published;
       const result={name,title:tool.title,description:tool.description,
-        inputSchema:input?compactWorkflowSchema(toJsonSchemaCompat(input,{strictUnions:true,pipeStrategy:'input'})):{type:'object'},
+        inputSchema,
         annotations:tool.annotations,execution:compactWorkflowExecution(tool.execution),_meta:tool._meta};
       if(tool.outputSchema)result.outputSchema=toJsonSchemaCompat(normalizeObjectSchema(tool.outputSchema),{strictUnions:true,pipeStrategy:'output'});
       return result;
