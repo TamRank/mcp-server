@@ -409,7 +409,9 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
           if(!valid||(!isSchema&&def.fieldExecution==='execute'&&data?.record?.history&&!matchesHistoricalExecution(data,a)))
             return failure('field_execution_incompatible_response','Result could not be verified. Reconcile this set with get_changes(kind=execution); do not repeat writes automatically.');
           return result(data);
-        }catch(err){return failure(err.code||'field_execution_uncertain','Workflow refused or uncertain. Read the same set with get_changes(kind=execution); no automatic retry or legacy fallback.',
+        }catch(err){if(nativePlan&&err.code==='change_plan_target_unavailable'&&err.status===404&&err.data?.outcome_unknown===false)
+          return failure(err.code,`Site refused the request (404). ${err.message}`,err.data);
+          return failure(err.code||'field_execution_uncertain','Workflow refused or uncertain. Read the same set with get_changes(kind=execution); no automatic retry or legacy fallback.',
           {automatic_retry:false,...(hostedContext?err.data:err.status===429?rateLimitAdvice(err.data):{})});}
       }
       if(def.fieldRead&&parsed.data.kind==='draft')delete parsed.data.kind;

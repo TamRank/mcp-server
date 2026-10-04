@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { isSiteReadRefusal, mapHostedOutcome } from '../../src/hosted/error-map.js';
+import { isSitePlanRefusal, isSiteReadRefusal, mapHostedOutcome } from '../../src/hosted/error-map.js';
 
 const cases = [
   [402, 'pro_required', 'site_entitlement_required'],
@@ -46,4 +46,21 @@ assert.deepEqual(mapHostedOutcome({ status: 401, code: 'agent_token_revoked', va
 assert.deepEqual(mapHostedOutcome({ status: 429, retryAfter: 20, validWpEnvelope: true }),
   { code: 'rate_limited', retryable: true, outcome_unknown: false, retry_after: 20 });
 assert.equal(Object.hasOwn(mapHostedOutcome({ status: 429, retryAfter: 3601, validWpEnvelope: true }), 'retry_after'), false);
+const planRefusal = { status: 404, code: 'change_plan_target_unavailable', validWpEnvelope: true,
+  kind: 'write', method: 'POST', path: '/changes/executions' };
+for (const path of ['/changes/executions', '/changes/proposals']) {
+  assert.equal(isSitePlanRefusal({ ...planRefusal, path }), true);
+  assert.deepEqual(mapHostedOutcome({ ...planRefusal, path }),
+    { code: 'change_plan_target_unavailable', retryable: false, outcome_unknown: false });
+}
+for (const changes of [
+  { path: '/changes/executions/' + 'a'.repeat(36) + '/execute' },
+  { path: '/work-items' }, { method: 'GET' }, { status: 403 },
+  { code: 'rest_no_route' }, { validWpEnvelope: false },
+]) {
+  assert.equal(isSitePlanRefusal({ ...planRefusal, ...changes }), false);
+  assert.deepEqual(mapHostedOutcome({ ...planRefusal, ...changes }),
+    { code: 'site_unavailable', retryable: false, outcome_unknown: true },
+    'No other route, method, code, status or envelope becomes a definitive write refusal');
+}
 console.log('PASS: hosted mapping, known WP errors, site read refusals passed through, ERR02 unknown JSON/HTML, uncertain writes; no persistent actions.');

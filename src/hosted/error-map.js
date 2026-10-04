@@ -6,12 +6,21 @@
 // - 408 (timeout), 425 (too early), 429 (rate limit): transient, the read stays retryable.
 // rest_* is WordPress itself (no route, forbidden), not a TamRank decision.
 const NOT_A_REFUSAL = [401, 402, 403, 407, 408, 425, 429];
+const PLAN_ROUTES = new Set(['/changes/proposals', '/changes/executions']);
 export function isSiteReadRefusal({ status = 0, code, validWpEnvelope = false, kind = 'read' } = {}) {
   return kind === 'read' && validWpEnvelope === true && status >= 400 && status < 500 && !NOT_A_REFUSAL.includes(status)
     && typeof code === 'string' && !/^(rest|agent|cloud|pro)_/.test(code);
 }
 
-export function mapHostedOutcome({ status = 0, code, validWpEnvelope = false, kind = 'read', retryAfter } = {}) {
+// These two POST routes only prepare a draft. The PRO planner resolves the
+// target before inserting a set, so this exact validated refusal proves that
+// no proposal was created. The same code on execute/recovery remains uncertain.
+export function isSitePlanRefusal({ status = 0, code, validWpEnvelope = false, kind, method, path } = {}) {
+  return kind === 'write' && method === 'POST' && PLAN_ROUTES.has(path)
+    && status === 404 && validWpEnvelope === true && code === 'change_plan_target_unavailable';
+}
+
+export function mapHostedOutcome({ status = 0, code, validWpEnvelope = false, kind = 'read', method, path, retryAfter } = {}) {
   const known = {
     '402:pro_required': 'site_entitlement_required',
     '401:agent_token_revoked': 'site_reconnect_required',
@@ -30,6 +39,8 @@ export function mapHostedOutcome({ status = 0, code, validWpEnvelope = false, ki
   const mapped = validWpEnvelope && (known[`${status}:${code}`]
     || (code === 'workflow_upgrade_required' ? 'site_upgrade_required' : undefined));
   if (mapped) return { code: mapped, retryable: false, outcome_unknown: false };
+  if (isSitePlanRefusal({ status, code, validWpEnvelope, kind, method, path }))
+    return { code, retryable: false, outcome_unknown: false };
   if (isSiteReadRefusal({ status, code, validWpEnvelope, kind })) return { code, retryable: false, outcome_unknown: false };
   return { code: 'site_unavailable', retryable: kind === 'read', outcome_unknown: kind === 'write' };
 }

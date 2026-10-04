@@ -2,7 +2,7 @@
 import { ApiError } from './workflow-error.js';
 import { validateRestBase, workflowUrl, legacyRestBase } from './hosted/rest-base.js';
 import { createFetchTransport } from './hosted/fetch-transport.js';
-import { isSiteReadRefusal, mapHostedOutcome } from './hosted/error-map.js';
+import { isSitePlanRefusal, isSiteReadRefusal, mapHostedOutcome } from './hosted/error-map.js';
 import { isScanReceipt } from './scan-receipt-store.js';
 
 // Only bounded operational advice crosses the error boundary; never arbitrary server data.
@@ -127,9 +127,10 @@ export class WorkflowClient {
         const advice=response.status===429?rateLimitAdvice(data.data):undefined;
         if (this.#hosted) {
           // Only the site's own code classifies; a replaced code is no evidence of a site decision.
-          const outcome = {status: response.status, code: siteCode, validWpEnvelope, kind: method === 'GET' ? 'read' : 'write'};
+          const outcome = {status: response.status, code: siteCode, validWpEnvelope, kind: method === 'GET' ? 'read' : 'write', method, path};
           const mapped = mapHostedOutcome({...outcome, retryAfter: advice?.retry_after});
-          throw new ApiError(response.status, mapped.code, mapped.code === siteCode && isSiteReadRefusal(outcome) ? message : 'The site refused this workflow request.', mapped);
+          throw new ApiError(response.status, mapped.code,
+            mapped.code === siteCode && (isSiteReadRefusal(outcome) || isSitePlanRefusal(outcome)) ? message : 'The site refused this workflow request.', mapped);
         }
         throw new ApiError(response.status, code, message, retained ? { receipt_reference: retained.receipt_reference, receipt_retained: true } : advice);
       }

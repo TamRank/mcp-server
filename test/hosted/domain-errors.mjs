@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { connect } from './factory-fixtures.mjs';
+import { connect, planArgs } from './factory-fixtures.mjs';
 
 // A read the site refused with its own TamRank reason is not an outage. The
 // caller gets that reason and is told not to retry; everything that is not
@@ -74,7 +74,7 @@ for (const code of ['Workflow-Work-Unavailable', 'x'.repeat(81), '9workflow']) {
   assert.ok(output.message.startsWith('Site refused the request (404). Synthetic site reason. No administration state exists for this work_id:'), output.message);
   assert.doesNotMatch(output.message, /in the queue but|This work item is/);
 }
-// Writes are out of scope: a refused write still reports an unknown outcome.
+// Ordinary refused writes still report an unknown outcome.
 {
   const { url, ...output } = await call('update_work_item', { client_request_id: 'synthetic-work-001', operation: 'work.note',
     work_id: 'manual_fixture', expected_revision: 'a'.repeat(64), note: 'Synthetic note' },
@@ -82,4 +82,14 @@ for (const code of ['Workflow-Work-Unavailable', 'x'.repeat(81), '9workflow']) {
   assert.deepEqual(output, { code: 'site_unavailable', message: 'Site refused the request (404). The site refused this workflow request.',
     retryable: false, outcome_unknown: true });
 }
-console.log('PASS: hosted reads pass TamRank domain refusals through (code, site text, not retryable); rest_*, HTML, auth statuses, mismatched envelopes and writes stay site_unavailable.');
+// A validated target refusal on one of the two draft-only plan routes proves that
+// this proposal was not created. It does not prove anything about execute routes.
+{
+  const { url, ...output } = await call('plan_changes', planArgs(),
+    wp(404, 'change_plan_target_unavailable', 'This target cannot be changed.'));
+  assert.equal(url, 'https://site.example.invalid/wp-json/tamrank/v2/changes/executions');
+  assert.deepEqual(output, { code: 'change_plan_target_unavailable',
+    message: 'Site refused the request (404). This target cannot be changed.',
+    retryable: false, outcome_unknown: false });
+}
+console.log('PASS: hosted reads and the exact pre-storage plan refusal pass through; ordinary writes, rest_*, HTML, auth statuses and mismatched envelopes stay site_unavailable.');
