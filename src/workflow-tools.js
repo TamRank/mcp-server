@@ -9,6 +9,8 @@ import {fieldProposalSchema,fieldProposalItem,validFieldProposal} from './field-
 import {schemaPreviewItem,validSchemaPreviewResponse} from './schema-preview.js';
 import {workflowCatalog} from './workflow-catalog.js';
 import {clampToToolProfile} from './workflow-profile.js';
+import {hostedToolSecuritySchemes} from './hosted/tool-scopes.js';
+import {hostedScopeChallengeMeta} from './hosted/auth-challenge.js';
 import {sourceConfirmation,validSourceStart,sourcePath,sourceArgs} from './source-scans.js';
 import {scanConfirmation,pagespeedRoute,pagespeedSupport,discoverPageSpeedScans,validPageSpeedStart,
   validPageSpeedProposal,validPageSpeedProgress,pageSpeedStartBody,pageSpeedProgress} from './pagespeed-scans.js';
@@ -138,7 +140,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
     field_execution:capabilities?.field_execution?{...capabilities.field_execution,recovery_available:false}:undefined};
   const serverOriginal=server;
   const clientInfo=()=>serverOriginal.server?.getClientVersion?.();
-  const catalog=workflowCatalog(server);server=catalog.server;
+  const catalog=workflowCatalog(server,{hosted:Boolean(hostedContext)});server=catalog.server;
   const defs = workflowDefinitions();
   const schemaExecution=capabilities?.schema_execution;
   const schemaExecutionWrite=capability(schemaExecution,'available')&&schemaExecution.record_contract==='schema_execution_view_v1'
@@ -233,7 +235,10 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   // reach current authorization before an availability decision. Listing is a
   // separate projection; SDK tool handles must not be disabled to hide a tool.
   if(hostedContext){
-    if(!defs.execute_change_set.fieldExecution)defs.execute_change_set={...defs.execute_change_set,schema:executionSchema};
+    // A prior grant may lack redirects:write, causing the VPS to hide redirect
+    // capability. Keep redirect tokens syntactically valid through the SDK so
+    // the authorizer can return an OAuth scope challenge before capability gates.
+    defs.execute_change_set={...defs.execute_change_set,schema:mixedExecutionSchema};
     if(!defs.rollback_change_set.fieldExecution)defs.rollback_change_set={...defs.rollback_change_set,schema:rollbackSchema};
     defs.get_changes={...defs.get_changes,schema:{...defs.get_changes.schema,kind:z.enum(['draft','execution','recovery']).optional()}};
   }
@@ -241,6 +246,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
     const schema = z.object(def.schema).strict();
     const readOnly=Boolean(def.path)&&!def.write&&!def.scanPlan&&!def.maintenanceWrite&&!def.fieldPlan&&!def.fieldExecution;
     server.registerTool(name, { description: def.description, inputSchema: schema,
+      ...(hostedContext ? { securitySchemes: hostedToolSecuritySchemes(name,hostedContext.grantContext,hostedContext.filteredCapabilities) } : {}),
       // Read-only already implies idempotence. Omitted open-world hint stays conservative.
       annotations: { readOnlyHint:readOnly, ...(!readOnly?{destructiveHint:Boolean(def.write || def.scanPlan || def.maintenanceWrite || def.fieldExecution==='execute')||!def.path}:{}),
         ...(!readOnly&&def.path?{idempotentHint:true}:{}) } }, async input => {
@@ -257,8 +263,11 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         if(permission?.ok!==true){
           const valid=permission?.ok===false&&typeof permission.code==='string'&&/^[a-z][a-z0-9_]{0,79}$/.test(permission.code)
             &&typeof permission.message==='string'&&typeof permission.retryable==='boolean';
-          return valid?failure(permission.code,permission.message.slice(0,500),{retryable:permission.retryable})
-            :failure('authorization_unavailable','Authorization could not be verified; nothing was sent.',{retryable:true});
+          if (!valid) return failure('authorization_unavailable','Authorization could not be verified; nothing was sent.',{retryable:true});
+          const refused=failure(permission.code,permission.message.slice(0,500),{retryable:permission.retryable});
+          const challenge=hostedScopeChallengeMeta(permission.code,permission.wwwAuthenticate,
+            hostedContext.grantContext.resource_metadata_url);
+          return challenge?{...refused,_meta:challenge}:refused;
         }
         // Items are all field operations, or all redirect operations this connection lists; never mixed.
         const items=parsed.data.items,hostedRedirectItems=Array.isArray(items)&&items.length>0&&capability(redirects,'available')
@@ -409,7 +418,9 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
           if(!valid||(!isSchema&&def.fieldExecution==='execute'&&data?.record?.history&&!matchesHistoricalExecution(data,a)))
             return failure('field_execution_incompatible_response','Result could not be verified. Reconcile this set with get_changes(kind=execution); do not repeat writes automatically.');
           return result(data);
-        }catch(err){return failure(err.code||'field_execution_uncertain','Workflow refused or uncertain. Read the same set with get_changes(kind=execution); no automatic retry or legacy fallback.',
+        }catch(err){if(nativePlan&&err.code==='change_plan_target_unavailable'&&err.status===404&&err.data?.outcome_unknown===false)
+          return failure(err.code,`Site refused the request (404). ${err.message}`,err.data);
+          return failure(err.code||'field_execution_uncertain','Workflow refused or uncertain. Read the same set with get_changes(kind=execution); no automatic retry or legacy fallback.',
           {automatic_retry:false,...(hostedContext?err.data:err.status===429?rateLimitAdvice(err.data):{})});}
       }
       if(def.fieldRead&&parsed.data.kind==='draft')delete parsed.data.kind;

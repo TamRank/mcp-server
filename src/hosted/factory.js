@@ -8,7 +8,8 @@ export { discoverWorkflows } from '../scan-maintenance.js';
 // redirects:write must be known here before the VPS may issue it: a grant carrying an unknown scope
 // fails every session of that grant ('grant scopes'). Knowing it grants nothing by itself; hosted
 // redirects stay governed by the VPS-filtered redirect_execution capability and its authorizer.
-const scopes = new Set(['site:read','meta:write','audit:read','rollback','changes:write','tasks:write','importance:write','redirects:write']);
+const baseScopes = ['site:read','meta:write','audit:read','rollback','changes:write','tasks:write','importance:write'];
+const scopes = new Set([...baseScopes,'redirects:write']);
 const uuid = value => typeof value === 'string' && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(value);
 const label = (value, max) => typeof value === 'string' && value.trim() !== ''
   && Buffer.byteLength(value, 'utf8') <= max && !/[<>\p{C}]/u.test(value);
@@ -62,6 +63,17 @@ function validateContext(ctx) {
   requireValue(uuid(grant.grant_id) && identifier(grant.account_id) && identifier(grant.client_id), 'grant binding');
   requireValue(Array.isArray(grant.scopes) && new Set(grant.scopes).size === grant.scopes.length
     && grant.scopes.every(scope => scopes.has(scope)), 'grant scopes');
+  // Optional for a rolling API/MCP deployment. An older API without this field
+  // is treated as offering only the original seven scopes, never redirects.
+  const offered = grant.offered_scopes;
+  requireValue(offered === undefined || Array.isArray(offered) && new Set(offered).size === offered.length
+    && offered.length >= baseScopes.length && offered.length <= scopes.size
+    && baseScopes.every(scope => offered.includes(scope)) && offered.every(scope => scopes.has(scope)), 'offered scopes');
+  if (grant.resource_metadata_url !== undefined) {
+    const metadata = publicHttps(grant.resource_metadata_url);
+    requireValue(grant.resource_metadata_url === metadata.origin+'/.well-known/oauth-protected-resource/mcp',
+      'resource metadata URL');
+  }
   requireValue(label(audit.grantLabel, 80) && audit.grantLabel === `grant:${grant.grant_id}`
     && label(audit.clientLabel, 80) && identifier(audit.request_id), 'audit context');
   requireValue(typeof ctx.transport.request === 'function', 'transport.request');

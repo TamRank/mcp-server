@@ -39,13 +39,15 @@ export const toolCases = () => [
     nativeReply('planned', 'workflow-field-rollback-1')],
 ];
 export function context(stub, { host = 'site.example.invalid', grant = '22222222-2222-4222-8222-222222222222', capabilities = fullCaps(),
-  scopes = ['site:read','meta:write','audit:read','rollback','changes:write','tasks:write','importance:write'] } = {}) {
+  scopes = ['site:read','meta:write','audit:read','rollback','changes:write','tasks:write','importance:write'],
+  offeredScopes, resourceMetadataUrl } = {}) {
   return {
     validatedInstallation: { installation_id: '11111111-1111-4111-8111-111111111111', blog_id: 2,
       canonical_home_url: `https://${host}/`, rest_base_url: `https://${host}/wp-json/tamrank/v2`,
       rest_style: 'pretty', link_id: 'fixture-link-a', generation: 1, workflow_profile: 'safe-beta-1' },
     grantContext: { grant_id: grant, account_id: 'fixture-account-a', client_id: 'fixture-client-a',
-      scopes },
+      scopes, ...(offeredScopes === undefined ? {} : { offered_scopes: offeredScopes }),
+      ...(resourceMetadataUrl === undefined ? {} : { resource_metadata_url: resourceMetadataUrl }) },
     filteredCapabilities: capabilities,
     auditContext: { grantLabel: `grant:${grant}`, clientLabel: 'OAuth fixture display', request_id: 'fixture-request-a' },
     transport: stub.transport, authorizer: stub.authorizer,
