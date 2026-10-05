@@ -9,6 +9,8 @@ import {fieldProposalSchema,fieldProposalItem,validFieldProposal} from './field-
 import {schemaPreviewItem,validSchemaPreviewResponse} from './schema-preview.js';
 import {workflowCatalog} from './workflow-catalog.js';
 import {clampToToolProfile} from './workflow-profile.js';
+import {hostedToolSecuritySchemes} from './hosted/tool-scopes.js';
+import {hostedScopeChallengeMeta} from './hosted/auth-challenge.js';
 import {sourceConfirmation,validSourceStart,sourcePath,sourceArgs} from './source-scans.js';
 import {scanConfirmation,pagespeedRoute,pagespeedSupport,discoverPageSpeedScans,validPageSpeedStart,
   validPageSpeedProposal,validPageSpeedProgress,pageSpeedStartBody,pageSpeedProgress} from './pagespeed-scans.js';
@@ -241,6 +243,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
     const schema = z.object(def.schema).strict();
     const readOnly=Boolean(def.path)&&!def.write&&!def.scanPlan&&!def.maintenanceWrite&&!def.fieldPlan&&!def.fieldExecution;
     server.registerTool(name, { description: def.description, inputSchema: schema,
+      ...(hostedContext ? { securitySchemes: hostedToolSecuritySchemes(name) } : {}),
       // Read-only already implies idempotence. Omitted open-world hint stays conservative.
       annotations: { readOnlyHint:readOnly, ...(!readOnly?{destructiveHint:Boolean(def.write || def.scanPlan || def.maintenanceWrite || def.fieldExecution==='execute')||!def.path}:{}),
         ...(!readOnly&&def.path?{idempotentHint:true}:{}) } }, async input => {
@@ -257,8 +260,10 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         if(permission?.ok!==true){
           const valid=permission?.ok===false&&typeof permission.code==='string'&&/^[a-z][a-z0-9_]{0,79}$/.test(permission.code)
             &&typeof permission.message==='string'&&typeof permission.retryable==='boolean';
-          return valid?failure(permission.code,permission.message.slice(0,500),{retryable:permission.retryable})
-            :failure('authorization_unavailable','Authorization could not be verified; nothing was sent.',{retryable:true});
+          if (!valid) return failure('authorization_unavailable','Authorization could not be verified; nothing was sent.',{retryable:true});
+          const refused=failure(permission.code,permission.message.slice(0,500),{retryable:permission.retryable});
+          const challenge=hostedScopeChallengeMeta(permission.code,permission.wwwAuthenticate);
+          return challenge?{...refused,_meta:challenge}:refused;
         }
         // Items are all field operations, or all redirect operations this connection lists; never mixed.
         const items=parsed.data.items,hostedRedirectItems=Array.isArray(items)&&items.length>0&&capability(redirects,'available')

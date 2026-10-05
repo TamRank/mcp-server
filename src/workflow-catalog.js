@@ -129,8 +129,8 @@ export function workflowCatalog(server,{hosted=false}={}){
   if(!server.server?.setRequestHandler)return {server,publish(){}};
   const entries=[];
   return {
-    server:{registerTool(name,config,handler){const tool=server.registerTool(name,config,handler);entries.push({name,tool});return tool;}},
-    publish(){server.server.setRequestHandler(ListToolsRequestSchema,()=>({tools:entries.filter(({tool})=>tool.enabled).map(({name,tool})=>{
+    server:{registerTool(name,config,handler){const tool=server.registerTool(name,config,handler);entries.push({name,tool,config});return tool;}},
+    publish(){server.server.setRequestHandler(ListToolsRequestSchema,()=>({tools:entries.filter(({tool})=>tool.enabled).map(({name,tool,config})=>{
       const input=normalizeObjectSchema(tool.inputSchema);
       const published=input?compactWorkflowSchema(toJsonSchemaCompat(input,{strictUnions:true,pipeStrategy:'input'})):{type:'object'};
       // Some hosted connectors add one private argument while validating the
@@ -141,6 +141,12 @@ export function workflowCatalog(server,{hosted=false}={}){
       const result={name,title:tool.title,description:tool.description,
         inputSchema,
         annotations:tool.annotations,execution:compactWorkflowExecution(tool.execution),_meta:tool._meta};
+      // SDK 1.29.0 discards config.securitySchemes. Publish the standard field
+      // ourselves and mirror it in _meta for clients using the compatibility key.
+      if(hosted&&config.securitySchemes){
+        result.securitySchemes=config.securitySchemes;
+        result._meta={...tool._meta,securitySchemes:config.securitySchemes};
+      }
       if(tool.outputSchema)result.outputSchema=toJsonSchemaCompat(normalizeObjectSchema(tool.outputSchema),{strictUnions:true,pipeStrategy:'output'});
       return result;
     })}));},
