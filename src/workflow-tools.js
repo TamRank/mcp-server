@@ -235,7 +235,10 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   // reach current authorization before an availability decision. Listing is a
   // separate projection; SDK tool handles must not be disabled to hide a tool.
   if(hostedContext){
-    if(!defs.execute_change_set.fieldExecution)defs.execute_change_set={...defs.execute_change_set,schema:executionSchema};
+    // A prior grant may lack redirects:write, causing the VPS to hide redirect
+    // capability. Keep redirect tokens syntactically valid through the SDK so
+    // the authorizer can return an OAuth scope challenge before capability gates.
+    defs.execute_change_set={...defs.execute_change_set,schema:mixedExecutionSchema};
     if(!defs.rollback_change_set.fieldExecution)defs.rollback_change_set={...defs.rollback_change_set,schema:rollbackSchema};
     defs.get_changes={...defs.get_changes,schema:{...defs.get_changes.schema,kind:z.enum(['draft','execution','recovery']).optional()}};
   }
@@ -243,7 +246,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
     const schema = z.object(def.schema).strict();
     const readOnly=Boolean(def.path)&&!def.write&&!def.scanPlan&&!def.maintenanceWrite&&!def.fieldPlan&&!def.fieldExecution;
     server.registerTool(name, { description: def.description, inputSchema: schema,
-      ...(hostedContext ? { securitySchemes: hostedToolSecuritySchemes(name) } : {}),
+      ...(hostedContext ? { securitySchemes: hostedToolSecuritySchemes(name,hostedContext.grantContext,hostedContext.filteredCapabilities) } : {}),
       // Read-only already implies idempotence. Omitted open-world hint stays conservative.
       annotations: { readOnlyHint:readOnly, ...(!readOnly?{destructiveHint:Boolean(def.write || def.scanPlan || def.maintenanceWrite || def.fieldExecution==='execute')||!def.path}:{}),
         ...(!readOnly&&def.path?{idempotentHint:true}:{}) } }, async input => {
@@ -262,7 +265,8 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
             &&typeof permission.message==='string'&&typeof permission.retryable==='boolean';
           if (!valid) return failure('authorization_unavailable','Authorization could not be verified; nothing was sent.',{retryable:true});
           const refused=failure(permission.code,permission.message.slice(0,500),{retryable:permission.retryable});
-          const challenge=hostedScopeChallengeMeta(permission.code,permission.wwwAuthenticate);
+          const challenge=hostedScopeChallengeMeta(permission.code,permission.wwwAuthenticate,
+            hostedContext.grantContext.resource_metadata_url);
           return challenge?{...refused,_meta:challenge}:refused;
         }
         // Items are all field operations, or all redirect operations this connection lists; never mixed.

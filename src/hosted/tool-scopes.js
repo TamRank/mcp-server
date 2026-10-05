@@ -1,10 +1,11 @@
 /** Public hosted OAuth declarations; actual authorization remains with the VPS. */
 const siteRead = ['site:read'];
 const historyRead = ['site:read','audit:read'];
-// These tools dispatch either field or redirect change sets. MCP tool metadata
-// cannot vary its required scopes by arguments, so declare both write domains.
-// Do not attach redirects:write to read-only tools or unrelated work updates.
-const changeWrites = ['site:read','changes:write','meta:write','redirects:write'];
+// These tools dispatch field sets and, only when the authorization server
+// offers the eighth scope AND this site exposes the lane, redirect sets. Do not
+// infer from the current grant or available:true: a seven-scope grant must be
+// able to upgrade. A disabled flag/unsupported site must never ask for it.
+const changeWrites = ['site:read','changes:write','meta:write','audit:read','rollback'];
 const scopesByTool = Object.freeze({
   get_site_context: siteRead,
   get_capabilities: siteRead,
@@ -22,11 +23,15 @@ const scopesByTool = Object.freeze({
   update_work_item: ['site:read','tasks:write','importance:write'],
   plan_changes: changeWrites,
   execute_change_set: changeWrites,
-  rollback_change_set: [...changeWrites,'rollback'],
+  rollback_change_set: changeWrites,
 });
 
-export function hostedToolSecuritySchemes(name) {
+export function hostedToolSecuritySchemes(name, grantContext, filteredCapabilities) {
   const scopes = scopesByTool[name];
   if (!scopes) throw new Error(`Hosted OAuth scopes not declared for ${name}`);
-  return [{ type: 'oauth2', scopes: [...scopes] }];
+  const redirectOffered = grantContext.offered_scopes?.includes('redirects:write') === true
+    && Object.hasOwn(filteredCapabilities, 'redirect_execution');
+  return [{ type: 'oauth2', scopes: [...scopes,
+    ...(redirectOffered && ['plan_changes','execute_change_set','rollback_change_set'].includes(name)
+      ? ['redirects:write'] : [])] }];
 }
