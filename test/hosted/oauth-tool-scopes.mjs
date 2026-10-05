@@ -57,6 +57,33 @@ try {
       `${name}: no unoffered redirects:write scope`);
 } finally { await noRedirect.close(); }
 
+// A stored redirect grant survives a temporary feature rollback. An upgrade
+// for another tool must not replace it with a seven-scope grant that loses the
+// eighth permission. Without a safe consent request, inherit server auth and
+// let the authorizer refuse the missing tool permission.
+const legacyGrant = await connect({}, {
+  scopes: ['site:read','redirects:write'], offeredScopes: sevenScopes,
+  capabilities: redirectCaps(),
+});
+try {
+  const tools = byName((await legacyGrant.client.request({ method: 'tools/list' }, rawSchema)).tools);
+  for (const name of ['update_work_item','plan_changes','get_changes']) {
+    assert.equal(tools.get(name)?.securitySchemes, undefined, `${name}: no lossy OAuth upgrade`);
+    assert.equal(tools.get(name)?._meta?.securitySchemes, undefined, `${name}: no lossy OAuth mirror`);
+  }
+} finally { await legacyGrant.close(); }
+
+// When all existing grant scopes are still offered, the metadata can safely
+// request new permissions only if it also preserves the old ones.
+const preservedGrant = await connect({}, {
+  scopes: ['site:read','meta:write'], offeredScopes: sevenScopes,
+});
+try {
+  const tools = byName((await preservedGrant.client.request({ method: 'tools/list' }, rawSchema)).tools);
+  assert.deepEqual(oauthScopes(tools.get('update_work_item')),
+    ['site:read','meta:write','tasks:write','importance:write']);
+} finally { await preservedGrant.close(); }
+
 // A global flag can offer redirects while this particular site lacks the PRO
 // capability. Do not request a permission it cannot currently use.
 const unsupportedSite = await connect({}, { offeredScopes: eightScopes });
@@ -77,8 +104,8 @@ const upgrade = await connect({}, { capabilities: upgradeCaps(), offeredScopes: 
 try {
   const tools = byName((await upgrade.client.request({ method: 'tools/list' }, rawSchema)).tools);
   for (const name of ['plan_changes','execute_change_set','rollback_change_set'])
-    assert.ok(oauthScopes(tools.get(name)).includes('redirects:write'),
-      `${name}: existing seven-scope grant can upgrade`);
+    assert.deepEqual(oauthScopes(tools.get(name)), eightScopes,
+      `${name}: upgrade preserves the existing seven-scope grant`);
 } finally { await upgrade.close(); }
 
 // A denied write can request fresh consent without forwarding an untrusted or
