@@ -10,6 +10,17 @@ project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+### Fixed
+
+- Hosted connections and a clamped `workflow-v2-1` stdio profile no longer see recovery in
+  `tools/list`: `get_changes` lists `kind` as `draft`/`execution` with a non-recovery
+  description, and `execute_change_set` lists no `recovery_plan` or recovery tokens. A
+  direct recovery call is still parsed and refused by the authorizer
+  (`operation_unavailable`). A stdio site that offers recovery keeps it.
+- `get_site_diagnostics`, `get_topical_authority` and `get_redirects` describe their
+  section rules (`overview` takes `section` only; `trace` needs `redirect_id`), and a
+  refused call names the argument instead of the generic `invalid_request` text.
+
 ### Changed
 
 - A site on the `workflow-v2-1` release profile (TamRank PRO 0.9.22+, reporting

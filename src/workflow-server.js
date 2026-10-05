@@ -27,6 +27,28 @@ function visible(name, caps) {
   return caps.reads?.[name]?.available === true;
 }
 
+// Recovery tokens: field (trfr1) and redirect (trrr1).
+const RECOVERY_TOKEN = /^tr[fr]r1$/;
+/** The listed shape of a tool where recovery is masked (hosted, clamped profile). The closed argument
+ * schema that parses a call is unchanged, so a direct recovery call still reaches the authorizer and
+ * its operation_unavailable; the listing just stops offering what that refusal takes away. */
+function listedWithoutRecovery(tool) {
+  const properties = tool.inputSchema?.properties;
+  if (!properties) return tool;
+  if (tool.name === 'get_changes' && Array.isArray(properties.kind?.enum)) {
+    return { ...tool, inputSchema: { ...tool.inputSchema, properties: { ...properties,
+      kind: { ...properties.kind, enum: properties.kind.enum.filter(kind => kind !== 'recovery') } } } };
+  }
+  if (tool.name === 'execute_change_set') {
+    const { recovery_plan, ...rest } = properties;
+    const token = rest.change_token;
+    const match = typeof token?.pattern === 'string' ? /^\^\(\?:([a-z0-9|]+)\)(.*)$/.exec(token.pattern) : null;
+    const change_token = match ? { ...token, pattern: `^(?:${match[1].split('|').filter(p => !RECOVERY_TOKEN.test(p)).join('|')})${match[2]}` } : token;
+    return { ...tool, inputSchema: { ...tool.inputSchema, properties: { ...rest, ...(change_token ? { change_token } : {}) } } };
+  }
+  return tool;
+}
+
 const withoutRecovery = (prefix, caps) => WORKFLOW_INSTRUCTIONS.replace(/ Recovery: get_changes\(kind=recovery\)[\s\S]*?No automatic retries or legacy writers\./,
   ` ${prefix} recovery and specialist modes are unavailable` + (HOSTED_SPECIALIST_READS.some(name => specialistReadVisible(name, caps))
     ? ', except the listed stored-data reads' : '') + '. No automatic retries or legacy writers.');
@@ -48,7 +70,7 @@ export function buildWorkflowServer(client, options = {}) {
     const method = schema.shape?.method?.value;
     const guarded = method === 'tools/list' ? async (...args) => {
       const listing = await handler(...args);
-      return { ...listing, tools: listing.tools.filter(tool => visible(tool.name, listed)) };
+      return { ...listing, tools: listing.tools.filter(tool => visible(tool.name, listed)).map(listedWithoutRecovery) };
     } : handler;
     return setHandler.call(this, schema, guarded);
   };
