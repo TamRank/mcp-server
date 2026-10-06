@@ -554,7 +554,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       }
     },
     get_redirects:{
-      description:'Stored rules; trace needs redirect_id, not live.',
+      description:'Stored rules; trace needs redirect_id (an id from section rules, e.g. 12), not live.',
       specialist:true,path:()=>'/redirects',schema:{section:z.enum(['rules','chains','trace']).optional(),redirect_id:pageId.optional(),
         q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),
         state:z.enum(['all','active','inactive']).optional(),match_type:z.enum(['exact','regex']).optional(),...paging},
@@ -562,7 +562,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       invalid:a=>{
         if(a.section!=='trace')return 'redirect_id requires section trace; nothing was sent.';
         const extra=['q','state','match_type'].filter(k=>Object.hasOwn(a,k));
-        return [a.redirect_id===undefined?'section trace requires redirect_id':'',extra.length?`section trace does not accept ${extra.join(', ')}`:'']
+        return [a.redirect_id===undefined?'section trace requires redirect_id (an id from section rules, e.g. 12)':'',extra.length?`section trace does not accept ${extra.join(', ')}`:'']
           .filter(Boolean).join(' and ')+'; nothing was sent.';
       }
     },

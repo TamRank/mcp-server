@@ -81,6 +81,7 @@ const stdio = async options => {
   try {
     const tools = await listRaw(fixture.client);
     ok(/trace needs redirect_id/.test(tools.get('get_redirects').description), 'get_redirects description names redirect_id as required for trace');
+    ok(/redirect_id \(an id from section rules, e\.g\. 12\)/.test(tools.get('get_redirects').description), 'get_redirects description gives an example redirect_id and where it comes from');
     for (const name of ['get_site_diagnostics','get_topical_authority']) {
       ok(/overview: section only/.test(tools.get(name).description), `${name} description: overview takes section only`);
     }
@@ -91,9 +92,9 @@ const stdio = async options => {
       ['get_topical_authority', { section: 'overview', limit: 5 }, /section overview accepts only section; remove limit; nothing was sent\./],
       ['get_topical_authority', { section: 'pages' }, /section pages requires cluster/],
       ['get_topical_authority', { section: 'gaps', cluster: 2 }, /section gaps does not accept cluster/],
-      ['get_redirects', { section: 'trace' }, /section trace requires redirect_id/],
+      ['get_redirects', { section: 'trace' }, /^section trace requires redirect_id \(an id from section rules, e\.g\. 12\); nothing was sent\.$/],
       ['get_redirects', { section: 'trace', redirect_id: 3, q: 'x' }, /section trace does not accept q/],
-      ['get_redirects', { section: 'trace', q: 'x' }, /requires redirect_id and section trace does not accept q/],
+      ['get_redirects', { section: 'trace', q: 'x' }, /requires redirect_id \(an id from section rules, e\.g\. 12\) and section trace does not accept q;/],
       ['get_redirects', { section: 'rules', redirect_id: 3 }, /redirect_id requires section trace/],
     ]) {
       const output = value(await fixture.client.callTool({ name, arguments: args }));

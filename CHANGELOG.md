@@ -20,6 +20,8 @@ project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 - `get_site_diagnostics`, `get_topical_authority` and `get_redirects` describe their
   section rules (`overview` takes `section` only; `trace` needs `redirect_id`), and a
   refused call names the argument instead of the generic `invalid_request` text.
+- `get_redirects` with `section: "trace"` names where `redirect_id` comes from in its
+  description and in the refusal when it is missing: an id from `section: "rules"`, e.g. `12`.
 
 ### Changed
 
