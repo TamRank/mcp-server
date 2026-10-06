@@ -36,6 +36,11 @@ const pageId = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
 const workId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}$/);
 const cursor = z.string().min(1).max(2048).optional();
 const paging = { limit: z.number().int().min(1).max(50).optional(), cursor };
+// Name each argument a section refused, so one retry is enough.
+const refusedArguments = (a, allowed, label) => {
+  const extra = Object.keys(a).filter(k => !allowed.includes(k));
+  return `${label} accepts only ${allowed.join(' and ')}; remove ${extra.join(', ')}; nothing was sent.`;
+};
 const strip = (args, keys) => Object.fromEntries(Object.entries(args).filter(([key]) => !keys.includes(key)));
 const result = data => ({ content: [{ type: 'text', text: JSON.stringify(data) }] });
 const failure = (code, message, advice) => ({ ...result({ code, message, ...(advice || {}) }), isError: true });
@@ -196,12 +201,14 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   }
   if(!maintenanceOnly&&redirects?.contract_version===1){
     if(capability(redirects,'available'))defs.plan_changes={...defs.plan_changes,description:'Exact plan; copy action_origin.'};
-    if(capability(redirects,'read_available'))defs.get_changes={...defs.get_changes,description:'Status/recovery preview.',
+    // Name recovery only where it is offered: hosted and a clamped profile mask it, and the authorizer refuses it.
+    if(capability(redirects,'read_available'))defs.get_changes={...defs.get_changes,
+      description:fieldRecovery||redirectRecovery?'Status/recovery preview.':'kind=execution: reconcile; else draft.',
       schema:{...defs.get_changes.schema,kind:z.enum(fieldRecovery||redirectRecovery?['draft','execution','recovery']:['draft','execution']).optional()}};
     if(capability(redirects,'rollback_available'))defs.rollback_change_set={description:'Preview; approve→execute_change_set.',
       schema:rollbackSchema,path:a=>'/changes/executions/'+a.change_set_id+'/rollback-proposals',fieldExecution:'rollback'};
     if(capability(redirects,'available')||redirectRecovery){
-      defs.execute_change_set={description:'NEW chat approval; copy acknowledgements. Recovery: no site edits.',schema:mixedExecutionSchema,
+      defs.execute_change_set={description:'NEW chat approval; copy acknowledgements.'+(fieldRecovery||redirectRecovery?' Recovery: no site edits.':''),schema:mixedExecutionSchema,
         path:a=>'/changes/executions/'+a.change_set_id+(a.recovery_plan!==undefined?'/recover':'/execute'),fieldExecution:'execute',validate:a=>{
           if(a.recovery_plan!==undefined)return a.change_set_id===a.recovery_plan.change_set_id&&(redirectRecoveryToken(a.change_token)
             ?redirectRecovery&&validRedirectRecoveryInput(recoveryInput(a)):fieldRecovery&&validRecoveryInput(recoveryInput(a)));
@@ -530,11 +537,13 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   // specialist_reads entry, and hosted the authorizer decides every call. Scans (start_scan/get_scan_status/close_scan) stay specialist-only.
   const specialistReads={
     get_site_diagnostics:{
-      description:'Stored. 404_events:url; q:case-sensitive.',
+      description:'Stored. overview: section only. 404_events:url; q:case-sensitive.',
       specialist:true,path:()=>'/site/diagnostics',schema:{section:z.enum(['overview','metadata','index','schema','404_urls','404_events']).optional(),
         q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),
         url:z.string().min(1).max(4096).refine(v=>Buffer.byteLength(v,'utf8')<=4096).optional(),...paging},
-      validate:a=>(a.section || 'overview')==='overview'?Object.keys(a).every(k=>k==='section'):!Object.hasOwn(a,'url') || (a.section==='404_events' && !Object.hasOwn(a,'q'))
+      validate:a=>(a.section || 'overview')==='overview'?Object.keys(a).every(k=>k==='section'):!Object.hasOwn(a,'url') || (a.section==='404_events' && !Object.hasOwn(a,'q')),
+      invalid:a=>(a.section || 'overview')==='overview'?refusedArguments(a,['section'],'section overview')
+        :a.section!=='404_events'?'url requires section 404_events; nothing was sent.':'section 404_events accepts url or q, not both; nothing was sent.'
     },
     get_gsc_pages:{
       description:'Stored GSC; q case-sensitive.',
@@ -545,11 +554,17 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       }
     },
     get_redirects:{
-      description:'Stored rules; trace is not live.',
+      description:'Stored rules; trace needs redirect_id (an id from section rules, e.g. 12), not live.',
       specialist:true,path:()=>'/redirects',schema:{section:z.enum(['rules','chains','trace']).optional(),redirect_id:pageId.optional(),
         q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),
         state:z.enum(['all','active','inactive']).optional(),match_type:z.enum(['exact','regex']).optional(),...paging},
-      validate:a=>a.section==='trace'?a.redirect_id!==undefined && !['q','state','match_type'].some(k=>Object.hasOwn(a,k)):a.redirect_id===undefined
+      validate:a=>a.section==='trace'?a.redirect_id!==undefined && !['q','state','match_type'].some(k=>Object.hasOwn(a,k)):a.redirect_id===undefined,
+      invalid:a=>{
+        if(a.section!=='trace')return 'redirect_id requires section trace; nothing was sent.';
+        const extra=['q','state','match_type'].filter(k=>Object.hasOwn(a,k));
+        return [a.redirect_id===undefined?'section trace requires redirect_id (an id from section rules, e.g. 12)':'',extra.length?`section trace does not accept ${extra.join(', ')}`:'']
+          .filter(Boolean).join(' and ')+'; nothing was sent.';
+      }
     },
     get_images_missing_alt:{
       description:'Alt may be decorative; usage unverified.',
@@ -557,9 +572,11 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),...paging}
     },
     get_topical_authority:{
-      description:'Topics, not demand/tasks.',
+      description:'Topics, not demand/tasks. overview: section only; pages/topics need cluster.',
       specialist:true,path:()=>'/site/topical-authority',schema:{section:z.enum(['overview','clusters','pages','topics','gaps','recommendations']).optional(),cluster:z.number().int().min(1).max(10000).optional(),...paging},
-      validate:a=>(a.section || 'overview')==='overview'?Object.keys(a).every(k=>k==='section'):['pages','topics'].includes(a.section)?a.cluster!==undefined:a.cluster===undefined
+      validate:a=>(a.section || 'overview')==='overview'?Object.keys(a).every(k=>k==='section'):['pages','topics'].includes(a.section)?a.cluster!==undefined:a.cluster===undefined,
+      invalid:a=>(a.section || 'overview')==='overview'?refusedArguments(a,['section'],'section overview')
+        :['pages','topics'].includes(a.section)?`section ${a.section} requires cluster; nothing was sent.`:`section ${a.section} does not accept cluster; nothing was sent.`
     },
   };
   if ((hostedContext || profileClamp) && profile === 'core') for (const [name, def] of Object.entries(specialistReads)) register(name, def);

@@ -30,14 +30,14 @@
     "LICENSE"
   ],
   "scripts": {
-    "test:hosted": "node test/hosted/error-map.mjs && node test/hosted/domain-errors.mjs && node test/hosted/capabilities-connector.mjs && node test/hosted/stub-vps-test.mjs && node test/hosted/transport.mjs && node test/hosted/factory.mjs && node test/hosted/redirects.mjs && node test/hosted/oauth-tool-scopes.mjs && node test/hosted/package.mjs && node test/hosted/voor-h3a.mjs",
+    "test:hosted": "node test/hosted/error-map.mjs && node test/hosted/domain-errors.mjs && node test/hosted/capabilities-connector.mjs && node test/hosted/stub-vps-test.mjs && node test/hosted/transport.mjs && node test/hosted/factory.mjs && node test/hosted/redirects.mjs && node test/hosted/oauth-tool-scopes.mjs && node test/hosted/listing-truth.mjs && node test/hosted/package.mjs && node test/hosted/voor-h3a.mjs",
     "start": "node index-workflow.js",
     "test": "node scripts/package-smoke.mjs",
     "test:dev": "node test/workflow-onboarding.mjs && node test/workflow-surface.mjs && node --test test/workflow-startup-probes.mjs && node --test test/workflow-profile-clamp.mjs",
     "test:smoke": "node scripts/package-smoke.mjs",
     "test:onboarding": "node test/workflow-onboarding.mjs",
     "test:surface": "node test/workflow-surface.mjs",
-    "test:workflow": "node test/workflow-surface.mjs && node test/workflow-field-proposals.mjs && node test/workflow-field-execution.mjs && node test/workflow-field-recovery.mjs && node test/workflow-redirect-execution.mjs && node test/workflow-execution-history.mjs && node test/workflow-schema-preview.mjs && node test/workflow-schema-proposals.mjs && node test/workflow-schema-execution-read.mjs && node test/workflow-schema-history.mjs && node test/workflow-schema-execution.mjs && node test/workflow-schema-rollback.mjs && node test/workflow-schema-recovery.mjs --bridge && node test/workflow-schema-token-transport.mjs && node test/workflow-catalog.mjs",
+    "test:workflow": "node test/workflow-surface.mjs && node test/workflow-field-proposals.mjs && node test/workflow-field-execution.mjs && node test/workflow-field-recovery.mjs && node test/workflow-redirect-execution.mjs && node test/workflow-execution-history.mjs && node test/workflow-wp-admin-history.mjs && node test/workflow-schema-preview.mjs && node test/workflow-schema-proposals.mjs && node test/workflow-schema-execution-read.mjs && node test/workflow-schema-history.mjs && node test/workflow-schema-execution.mjs && node test/workflow-schema-rollback.mjs && node test/workflow-schema-recovery.mjs --bridge && node test/workflow-schema-token-transport.mjs && node test/workflow-catalog.mjs",
     "test:workflow-package": "node test/workflow-package.mjs",
     "test:schema-history": "node test/workflow-schema-history.mjs",
     "test:workflow-scans": "node test/workflow-index-preview.mjs && node test/workflow-pagespeed-scans.mjs && node test/workflow-source-scans.mjs && node --test test/workflow-scan-receipt-recovery.mjs",

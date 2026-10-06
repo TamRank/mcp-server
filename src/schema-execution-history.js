@@ -6,9 +6,16 @@ import {z} from 'zod';
 const uuid=z.string().uuid(),hash=z.string().regex(/^[a-f0-9]{64}$/),id=z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const timestamp=z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00$/).refine(v=>Number.isFinite(Date.parse(v)));
 const text=z.string().max(4096),values=z.record(z.unknown()).nullable();
-const attestation=z.object({mode:z.literal('chat_attested'),received_at:timestamp,plan_hash:hash,statement:z.literal('user approved in chat'),
-  acknowledgements:z.array(z.string()).max(3).refine(v=>new Set(v).size===v.length),provenance_asserted:z.literal(true),human_verified:z.literal(false),
+const acknowledgements=z.array(z.string()).max(3).refine(v=>new Set(v).size===v.length);
+const chatAttestation=z.object({mode:z.literal('chat_attested'),received_at:timestamp,plan_hash:hash,statement:z.literal('user approved in chat'),
+  acknowledgements,provenance_asserted:z.literal(true),human_verified:z.literal(false),
   attribution_removed_at:id}).strict();
+// A rollback a site administrator confirmed in WordPress admin (PRO, contract delta 5 Oct 2026). Only WordPress creates it;
+// the bridge displays it and never sends it: agent input stays chat_attested.
+const wpAdminAttestation=z.object({mode:z.literal('wp_admin_confirmed'),received_at:timestamp,plan_hash:hash,
+  statement:z.literal('administrator approved in WordPress admin'),acknowledgements,provenance_asserted:z.literal(false),human_verified:z.literal(true),
+  attribution_removed_at:id}).strict();
+const attestation=z.union([chatAttestation,wpAdminAttestation]);
 const result=z.object({version:z.literal(1),execution_id:uuid,item_id:uuid,state:z.enum(['applied','failed','conflict','skipped']),attempts:z.union([z.literal(0),z.literal(1)]),
   committed_at:id.optional(),audit_id:id.optional(),changed:z.boolean().optional(),invalidation:z.enum(['pending','delivered']).optional(),
   stopped_at:id.optional(),reason:z.string().max(100).optional(),
@@ -21,7 +28,7 @@ const execution=z.object({execution_id:uuid,state:z.enum(['executed','partial','
   attestation,budget:z.object({version:z.literal(1),window_start:z.number().int().nonnegative(),operation_count:id,operator_limit:id}).strict(),
   stop:z.object({item_id:uuid,reason:z.string().max(100),at:id}).strict().optional(),
   recovery:z.object({version:z.literal(3),policy_version:z.literal('workflow-schema-recovery-1'),recovery_mode:z.enum(['stop_pending','delivery_only']),
-    plan_hash:hash,at:id,attestation}).strict().optional()}).strict().nullable();
+    plan_hash:hash,at:id,attestation:chatAttestation}).strict().optional()}).strict().nullable();
 const schemaOps=['schema.select','schema.detect','schema_settings.update'];
 const item=z.object({item_id:uuid,operation:z.enum([...schemaOps,'meta.update','social.update','image_alt.update','redirect.create','redirect.update','redirect.delete','redirect.restore']),
   target:z.object({post_id:id.optional(),attachment_id:id.optional(),site:z.literal('current').optional(),sample_post_id:id.optional(),
