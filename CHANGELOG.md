@@ -10,6 +10,13 @@ project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+### Added
+
+- Historical change reads accept a rollback a site administrator confirmed in WordPress
+  admin (`wp_admin_confirmed`, `human_verified: true`; TamRank PRO). A recovery
+  attestation stays `chat_attested` only, and everything the bridge sends (plan,
+  execute, rollback) remains chat-attested.
+
 ### Fixed
 
 - Hosted connections and a clamped `workflow-v2-1` stdio profile no longer see recovery in
