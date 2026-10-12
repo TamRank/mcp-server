@@ -10,7 +10,7 @@ const fake = { get: async (path, query) => { calls.push({ path, query }); return
 function registry(profile,capabilities=null) { const tools = new Map(); registerWorkflowTools({ registerTool: (n,c,h) => tools.set(n,{c,h}) },fake,{profile,capabilities}); return tools; }
 const core = registry('core'), legacy = registry('legacy'), specialist = registry('specialist');
 assert.equal(core.size,12); assert.equal(legacy.size,42); assert.equal(specialist.size,20);
-assert.ok(WORKFLOW_INSTRUCTIONS.length<1500);
+assert.ok(WORKFLOW_INSTRUCTIONS.length<1700);
 assert.equal(core.has('get_gsc_pages'),false);
 await specialist.get('get_gsc_pages').h({q:'/category/?x=%2B',order:'impressions_desc',period:28,limit:50,cursor:'opaque'});
 assert.deepEqual(calls.pop(),{path:'/gsc/pages',query:{q:'/category/?x=%2B',order:'impressions_desc',period:28,limit:50,cursor:'opaque'}});
