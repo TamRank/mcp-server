@@ -88,7 +88,7 @@ test('workflow-v2-1 lists exactly the hosted toolset for the same site',async()=
       'get_changes','rollback_change_set'].sort());
     for(const hidden of ['start_scan','get_scan_status','close_scan'])assert.equal(local.tools.includes(hidden),false,hidden);
     const instructions=local.client.getInstructions();
-    assert.match(instructions,/For this site profile, recovery and specialist modes are unavailable, except the listed stored-data reads\./);
+    assert.match(instructions,/For this site profile, recovery and scans are unavailable; the listed saved-report tools work\./);
     assert.equal(instructions.includes('Recovery: get_changes(kind=recovery)'),false);
   }finally{await local.close();await remote.close();}
 });

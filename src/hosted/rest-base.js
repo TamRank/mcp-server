@@ -15,7 +15,7 @@ export function validateRestBase(value, style = 'pretty', allowLoopback = false)
 
 export function workflowUrl(base, style, path, query = {}) {
   if (typeof path !== 'string' || !/^\/[a-zA-Z0-9_/:.-]+$/.test(path) || path.includes('..'))
-    throw new ApiError(400, 'invalid_route', 'Invalid workflow route.');
+    throw new ApiError(400, 'invalid_route', 'TamRank could not build this request. Nothing was sent.');
   const root = new URL(base), url = new URL(base);
   if (style === 'query') url.searchParams.set('rest_route', root.searchParams.get('rest_route') + path);
   else url.pathname += path;

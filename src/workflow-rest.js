@@ -55,7 +55,7 @@ export class WorkflowClient {
   }
 
   async request(method, path, { query = {}, body, retainScanReceipt = false } = {}) {
-    if (!/^\/[a-zA-Z0-9_/:.%-]+$/.test(path) || path.includes('..') || path.includes('%')) throw new ApiError(400, 'invalid_route', 'Invalid workflow route.');
+    if (!/^\/[a-zA-Z0-9_/:.%-]+$/.test(path) || path.includes('..') || path.includes('%')) throw new ApiError(400, 'invalid_route', 'TamRank could not build this request. Nothing was sent.');
     if (retainScanReceipt !== false && (retainScanReceipt !== true || !validReceiptAttempt(method, body)
       || !this.#receiptStore || typeof this.#receiptStore.save !== 'function' || typeof this.#receiptStore.checkReady !== 'function'))
       throw new ApiError(400, 'scan_receipt_configuration_invalid', 'A private receipt store and exact attempt are required. Nothing was sent.');
@@ -98,8 +98,8 @@ export class WorkflowClient {
         throw new ApiError(503, 'workflow_response_limit', 'Response exceeds the transport budget. Use an explicit section or smaller page.');
       let data;
       try { data = JSON.parse(Buffer.from(response.bodyBytes).toString('utf8')); }
-      catch { throw new ApiError(response.status, 'invalid_response', 'The site did not return a JSON workflow response.'); }
-      if (!data || typeof data !== 'object' || Array.isArray(data)) throw new ApiError(response.status, 'invalid_response', 'Invalid workflow response envelope.');
+      catch { throw new ApiError(response.status, 'invalid_response', 'The website sent an answer TamRank could not read.'); }
+      if (!data || typeof data !== 'object' || Array.isArray(data)) throw new ApiError(response.status, 'invalid_response', 'The website sent an answer TamRank could not read.');
       if (response.status < 200 || response.status >= 300) {
         let retained = null;
         if (retainScanReceipt && Object.hasOwn(data.data || {}, 'result_receipt')) {
@@ -123,20 +123,21 @@ export class WorkflowClient {
         const code = siteCode ?? 'workflow_request_failed';
         const message = retained ? 'The result was not confirmed as stored. A private recovery receipt was retained locally. Reconcile before any new measurement.'
           : privatePacketPresent ? 'The site returned a private recovery receipt that was not retained. Reconcile the request outcome; do not repeat the measurement.'
-          : typeof data.message === 'string' ? data.message.slice(0,500) : 'The site refused this workflow request.';
+          : siteCode?.startsWith('rest_') ? 'The website could not handle this request. The TamRank plugin may be inactive or out of date.'
+          : typeof data.message === 'string' ? data.message.slice(0,500) : 'No reason was given.';
         const advice=response.status===429?rateLimitAdvice(data.data):undefined;
         if (this.#hosted) {
           // Only the site's own code classifies; a replaced code is no evidence of a site decision.
           const outcome = {status: response.status, code: siteCode, validWpEnvelope, kind: method === 'GET' ? 'read' : 'write', method, path};
           const mapped = mapHostedOutcome({...outcome, retryAfter: advice?.retry_after});
           throw new ApiError(response.status, mapped.code,
-            mapped.code === siteCode && (isSiteReadRefusal(outcome) || isSitePlanRefusal(outcome)) ? message : 'The site refused this workflow request.', mapped);
+            mapped.code === siteCode && (isSiteReadRefusal(outcome) || isSitePlanRefusal(outcome)) ? message : 'No reason was given.', mapped);
         }
         throw new ApiError(response.status, code, message, retained ? { receipt_reference: retained.receipt_reference, receipt_retained: true } : advice);
       }
       // Native execution has its own versioned policy/envelope. Accept v1 only
       // on these exact method/route pairs; every older read/draft remains v2.
-      if (data.contract_version !== (fieldExecution ? 1 : 2)) throw new ApiError(409, 'workflow_upgrade_required', 'Incompatible workflow contract. There is no fallback to legacy writers.');
+      if (data.contract_version !== (fieldExecution ? 1 : 2)) throw new ApiError(409, 'workflow_upgrade_required', 'The TamRank plugin on this website does not match this connection. Nothing else was tried.');
       // Native schema rollback IDs share a prefix with private scan receipts.
       // Exempt only the exact envelope field after validating the whole closed
       // semantic response on an execution route, never error data or metadata.
@@ -151,17 +152,17 @@ export class WorkflowClient {
           const mapped = mapHostedOutcome({status:error.status, code:error.code, validWpEnvelope:error.code==='workflow_upgrade_required', kind:method==='GET'?'read':'write'});
           // Only a 2xx raises workflow_upgrade_required here: the site accepted the write, so its outcome is unknown.
           if (error.code === 'workflow_upgrade_required' && method !== 'GET') mapped.outcome_unknown = true;
-          throw new ApiError(error.status, mapped.code, 'The site returned an unavailable or incompatible workflow response.', mapped);
+          throw new ApiError(error.status, mapped.code, 'Its answer could not be used.', mapped);
         }
         throw error;
       }
       if (this.#hosted) {
         const mapped = mapHostedOutcome({kind:method==='GET'?'read':'write'});
-        throw new ApiError(0, mapped.code, 'Could not confirm the workflow result.', mapped);
+        throw new ApiError(0, mapped.code, 'TamRank could not confirm the result.', mapped);
       }
       // Network messages can contain URLs/proxy details. Never echo raw exceptions or PATs.
       throw new ApiError(0, controller.signal.aborted ? 'timeout' : 'network_error',
-        controller.signal.aborted ? 'Workflow request timed out. A write must be reconciled before retry.' : 'Could not reach the configured workflow site. No automatic retry was made.');
+        controller.signal.aborted ? 'The website took too long to answer. If this was a change, check its result before trying again.' : 'TamRank could not reach the website. It did not try again.');
     } finally { clearTimeout(timer); }
   }
   get(path, query) { return this.request('GET', path, { query }); }
