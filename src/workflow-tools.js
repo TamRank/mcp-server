@@ -99,6 +99,9 @@ function validWork(a) {
   return a.operation==='work.review_target' ? /^pickup_/.test(a.work_id) && a.target_key!==undefined && a.reviewed!==undefined : a.target_key===undefined && a.reviewed===undefined;
 }
 
+// The bridge profile name gates this session (factory.js) but tells the assistant nothing it can use,
+// and it is an internal codename a user would see quoted. The gating object itself is unchanged.
+const hostedCapabilitiesView = ({ mcp_bridge_compatibility, ...shown }) => shown;
 export function workflowDefinitions() {
   return {
     get_site_context: { description: 'Site identity.', schema: { section: z.enum(['overview','schema_identity']).optional() }, path: () => '/site/context' },
@@ -499,7 +502,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         }
         // A clamped profile reports the live site through the same clamp that chose its tools.
         const shown=profileClamp&&canonical==='get_capabilities'?clampToToolProfile(data):data;
-        return result(hostedContext&&canonical==='get_capabilities'?hostedContext.filteredCapabilities
+        return result(hostedContext&&canonical==='get_capabilities'?hostedCapabilitiesView(hostedContext.filteredCapabilities)
           :deprecated ? { deprecated: true, replacement: canonical, remove_in: '0.5.0', data:shown } : shown);
       } catch (err) { const refused=typeof err.code==='string'&&def.refused?.(parsed.data,err.code);
         return failure(typeof err.code === 'string' ? err.code : 'workflow_request_failed', err.status ? `The request to the website did not go through. ${err.message}` : err.message,

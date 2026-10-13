@@ -174,7 +174,9 @@ for (const recorded of [undefined, {}, { ok: false }]) {
   const fixture = await connect({ responses: [{ body: { ...fullCaps(), unexpected_site_authority: 'must-not-be-released' } }] });
   try {
     const output = await fixture.client.callTool({ name: 'get_capabilities', arguments: {} });
-    assert.deepEqual(value(output), fixture.ctx.filteredCapabilities);
+    // The visible result is the filtered object minus the bridge profile name that only gates the session.
+    const { mcp_bridge_compatibility, ...shown } = fixture.ctx.filteredCapabilities;
+    assert.deepEqual(value(output), shown);
     assert.equal(JSON.stringify(output).includes('must-not-be-released'), false);
   } finally { await fixture.close(); }
 }

@@ -61,6 +61,16 @@ try {
   }
 } finally { await fixture.close(); }
 
+// get_capabilities shows the site's abilities, not the bridge profile codename that gates the session.
+{
+  const f = await connect({ responses: [{ body: fullCaps() }] });
+  try {
+    const out = JSON.parse((await f.client.callTool({ name: 'get_capabilities', arguments: {} })).content[0].text);
+    assert.equal(out.mcp_bridge_compatibility, undefined); assert.equal(out.contract_version, 2);
+    assert.ok(!CODENAMES.test(JSON.stringify(out)), JSON.stringify(out).match(CODENAMES)?.[0]);
+  } finally { await f.close(); }
+}
+
 // 3. Live refusals of every hosted tool when the site turns it down: the message stays plain.
 for (const [name, args] of toolCases()) {
   for (const response of [{ status: 404, body: { code: 'rest_no_route', message: 'No route was found matching the URL and request method.', data: { status: 404 } } },
