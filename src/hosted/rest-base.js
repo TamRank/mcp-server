@@ -26,7 +26,7 @@ export function workflowUrl(base, style, path, query = {}) {
   if (url.origin !== root.origin || (style === 'query'
     ? url.pathname !== root.pathname || url.searchParams.getAll('rest_route').length !== 1
       || !url.searchParams.get('rest_route').startsWith('/tamrank/v2/')
-    : !url.pathname.startsWith(root.pathname + '/'))) throw new ApiError(400, 'invalid_route', 'Route escaped its installation.');
+    : !url.pathname.startsWith(root.pathname + '/'))) throw new ApiError(400, 'invalid_route', 'TamRank could not build this request. Nothing was sent.');
   return url;
 }
 

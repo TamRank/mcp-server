@@ -7,8 +7,9 @@ import { WORKFLOW_INSTRUCTIONS } from '../../src/workflow-tools.js';
 // language only: no internal codenames, scope ids, tool or field names, HTTP statuses or Dutch values.
 // Tool names and arguments the assistant needs go in assistant_note, descriptions or instructions,
 // which may name tools and arguments but never internal codenames.
-const CODENAMES = /workflow|legacy|hosted|specialist|attest|entitlement|safe-beta|\bgrant\b|\bH\d\b|\b(?:laag|middel|hoog)\b/i;
-const MESSAGE_ONLY = /\b(?:get|list|plan|execute|rollback|update|search|diagnose)_[a-z_]+\b|\b[a-z]+:(?:read|write|maintain|plan)\b|\(\d{3}\)|\btoken\b|\bcanonical\b|\/tamrank\/v\d/i;
+// hosted_site is a result field the assistant must read, so it is allowed; the word hosted is not.
+const CODENAMES = /workflow|legacy|hosted(?!_site)|specialist|attest|entitlement|safe-beta|\bH\d\b|\b(?:laag|middel|hoog)\b/i;
+const MESSAGE_ONLY = /\b(?:get|list|plan|execute|rollback|update|search|diagnose)_[a-z_]+\b|\b[a-z]+:(?:read|write|maintain|plan)\b|\(\d{3}\)|\btoken\b|\bcanonical\b|\/tamrank\/v\d|\b[a-z]+=[a-z_]+|\b(?:meta|social|image_alt|redirect|work|importance)\.[a-z_]+\b|\b[a-z][a-z0-9]*_[a-z0-9_]+\b|\broute\b/i;
 const bad = (text, extra = true) => CODENAMES.test(text) || (extra && MESSAGE_ONLY.test(text));
 
 // Proof that the patterns bind, on strings this library used to send.
@@ -17,6 +18,7 @@ for (const old of ['This mode is unavailable for hosted workflows; nothing was s
   'Work administration is unavailable or this token lacks the operation-specific permission. No mutation was sent.',
   'Read the same set with get_changes(kind=execution); no automatic retry or legacy fallback.',
   'Private scan planning requires explicit site support and scans:plan. Nothing was sent.',
+  'Route escaped its installation.', 'Read this set with kind=execution. Do not repeat changes automatically.',
   'No automatic retries or legacy writers.', 'Chat attestation is an agent assertion'])
   assert.ok(bad(old), `pattern misses known old text: ${old}`);
 

@@ -371,10 +371,10 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
               ?redirectRecovery&&validRedirectRecoveryProposal(data.recovery_proposal,setId):fieldRecovery&&validRecoveryProposal(data.recovery_proposal,setId))
             :schemaConfirm?validSchemaRecoveryResult(data,recovery.proposal):redirectConfirm?validRedirectRecoveryResult(data,recovery.proposal):validRecoveryResult(data,recovery.proposal);
           if(!valid)
-            return failure('field_recovery_incompatible_response','Read this set with kind=execution. Do not repeat changes automatically.');
+            return failure('field_recovery_incompatible_response','TamRank could not confirm the result of this recovery. Do not repeat the changes.',noted('Read this set with get_changes(kind=execution); never repeat changes automatically.'));
           return result(data);
-        }catch(err){return failure(err.code||'field_recovery_uncertain','Recovery refused or uncertain. Read this set with kind=execution; never replay website writes.',
-          {automatic_retry:false,...(err.status===429?rateLimitAdvice(err.data):{})});}
+        }catch(err){return failure(err.code||'field_recovery_uncertain','The recovery was turned down or its result is unclear. Do not repeat the changes.',
+          {automatic_retry:false,assistant_note:'Read this set with get_changes(kind=execution); never replay website writes.',...(err.status===429?rateLimitAdvice(err.data):{})});}
       }
       if(sourceStart || sourceRead){
         const support=capabilities?.schema_source_jobs,mode=parsed.data.mode;
@@ -387,8 +387,10 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
           return result(sourceRead?await client.get('/scans/sources/'+parsed.data.proposal_id):mode==='preview'
             ?await client.get(sourcePath(parsed.data),sourceArgs(parsed.data)):await client.post(sourcePath(parsed.data),sourceArgs(parsed.data)));
         }catch(err){return failure(err.code||'source_job_request_failed',mode==='run'
-          ?'Source result is refused or uncertain. Read this proposal_id with type=schema_source; never start a replacement job automatically.'
-          :'Source request failed; no schema change was requested.',err.status===429?rateLimitAdvice(err.data):undefined);}
+          ?'The scan was turned down or its result is unclear. Do not start it again.'
+          :'Source request failed; no schema change was requested.',mode==='run'
+          ?noted('Read this proposal_id with get_scan_status(type=schema_source); never start a replacement job automatically.',err.status===429?rateLimitAdvice(err.data):undefined)
+          :err.status===429?rateLimitAdvice(err.data):undefined);}
       }
       const schemaPlan=def.fieldPlan&&isSchemaExecutionPlan(parsed.data,schemaExecution);
       if(def.fieldPlan&&schemaExecutionWrite&&parsed.data.items?.some(i=>['schema.select','schema.detect','schema_settings.update'].includes(i.operation))&&!schemaPlan)
