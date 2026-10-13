@@ -131,7 +131,8 @@ export class WorkflowClient {
           const outcome = {status: response.status, code: siteCode, validWpEnvelope, kind: method === 'GET' ? 'read' : 'write', method, path};
           const mapped = mapHostedOutcome({...outcome, retryAfter: advice?.retry_after});
           throw new ApiError(response.status, mapped.code,
-            mapped.code === siteCode && (isSiteReadRefusal(outcome) || isSitePlanRefusal(outcome)) ? message : 'No reason was given.', mapped);
+            mapped.code === siteCode && (isSiteReadRefusal(outcome) || isSitePlanRefusal(outcome)) ? message
+              : mapped.code === 'rate_limited' ? 'The website asked TamRank to slow down. Try again shortly.' : 'No reason was given.', mapped);
         }
         throw new ApiError(response.status, code, message, retained ? { receipt_reference: retained.receipt_reference, receipt_retained: true } : advice);
       }

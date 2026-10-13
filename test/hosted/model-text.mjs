@@ -86,4 +86,13 @@ for (const [name, args] of toolCases()) {
     } finally { await f.close(); }
   }
 }
+// A rate limit says so in plain words instead of "no reason was given".
+{
+  const f = await connect({ responses: [{ status: 429, body: { code: 'rest_too_many', message: 'x', data: { status: 429, retry_after: 2 } } }] });
+  try {
+    const out = JSON.parse((await f.client.callTool({ name: 'get_site_context', arguments: {} })).content[0].text);
+    assert.equal(out.code, 'rate_limited');
+    assert.equal(out.message, 'The request to the website did not go through. The website asked TamRank to slow down. Try again shortly.');
+  } finally { await f.close(); }
+}
 console.log(`PASS: ${scanned} refusal literals, instructions, every tool description and live refusals of ${toolCases().length} tools are free of internal names.`);
