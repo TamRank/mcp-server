@@ -49,9 +49,9 @@ function listedWithoutRecovery(tool) {
   return tool;
 }
 
-const withoutRecovery = (prefix, caps) => WORKFLOW_INSTRUCTIONS.replace(/ Recovery: get_changes\(kind=recovery\)[\s\S]*?No automatic retries or legacy writers\./,
-  ` ${prefix} recovery and specialist modes are unavailable` + (HOSTED_SPECIALIST_READS.some(name => specialistReadVisible(name, caps))
-    ? ', except the listed stored-data reads' : '') + '. No automatic retries or legacy writers.');
+const withoutRecovery = (prefix, caps) => WORKFLOW_INSTRUCTIONS.replace(/ Recovery: get_changes\(kind=recovery\)[\s\S]*?No automatic retries or other write paths\./,
+  ` ${prefix} recovery and scans are unavailable` + (HOSTED_SPECIALIST_READS.some(name => specialistReadVisible(name, caps))
+    ? '; the listed saved-report tools work' : '') + '. No automatic retries or other write paths.');
 
 export function buildWorkflowServer(client, options = {}) {
   const hosted = options.hostedContext;
@@ -60,8 +60,8 @@ export function buildWorkflowServer(client, options = {}) {
   // deprecated inventory, which a positive capability listing would hide wholesale.
   const clamped = !hosted && options.profileClamp === true && (options.profile ?? 'core') !== 'legacy' && options.capabilities;
   const listed = hosted ? hosted.filteredCapabilities : clamped ? options.capabilities : null;
-  const instructions = hosted ? withoutRecovery('Hosted', hosted.filteredCapabilities)
-    .replace('agent label is unknown.', 'agent label identifies the server-validated grant.')
+  const instructions = hosted ? withoutRecovery('In this connection,', hosted.filteredCapabilities)
+    .replace('agent label is unknown.', 'agent label identifies this connection.')
     : clamped ? withoutRecovery('For this site profile,', options.capabilities) : WORKFLOW_INSTRUCTIONS;
   const server = new (hosted ? HostedWorkflowServer : McpServer)(workflowIdentity,
     { instructions: instructions + (options.preflight?.ok === false ? '\nStartup: ' + options.preflight.message : '') });

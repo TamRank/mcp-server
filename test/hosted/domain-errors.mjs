@@ -15,7 +15,7 @@ const call = async (name, args, response) => {
     return { url: fixture.stub.calls[0].url, ...value(output) };
   } finally { await fixture.close(); }
 };
-const unavailable = { code: 'site_unavailable', message: 'Site refused the request (404). The site refused this workflow request.',
+const unavailable = { code: 'site_unavailable', message: 'The request to the website did not go through. No reason was given.',
   retryable: true, outcome_unknown: false };
 
 // Sam's claude.ai test, 29 sep: a dashboard group has no administration state.
@@ -24,13 +24,14 @@ const unavailable = { code: 'site_unavailable', message: 'Site refused the reque
     wp(404, 'workflow_work_unavailable', 'The work operation could not be completed.'));
   assert.equal(url, 'https://site.example.invalid/wp-json/tamrank/v2/work-items/grp_alt_images');
   assert.deepEqual(output, { code: 'workflow_work_unavailable',
-    message: 'Site refused the request (404). The work operation could not be completed. No administration state exists for this work_id: only picked-up research work and manual tasks have one. If this is a dashboard group from the queue, read it with section targets.',
+    message: 'The request to the website did not go through. The work operation could not be completed.',
+    assistant_note: 'No administration state exists for this work_id: only picked-up research work and manual tasks have one. If this is a dashboard group from the queue, read it with section targets.',
     retryable: false, outcome_unknown: false });
 }
 // The same code outside administration keeps the site's own text.
 assert.deepEqual((({ url, ...o }) => o)(await call('get_work_queue', { work_id: 'grp_alt_images', section: 'targets' },
   wp(404, 'workflow_work_unavailable', 'The work operation could not be completed.'))),
-  { code: 'workflow_work_unavailable', message: 'Site refused the request (404). The work operation could not be completed.',
+  { code: 'workflow_work_unavailable', message: 'The request to the website did not go through. The work operation could not be completed.',
     retryable: false, outcome_unknown: false });
 // 400 and 409 domain refusals from the shared read path, not a work-items exception.
 for (const [name, args, response] of [
@@ -40,7 +41,7 @@ for (const [name, args, response] of [
   ['get_page', { post_id: 1 }, wp(404, 'signal_subject_unavailable', 'Synthetic domain refusal.')],
 ]) {
   const { url, ...output } = await call(name, args, response);
-  assert.deepEqual(output, { code: response.body.code, message: `Site refused the request (${response.status}). ${response.body.message}`,
+  assert.deepEqual(output, { code: response.body.code, message: `The request to the website did not go through. ${response.body.message}`,
     retryable: false, outcome_unknown: false }, name);
 }
 // No route, a WAF/HTML page, WordPress' own refusals and a mismatched envelope are no domain evidence.
@@ -50,17 +51,17 @@ for (const response of [
   { status: 404, body: { code: 'workflow_work_unavailable', message: 'Synthetic', data: { status: 200 } } },
   { status: 404, body: { code: 'workflow_work_unavailable', data: { status: 404 } } },
 ]) assert.deepEqual((({ url, ...o }) => o)(await call('get_work_queue', { section: 'administration', work_id: 'grp_alt_images' }, response)),
-  response.html ? { ...unavailable, message: 'Site refused the request (404). The site returned an unavailable or incompatible workflow response.' } : unavailable);
+  response.html ? { ...unavailable, message: 'The request to the website did not go through. Its answer could not be used.' } : unavailable);
 for (const [status, code] of [[403, 'rest_forbidden'], [401, 'workflow_session_invalid'], [403, 'workflow_forbidden'],
   [404, 'agent_token_revoked'], [404, 'cloud_link_revoked'], [404, 'pro_required'], [400, 'rest_invalid_param']]) {
   assert.deepEqual((({ url, ...o }) => o)(await call('get_site_context', {}, wp(status, code, 'Synthetic'))),
-    { ...unavailable, message: `Site refused the request (${status}). The site refused this workflow request.` }, `${status}:${code}`);
+    { ...unavailable, message: 'The request to the website did not go through. No reason was given.' }, `${status}:${code}`);
 }
 // Greptile PR #7 (1): a timeout (408) or too-early (425) in a valid WP envelope stays a retryable outage.
 for (const status of [408, 425]) {
   assert.deepEqual((({ url, ...o }) => o)(await call('get_work_queue', { section: 'targets', work_id: 'grp_alt_images' },
     wp(status, 'workflow_request_timeout', 'Synthetic'))),
-    { ...unavailable, message: `Site refused the request (${status}). The site refused this workflow request.` }, `transient ${status} stays retryable`);
+    { ...unavailable, message: 'The request to the website did not go through. No reason was given.' }, `transient ${status} stays retryable`);
 }
 // Greptile PR #7 (2): a code the client had to replace is no site decision, even in a valid envelope.
 for (const code of ['Workflow-Work-Unavailable', 'x'.repeat(81), '9workflow']) {
@@ -71,15 +72,16 @@ for (const code of ['Workflow-Work-Unavailable', 'x'.repeat(81), '9workflow']) {
 {
   const { url, ...output } = await call('get_work_queue', { section: 'administration', work_id: 'manual_never_existed' },
     wp(404, 'workflow_work_unavailable', 'Synthetic site reason.'));
-  assert.ok(output.message.startsWith('Site refused the request (404). Synthetic site reason. No administration state exists for this work_id:'), output.message);
-  assert.doesNotMatch(output.message, /in the queue but|This work item is/);
+  assert.equal(output.message, 'The request to the website did not go through. Synthetic site reason.');
+  assert.ok(output.assistant_note.startsWith('No administration state exists for this work_id:'), output.assistant_note);
+  assert.doesNotMatch(output.assistant_note, /in the queue but|This work item is/);
 }
 // Ordinary refused writes still report an unknown outcome.
 {
   const { url, ...output } = await call('update_work_item', { client_request_id: 'synthetic-work-001', operation: 'work.note',
     work_id: 'manual_fixture', expected_revision: 'a'.repeat(64), note: 'Synthetic note' },
     wp(404, 'workflow_work_unavailable', 'The work operation could not be completed.'));
-  assert.deepEqual(output, { code: 'site_unavailable', message: 'Site refused the request (404). The site refused this workflow request.',
+  assert.deepEqual(output, { code: 'site_unavailable', message: 'The request to the website did not go through. No reason was given.',
     retryable: false, outcome_unknown: true });
 }
 // A validated target refusal on one of the two draft-only plan routes proves that
@@ -89,7 +91,7 @@ for (const code of ['Workflow-Work-Unavailable', 'x'.repeat(81), '9workflow']) {
     wp(404, 'change_plan_target_unavailable', 'This target cannot be changed.'));
   assert.equal(url, 'https://site.example.invalid/wp-json/tamrank/v2/changes/executions');
   assert.deepEqual(output, { code: 'change_plan_target_unavailable',
-    message: 'Site refused the request (404). This target cannot be changed.',
+    message: 'The website turned this down. This target cannot be changed.',
     retryable: false, outcome_unknown: false });
 }
 console.log('PASS: hosted reads and the exact pre-storage plan refusal pass through; ordinary writes, rest_*, HTML, auth statuses and mismatched envelopes stay site_unavailable.');

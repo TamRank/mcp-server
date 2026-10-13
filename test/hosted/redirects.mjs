@@ -218,7 +218,7 @@ for (const enabled of [Object.keys(specialist), ['get_redirects'], ['get_gsc_pag
     const names = (await fixture.client.listTools()).tools.map(t => t.name);
     for (const name of Object.keys(specialist)) eq(names.includes(name), enabled.includes(name), `${name} listing follows its entry`);
     for (const name of ['start_scan','get_scan_status','close_scan']) ok(!names.includes(name), `${name} never hosted`);
-    ok(fixture.client.getInstructions().includes('except the listed stored-data reads'), 'Instructions name the exception');
+    ok(fixture.client.getInstructions().includes('the listed saved-report tools work'), 'Instructions name the exception');
     for (const name of enabled) {
       const start = fixture.stub.events.length;
       const output = await fixture.client.callTool({ name, arguments: specialist[name][0] });

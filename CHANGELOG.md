@@ -10,6 +10,17 @@ project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+### Changed
+
+- Everything the assistant can pass on to a user is plain language. Refusal messages no longer
+  name internal terms (workflow, hosted, legacy writers, specialist, token, scope ids), tool
+  names or HTTP statuses; what the assistant must do next (for example reading a set with
+  `get_changes(kind=execution)`) moves to a separate `assistant_note`. Tool descriptions and
+  server instructions drop internal codenames. A WordPress `rest_*` refusal over stdio says the
+  plugin may be inactive or out of date instead of forwarding WordPress' route text.
+- `update_work_item.priority` takes `low`, `medium` or `high`. The old Dutch values are still
+  accepted, and the site keeps receiving its own values. Guarded by `test/hosted/model-text.mjs`.
+
 ### Added
 
 - Historical change reads accept a rollback a site administrator confirmed in WordPress

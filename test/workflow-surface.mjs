@@ -208,6 +208,8 @@ const pickup={client_request_id:'fixture-pickup-1',operation:'work.pickup',signa
 assert.equal((await enabled.get('update_work_item').h(pickup)).isError,true); assert.equal(calls.length,0);
 const pickupEnabled=registry('core',{work_administration:{available:true,operations:['work.pickup']}});
 await pickupEnabled.get('update_work_item').h(pickup); assert.deepEqual(calls.pop(),{path:'/work-items',body:pickup});
+// The assistant sees English priorities; the plugin keeps receiving its own Dutch values.
+await pickupEnabled.get('update_work_item').h({...pickup,priority:'high'}); assert.deepEqual(calls.pop(),{path:'/work-items',body:{...pickup,priority:'hoog'}});
 for(const bad of [{...pickup,title:undefined},{...pickup,target_keys:[]},{...pickup,target_keys:[...pickup.target_keys,pickup.target_keys[0]]},
   {...pickup,work_id:work.work_id},{...pickup,expected_revision:work.expected_revision},{...pickup,reviewed:true},
   {...pickup,signal_id:'1'},{...pickup,research_operation:'technical.resolve_404'},{...pickup,priority:'urgent'},

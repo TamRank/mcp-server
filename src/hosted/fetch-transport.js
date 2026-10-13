@@ -13,7 +13,7 @@ export function createFetchTransport(pat) {
         return {status: response.status, headers: Object.fromEntries(response.headers), bodyBytes: new Uint8Array()};
       }
       const reader = response.body?.getReader();
-      if (!reader) throw new ApiError(response.status, 'invalid_response', 'Empty workflow response.');
+      if (!reader) throw new ApiError(response.status, 'invalid_response', 'The website sent an empty answer.');
       const chunks = []; let size = 0;
       while (true) {
         const {done, value} = await reader.read(); if (done) break;
