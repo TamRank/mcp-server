@@ -185,4 +185,16 @@ const started = { contract_version: 1, check_id: check, status: 'running', urls:
     assert.equal(out.stopped, 'timeout'); assert.equal(out.live, null); assert.equal(out.extra, undefined, 'only documented fields');
   } finally { await stopped.close(); }
 }
+// Greptile PR #20 P1 (second round): a grant without scans:execute gets the upgrade challenge, not a bare refusal.
+{
+  const meta = 'https://mcp.example.invalid/.well-known/oauth-protected-resource/mcp';
+  const challenge = `Bearer resource_metadata="${meta}", scope="${[...scopes, 'scans:execute'].join(' ')}", error="insufficient_scope", error_description="Additional permission required"`;
+  const f = await connect({ responses: [], decisions: { start_scan: { ok: false, code: 'insufficient_scope', message: 'This needs permission to start index checks.',
+    retryable: false, wwwAuthenticate: challenge } } }, { capabilities: caps(), scopes, offeredScopes: [...scopes, 'scans:execute'], resourceMetadataUrl: meta });
+  try {
+    const out = await f.client.callTool({ name: 'start_scan', arguments: { type: 'index', urls: ['https://site.example.invalid/a/'] } });
+    assert.equal(value(out).code, 'insufficient_scope'); assert.deepEqual(out._meta?.['mcp/www_authenticate'], [challenge]);
+    assert.equal(f.stub.calls.length, 0);
+  } finally { await f.close(); }
+}
 console.log('PASS: hosted list_changes, live_check and index checks: listed when advertised, exact routes, plain limit messages, start refusals not uncertain.');
