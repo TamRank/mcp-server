@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { connect, fullCaps } from './factory-fixtures.mjs';
 import { naiveTimes } from './naive-times.mjs';
 import { registerWorkflowTools } from '../../src/workflow-tools.js';
-import { siteZone, siteSqlToIso, utcSqlToIso, utcDayToSiteSql } from '../../src/site-time.js';
+import { siteZone, siteSqlToIso, utcSqlToIso } from '../../src/site-time.js';
+import { workflowDefinitions } from '../../src/workflow-tools.js';
 
 const set = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const value = out => JSON.parse(out.content[0].text);
@@ -35,8 +36,8 @@ async function call(tool, items, options = {}, args = {}) {
   assert.equal(siteSqlToIso('2026-10-14 10:00:00', null), null);
   for (const bad of ['2026-02-30 10:00:00', '2026-10-14T10:00:00', '0000-00-00 00:00:00', '']) assert.equal(siteSqlToIso(bad, ams), null, bad);
   assert.equal(utcSqlToIso('2026-10-14 10:00:00'), '2026-10-14T10:00:00Z');
-  assert.equal(utcDayToSiteSql('2026-10-01', ams), '2026-10-01 02:00:00');
-  assert.equal(utcDayToSiteSql('2026-12-01', ams), '2026-12-01 01:00:00');
+  // A manual UTC offset (empty timezone_string): wp_timezone_string() gives '+00:00', as on tammarketing.nl (14 Oct 2026).
+  assert.equal(siteSqlToIso('2026-10-14 10:00:00', siteZone('+00:00')), '2026-10-14T10:00:00Z');
 }
 // get_outcomes: site-clock and UTC columns both leave in UTC with Z; a time already zoned passes on in UTC.
 {
@@ -50,12 +51,35 @@ async function call(tool, items, options = {}, args = {}) {
   assert.deepEqual(naiveTimes(out), []);
   assert.equal(stub.zoneCalls.length, 1);
   assert.deepEqual([...new URL(stub.zoneCalls[0].url).searchParams.keys()].sort(), ['from', 'through']);
+  // Review 14 Oct: the zone travels along, so the model can put a Z time back on the site's clock.
+  assert.equal(out.site_timezone, 'Europe/Amsterdam');
+  const changes = await call('list_changes', [row()]);
+  assert.equal(changes.out.site_timezone, 'Europe/Amsterdam'); assert.equal(changes.out.items[0].changed_at, '2026-10-14T08:00:00Z');
+}
+// A manual offset: the zone is named as WordPress reports it, times still leave with Z.
+{
+  const { out } = await call('list_changes', [row()], { siteTimezone: '+00:00' });
+  assert.equal(out.site_timezone, '+00:00'); assert.equal(out.items[0].changed_at, '2026-10-14T10:00:00Z'); assert.equal(out.times_note, undefined);
+}
+// Review 14 Oct: since is a date on the site's own calendar, sent as is, with or without a known zone; the
+// descriptions say so. (A UTC day would miss 00:00-02:00 Amsterdam time, and without a zone mean something else.)
+{
+  for (const tool of ['get_outcomes', 'list_changes']) {
+    const { stub } = await call(tool, [row()], {}, { since: '2026-10-01' });
+    assert.equal(new URL(stub.calls[0].url).searchParams.get('created_from'), '2026-10-01 00:00:00', tool);
+  }
+  const f = await connect({}, { capabilities: caps() });
+  try {
+    const listed = new Map((await f.client.listTools()).tools.map(t => [t.name, t.description]));
+    for (const tool of ['get_outcomes', 'list_changes']) assert.match(listed.get(tool), /since \(a date on the site's own calendar/, tool);
+  } finally { await f.close(); }
+  for (const tool of ['get_outcomes', 'list_changes']) assert.match(workflowDefinitions()[tool].description, /since \(site date\)/, tool);
 }
 // Without a readable zone: site-clock times are left out with a note, never guessed; since stays the site's day.
 {
   const { out, stub } = await call('get_outcomes', [row({ rolled_back_at: '2026-10-21 07:00:00' })], { siteTimezone: null }, { since: '2026-10-01' });
   assert.equal(out.items[0].changed_at, null); assert.equal(out.items[0].rolled_back_at, '2026-10-21T07:00:00Z');
-  assert.match(out.times_note, /time zone could not be read/);
+  assert.match(out.times_note, /time zone could not be read/); assert.equal(out.site_timezone, null);
   assert.equal(new URL(stub.calls[0].url).searchParams.get('created_from'), '2026-10-01 00:00:00');
   const changes = await call('list_changes', [row()], { siteTimezone: null });
   assert.equal(changes.out.items[0].changed_at, null); assert.match(changes.out.times_note, /time zone could not be read/);

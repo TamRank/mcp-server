@@ -22,10 +22,10 @@ const tool = tools.get('get_outcomes');
 assert.equal(tool.c.annotations.readOnlyHint, true, 'get_outcomes is a read');
 assert.ok(!/workflow|legacy|hosted|specialist/i.test(tool.c.description));
 
-// Filters map onto the site's own query names; since is a whole day.
+// Filters map onto the site's own query names; since is a whole day on the site's own calendar, also with a known zone.
 reply = page([row()]);
 await tool.h({ change_set_id: set, status: 'pending', since: '2026-10-01', limit: 10, cursor: '2' });
-assert.deepEqual(calls.pop(), { path: '/outcomes', query: { change_set_id: set, status: 'pending', created_from: '2026-10-01 02:00:00', per_page: 10, page: '2' } });
+assert.deepEqual(calls.pop(), { path: '/outcomes', query: { change_set_id: set, status: 'pending', created_from: '2026-10-01 00:00:00', per_page: 10, page: '2' } });
 await tool.h({});
 assert.deepEqual(calls.pop(), { path: '/outcomes', query: {} });
 // One page (golf 2b, PRO filter): post_id or url, passed on unchanged.

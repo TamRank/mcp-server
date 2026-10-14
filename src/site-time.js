@@ -6,13 +6,14 @@
 const SQL = /^([0-9]{4})-([0-9]{2})-([0-9]{2}) ([0-9]{2}):([0-9]{2}):([0-9]{2})$/;
 const OFFSET = /^(?:UTC)?([+-])([0-9]{2}):?([0-9]{2})$/;
 
-/** A zone WordPress reports (wp_timezone_string): an IANA name, '+02:00'-style offset or 'UTC'. Null if unusable. */
+/** A zone WordPress reports (wp_timezone_string): an IANA name, '+02:00'-style offset or 'UTC'. Null if unusable.
+ * name is the value as the site reported it, shown to the model as site_timezone. */
 export function siteZone(value) {
   if (typeof value !== 'string' || value.length > 64) return null;
-  if (value === 'UTC' || value === 'Z') return { offset: 0 };
+  if (value === 'UTC' || value === 'Z') return { offset: 0, name: value };
   const m = OFFSET.exec(value);
-  if (m) { const minutes = (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3])); return Math.abs(minutes) <= 14 * 60 ? { offset: minutes } : null; }
-  try { new Intl.DateTimeFormat('en-US', { timeZone: value }); return { iana: value }; } catch { return null; }
+  if (m) { const minutes = (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3])); return Math.abs(minutes) <= 14 * 60 ? { offset: minutes, name: value } : null; }
+  try { new Intl.DateTimeFormat('en-US', { timeZone: value }); return { iana: value, name: value }; } catch { return null; }
 }
 
 const wallAsUtc = value => { const m = SQL.exec(value); if (!m) return null;
@@ -40,9 +41,3 @@ export function siteSqlToIso(value, zone) {
   return iso(fits.length ? Math.max(...fits) : wall - before * 60000);
 }
 
-/** A UTC day ('Y-m-d') -> the site-clock 'Y-m-d H:i:s' of its first second, for PRO's site-local filters. */
-export function utcDayToSiteSql(day, zone) {
-  const ms = Date.parse(day + 'T00:00:00Z');
-  if (!Number.isFinite(ms) || !zone) return null;
-  return new Date(ms + offsetMinutes(zone, ms) * 60000).toISOString().slice(0, 19).replace('T', ' ');
-}

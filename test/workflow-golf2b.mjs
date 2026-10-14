@@ -25,7 +25,7 @@ const registry = (capabilities, profile = 'core', extra = {}) => { const tools =
   assert.equal(tools.has('start_scan'), false);
   reply = { contract_version: 2, items: [], pagination: { page: 1, per_page: 25, total: 0, total_pages: 0, has_more: false } };
   const out = parse(await tools.get('list_changes').h({ post_id: 7, since: '2026-10-01' }));
-  assert.deepEqual(calls.pop(), { method: 'GET', path: '/outcomes', query: { post_id: 7, created_from: '2026-10-01 02:00:00' } });
+  assert.deepEqual(calls.pop(), { method: 'GET', path: '/outcomes', query: { post_id: 7, created_from: '2026-10-01 00:00:00' } });
   assert.deepEqual(out.items, []); assert.equal(out.next_cursor, null); assert.match(out.coverage, /directly in WordPress/);
   // An explicit false from the site refuses locally; nothing is sent.
   const off = registry({ reads: { get_outcomes: { available: false } }, live_check: { available: false } });

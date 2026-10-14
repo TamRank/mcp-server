@@ -32,8 +32,8 @@ const reply = { contract_version: 2, items: [{ post_id: 7, post_title: 'Pricing'
     assert.equal(out.items[0].changed_at, '2026-10-14T08:00:00Z'); assert.equal(out.times_note, undefined);
     const url = new URL(f.stub.calls[0].url);
     assert.equal(url.pathname, '/wp-json/tamrank/v2/outcomes'); assert.equal(f.stub.calls[0].method, 'GET');
-    // since is a UTC day; PRO compares created_from with its site-clock column, so it goes out on that clock.
-    assert.equal(url.searchParams.get('change_set_id'), set); assert.equal(url.searchParams.get('created_from'), '2026-10-01 02:00:00');
+    // since is a day on the site's own calendar, sent as is (review 14 Oct: no UTC conversion).
+    assert.equal(url.searchParams.get('change_set_id'), set); assert.equal(url.searchParams.get('created_from'), '2026-10-01 00:00:00');
     assert.equal(f.stub.zoneCalls.length, 1, 'the site zone is read once');
     const authorized = f.stub.events.find(e => e.type === 'authorize');
     assert.deepEqual(authorized, { type: 'authorize', toolName: 'get_outcomes', parsedArgs: { change_set_id: set, since: '2026-10-01' } });

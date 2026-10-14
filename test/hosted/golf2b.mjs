@@ -60,7 +60,7 @@ const started = { contract_version: 1, check_id: check, status: 'running', urls:
     const url = new URL(f.stub.calls[0].url);
     assert.equal(url.pathname, '/wp-json/tamrank/v2/outcomes'); assert.equal(f.stub.calls[0].method, 'GET');
     assert.equal(url.searchParams.get('url'), 'https://site.example.invalid/pricing/');
-    assert.equal(url.searchParams.get('created_from'), '2026-10-01 02:00:00'); assert.equal(url.searchParams.get('per_page'), '1');
+    assert.equal(url.searchParams.get('created_from'), '2026-10-01 00:00:00'); assert.equal(url.searchParams.get('per_page'), '1');
     assert.deepEqual(out.items[0], { post_id: 7, page_title: 'Pricing', change_set_id: set, changed: 'Meta title', fields: ['meta_title'],
       changed_at: '2026-10-14T08:00:00Z', undone_at: null, result_in_search: 'pending' });
     assert.equal(out.next_cursor, '2'); assert.equal(out.total, 3); assert.match(out.coverage, /Edits made directly in WordPress are not/);
