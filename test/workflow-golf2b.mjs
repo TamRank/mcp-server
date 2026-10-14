@@ -69,6 +69,18 @@ const registry = (capabilities, profile = 'core', extra = {}) => { const tools =
   assert.equal(parse(await none.get('start_scan').h({ type: 'index', urls: ['https://example.test/a/'] })).code, 'workflow_operation_unavailable');
   assert.equal(calls.length, 0);
 }
+// Greptile PR #20 P2: specialist start_scan (it can start an index check) never claims idempotence.
+assert.equal(registry({}, 'specialist').get('start_scan').c.annotations.idempotentHint, undefined);
+// Greptile PR #20 P1 (stdio): the site's own refusal code is a refusal; an unreadable accepted answer stays uncertain.
+{
+  const tools = registry({ index_checks: { available: true } }, 'specialist');
+  const urls = ['https://example.test/a/'];
+  failure = Object.assign(new Error('Could not be started at TamRank right now.'), { status: 502, code: 'index_check_backend_unavailable', data: undefined });
+  assert.match(parse(await tools.get('start_scan').h({ type: 'index', urls })).message, /^The website turned this down/);
+  failure = Object.assign(new Error('The TamRank plugin on this website does not match this connection.'), { status: 409, code: 'workflow_upgrade_required', data: undefined });
+  assert.match(parse(await tools.get('start_scan').h({ type: 'index', urls })).message, /may or may not have started/);
+  failure = null; calls = [];
+}
 // The real stdio client: contract 1 on the golf 2 routes, and limit details survive for a plain message.
 {
   const answers = [];

@@ -80,12 +80,37 @@ export function indexCheckView(data) {
     results: data.results.map(result).filter(Boolean), ...(quota ? { todays_room: quota } : {}) };
 }
 
-/** A live check as shown: what the page serves now next to what TamRank has saved. */
+const plain = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+const text = v => v === null || typeof v === 'string';
+const STOPPED = ['timeout', 'request_failed', 'too_many_redirects', 'redirect_leaves_site'];
+const pick = (o, keys, ok) => keys.every(k => ok(o[k])) ? Object.fromEntries(keys.map(k => [k, o[k]])) : null;
+/** A live check as shown: what the page serves now next to what TamRank has saved. Only the documented
+ * fields, each with its documented type; any other shape is refused by the caller, never shown as a result. */
 export function liveCheckView(data) {
-  if (data?.contract_version !== 1 || typeof data.url !== 'string' || !data.live && !data.stopped) return null;
-  const { contract_version, limits, ...shown } = data;
-  const room = limits?.live_checks;
-  return { ...shown, ...(room && typeof room === 'object' ? { live_checks_left_this_hour: integer(room.remaining) ?? null } : {}) };
+  if (data?.contract_version !== 1 || typeof data.url !== 'string' || !text(data.checked_at) || !text(data.final_url)
+    || !(data.status === null || Number.isInteger(data.status)) || !(data.stopped === null || STOPPED.includes(data.stopped))
+    || !text(data.stopped_reason ?? null) || !Array.isArray(data.redirects) || !(data.post_id == null || integer(data.post_id) !== undefined)) return null;
+  const live = data.live === null || data.live === undefined ? null
+    : plain(data.live) ? pick(data.live, ['title', 'meta_description', 'meta_robots', 'canonical', 'x_robots_tag'], v => v === undefined || text(v)) : false;
+  const stored = data.stored === null || data.stored === undefined ? null
+    : plain(data.stored) ? pick(data.stored, ['title', 'meta_description', 'canonical', 'canonical_if_unset'], v => v === undefined || text(v)) : false;
+  const matches = plain(data.matches) ? pick(data.matches, ['title', 'meta_description', 'canonical', 'noindex'],
+    v => v === undefined || v === null || typeof v === 'boolean') : null;
+  const redirects = data.redirects.map(r => plain(r) && typeof r.url === 'string' && (r.status === null || Number.isInteger(r.status)) && text(r.location ?? null)
+    ? { url: r.url, status: r.status, location: r.location ?? null } : null);
+  // Without a stop reason the site fetched the page, so the page data must be there.
+  if (live === false || stored === false || !matches || redirects.includes(null) || (data.stopped === null && !live)) return null;
+  if (live && data.live.body_truncated !== undefined && typeof data.live.body_truncated !== 'boolean') return null;
+  if (stored && data.stored.noindex !== undefined && typeof data.stored.noindex !== 'boolean') return null;
+  if (!['stored', 'permalink', undefined].includes(data.matches.canonical_compared_with)) return null;
+  const room = data.limits?.live_checks;
+  return { url: data.url, checked_at: data.checked_at ?? null, freshness: 'live', status: data.status, final_url: data.final_url ?? null, redirects,
+    stopped: data.stopped, stopped_reason: data.stopped_reason ?? null,
+    live: live && { ...live, ...(data.live.body_truncated !== undefined ? { body_truncated: data.live.body_truncated } : {}) },
+    stored: stored && { ...stored, ...(data.stored.noindex !== undefined ? { noindex: data.stored.noindex } : {}) },
+    matches: { ...matches, ...(data.matches.canonical_compared_with ? { canonical_compared_with: data.matches.canonical_compared_with } : {}) },
+    post_id: data.post_id ?? null,
+    ...(plain(room) ? { live_checks_left_this_hour: integer(room.remaining) ?? null } : {}) };
 }
 
 // list_changes: the same site rows as get_outcomes, cut to "what changed where and when".

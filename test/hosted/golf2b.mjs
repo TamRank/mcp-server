@@ -150,4 +150,39 @@ const started = { contract_version: 1, check_id: check, status: 'running', urls:
     assert.equal(out.code, 'workflow_operation_unavailable'); assert.equal(f.stub.calls.length, 0);
   } finally { await f.close(); }
 }
+// Greptile PR #20 P1: an accepted start with an unreadable answer stays uncertain (outcome_unknown wins over the status).
+{
+  const f = await connect({ responses: [{ body: { contract_version: 2, check_id: check, status: 'running', results: [] } }] },
+    { capabilities: caps(), scopes: [...scopes, 'scans:execute'] });
+  try {
+    const out = value(await f.client.callTool({ name: 'start_scan', arguments: { type: 'index', urls: ['https://site.example.invalid/a/'] } }));
+    assert.match(out.message, /may or may not have started/); assert.doesNotMatch(out.message, /turned this down/);
+  } finally { await f.close(); }
+}
+// Greptile PR #20 P2: mcp_limit_unavailable on a start is a refusal with its reason (one shared list), not "may have started".
+{
+  const f = await connect({ responses: [wpError(503, 'mcp_limit_unavailable', 'The limit counter could not be read, so nothing was started.')] },
+    { capabilities: caps(), scopes: [...scopes, 'scans:execute'] });
+  try {
+    const out = value(await f.client.callTool({ name: 'start_scan', arguments: { type: 'index', urls: ['https://site.example.invalid/a/'] } }));
+    assert.equal(out.code, 'mcp_limit_unavailable'); assert.match(out.message, /^The website turned this down\. The limit counter/);
+  } finally { await f.close(); }
+}
+// Greptile PR #20 P2: a malformed live answer is never shown as a live check.
+{
+  const bad = [{ ...live, live: 5 }, { ...live, live: null }, { ...live, redirects: [5] }, { ...live, status: '200' },
+    { ...live, stopped: 'exploded' }, { ...live, live: { ...live.live, title: 7 } }, { ...live, matches: { ...live.matches, title: 'yes' } }];
+  const f = await connect({ responses: bad.map(body => ({ body })) }, { capabilities: caps() });
+  try {
+    for (const body of bad) {
+      const out = await f.client.callTool({ name: 'live_check', arguments: { post_id: 7 } });
+      assert.equal(out.isError, true, JSON.stringify(body).slice(0, 120));
+    }
+  } finally { await f.close(); }
+  const stopped = await connect({ responses: [{ body: { ...live, live: null, stored: null, status: null, stopped: 'timeout', stopped_reason: 'No answer within 5 seconds.', extra: 'x' } }] }, { capabilities: caps() });
+  try {
+    const out = value(await stopped.client.callTool({ name: 'live_check', arguments: { post_id: 7 } }));
+    assert.equal(out.stopped, 'timeout'); assert.equal(out.live, null); assert.equal(out.extra, undefined, 'only documented fields');
+  } finally { await stopped.close(); }
+}
 console.log('PASS: hosted list_changes, live_check and index checks: listed when advertised, exact routes, plain limit messages, start refusals not uncertain.');
