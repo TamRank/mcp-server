@@ -33,8 +33,11 @@ export function utcSqlToIso(value) { const ms = wallAsUtc(value); return ms === 
  * the wall time occurs twice; like PHP, this picks the later (post-transition) offset. */
 export function siteSqlToIso(value, zone) {
   const wall = wallAsUtc(value); if (wall === null || !zone) return null;
-  const first = wall - offsetMinutes(zone, wall) * 60000;
-  return iso(wall - offsetMinutes(zone, first) * 60000);
+  // The offsets a day before and after cover any clock change; keep each that maps back to this wall time.
+  const before = offsetMinutes(zone, wall - 86400000), after = offsetMinutes(zone, wall + 86400000);
+  const fits = [...new Set([before, after])].map(o => wall - o * 60000).filter(t => offsetMinutes(zone, t) * 60000 === wall - t);
+  // Repeated hour: the later instant. Skipped hour (no fit): moved forward by the gap, like PHP.
+  return iso(fits.length ? Math.max(...fits) : wall - before * 60000);
 }
 
 /** A UTC day ('Y-m-d') -> the site-clock 'Y-m-d H:i:s' of its first second, for PRO's site-local filters. */

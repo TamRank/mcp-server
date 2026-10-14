@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { connect, fullCaps } from './factory-fixtures.mjs';
 import { naiveTimes } from './naive-times.mjs';
+import { registerWorkflowTools } from '../../src/workflow-tools.js';
 import { siteZone, siteSqlToIso, utcSqlToIso, utcDayToSiteSql } from '../../src/site-time.js';
 
 const set = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -22,6 +23,11 @@ async function call(tool, items, options = {}, args = {}) {
   assert.equal(siteSqlToIso('2026-10-14 10:00:00', ams), '2026-10-14T08:00:00Z', 'summer time');
   assert.equal(siteSqlToIso('2026-12-01 10:00:00', ams), '2026-12-01T09:00:00Z', 'winter time');
   assert.equal(siteSqlToIso('2026-10-25 02:30:00', ams), '2026-10-25T01:30:00Z', 'repeated hour: the later offset, like PHP');
+  const ny = siteZone('America/New_York');
+  assert.equal(siteSqlToIso('2026-11-01 01:30:00', ny), '2026-11-01T06:30:00Z', 'repeated hour west of UTC: the later one too');
+  assert.equal(siteSqlToIso('2026-03-08 02:30:00', ny), '2026-03-08T07:30:00Z', 'skipped hour: moved forward, like PHP');
+  assert.equal(siteSqlToIso('2026-03-29 02:30:00', ams), '2026-03-29T01:30:00Z', 'skipped hour east of UTC');
+  assert.equal(siteSqlToIso('2026-07-01 12:00:00', ny), '2026-07-01T16:00:00Z');
   assert.equal(siteSqlToIso('2026-10-14 10:00:00', siteZone('+05:30')), '2026-10-14T04:30:00Z');
   assert.equal(siteSqlToIso('2026-10-14 10:00:00', siteZone('UTC')), '2026-10-14T10:00:00Z');
   assert.equal(siteSqlToIso('2026-10-14 10:00:00', siteZone('-03:00')), '2026-10-14T13:00:00Z');
@@ -61,6 +67,17 @@ async function call(tool, items, options = {}, args = {}) {
     await f.client.callTool({ name: 'get_outcomes', arguments: {} }); await f.client.callTool({ name: 'list_changes', arguments: {} });
     assert.equal(f.stub.zoneCalls.length, 1); assert.equal(f.stub.calls.length, 2);
   } finally { await f.close(); }
+}
+// Parallel first calls share one zone read (the hosted factory runs calls in turn; the local bridge need not).
+{
+  let zoneReads = 0;
+  const fake = { get: async path => { if (path === '/reports/outcomes/summary') { zoneReads++; await new Promise(r => setTimeout(r, 20));
+    return { site_timezone: 'Europe/Amsterdam' }; } return reply([row()]); }, post: async () => { throw new Error('no writes'); } };
+  const tools = new Map();
+  registerWorkflowTools({ registerTool: (n, c, h) => tools.set(n, { c, h }) }, fake, { profile: 'core', capabilities: { reads: { get_outcomes: { available: true } } } });
+  const outs = await Promise.all([tools.get('get_outcomes').h({}), tools.get('list_changes').h({})]);
+  assert.equal(zoneReads, 1, 'parallel: one zone read');
+  for (const o of outs) assert.equal(JSON.parse(o.content[0].text).items[0].changed_at, '2026-10-14T08:00:00Z');
 }
 // Bevinding 2: the page URL, from the row when the site sends it, else from a measurement; never a non-URL.
 {

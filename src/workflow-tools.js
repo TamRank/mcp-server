@@ -265,12 +265,14 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   if (!['core','legacy','specialist'].includes(profile)) throw new Error('Unknown workflow tool profile.');
   // The site's time zone, read once per session from the one workflow route that reports it (the outcome
   // report summary, one day; PRO 0.9.48 has no other). A failed read is kept for five minutes, then retried.
+  // Parallel first calls share the one pending read.
   let zoneRead=null;
   const siteTimeZone=async()=>{
-    if(zoneRead&&(zoneRead.zone||Date.now()-zoneRead.at<300000))return zoneRead.zone;
+    if(zoneRead&&(zoneRead.pending||zoneRead.zone||Date.now()-zoneRead.at<300000))return zoneRead.pending??zoneRead.zone;
     const day=new Date().toISOString().slice(0,10);
-    let zone=null;
-    try{zone=siteZone((await client.get('/reports/outcomes/summary',{from:day,through:day}))?.site_timezone);}catch{zone=null;}
+    const pending=client.get('/reports/outcomes/summary',{from:day,through:day}).then(r=>siteZone(r?.site_timezone),()=>null);
+    zoneRead={pending};
+    const zone=await pending;
     zoneRead={zone,at:Date.now()};
     return zone;
   };
