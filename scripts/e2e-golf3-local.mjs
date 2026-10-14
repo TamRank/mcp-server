@@ -1,7 +1,8 @@
 /** Golf 3 E2E against a local PRO site: the hosted PageSpeed module (src/pagespeed-hosted.js) over a direct REST
  * client with a site PAT. The hosted factory refuses loopback sites, so the transport here is the stdio one; the
  * plan → approval → start → status logic and its texts are exactly the hosted ones. PAT from the environment, never printed.
- * Usage: TAMRANK_SITE_URL=http://site.local TAMRANK_PAT=... [TAMRANK_REST_STYLE=query] node scripts/e2e-golf3-local.mjs <post_id> [<post_id-2>] */
+ * Usage: TAMRANK_SITE_URL=http://site.local TAMRANK_PAT=... [TAMRANK_REST_STYLE=query] node scripts/e2e-golf3-local.mjs <post_id>
+ * One page on purpose: the second start of the same page is what proves the per-page limit. Multi-page plans: test/hosted/golf3.mjs. */
 import { WorkflowClient } from '../src/workflow-rest.js';
 import { hostedPageSpeed } from '../src/pagespeed-hosted.js';
 import { pagespeedSupport } from '../src/pagespeed-scans.js';
@@ -9,7 +10,7 @@ import { pagespeedSupport } from '../src/pagespeed-scans.js';
 const site = process.env.TAMRANK_SITE_URL, pat = process.env.TAMRANK_PAT;
 if (!site || !pat) { console.error('TAMRANK_SITE_URL and TAMRANK_PAT are required.'); process.exit(2); }
 const ids = process.argv.slice(2).map(Number);
-if (!ids.length || !ids.every(n => Number.isSafeInteger(n) && n > 0)) { console.error('Give one or two post IDs.'); process.exit(2); }
+if (ids.length !== 1 || !Number.isSafeInteger(ids[0]) || ids[0] < 1) { console.error('Give exactly one post ID.'); process.exit(2); }
 const redact = text => text.split(pat).join('[pat]');
 const client = new WorkflowClient({ siteUrl: site, pat, routeStyle: process.env.TAMRANK_REST_STYLE || 'pretty' });
 
