@@ -2,7 +2,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerWorkflowTools, WORKFLOW_INSTRUCTIONS } from './workflow-tools.js';
 import { workflowIdentity } from './workflow-identity.js';
-import { hostedPageSpeedOffered } from './pagespeed-hosted.js';
+import { hostedPageSpeedOffered, hostedPageSpeedReadable } from './pagespeed-hosted.js';
 
 const invalidRequest = () => ({ isError: true, content: [{ type: 'text', text: JSON.stringify({ code: 'invalid_request',
   message: 'Invalid or unsupported tool request; nothing was sent.' }) }] });
@@ -28,7 +28,8 @@ function visible(name, caps) {
   // have their own capability blocks (PRO), and scans here are index checks only.
   if (name === 'list_changes') return caps.reads?.get_outcomes?.available === true;
   if (name === 'live_check') return caps.live_check?.available === true;
-  if (name === 'start_scan' || name === 'get_scan_status') return caps.index_checks?.available === true || hostedPageSpeedOffered(caps);
+  if (name === 'start_scan') return caps.index_checks?.available === true || hostedPageSpeedOffered(caps);
+  if (name === 'get_scan_status') return caps.index_checks?.available === true || hostedPageSpeedReadable(caps);
   // Hosted listing is positive: a read the capabilities do not advertise is absent.
   return caps.reads?.[name]?.available === true;
 }
@@ -43,7 +44,8 @@ const SCAN_ARGS = { index: ['urls', 'check_id'], pagespeed: ['post_ids', 'propos
 function listedScanKinds(tool, caps) {
   const properties = tool.inputSchema?.properties;
   if (!['start_scan', 'get_scan_status'].includes(tool.name) || !properties?.type?.enum) return tool;
-  const kinds = properties.type.enum.filter(kind => kind === 'index' ? caps.index_checks?.available === true : hostedPageSpeedOffered(caps));
+  const pagespeed = tool.name === 'start_scan' ? hostedPageSpeedOffered(caps) : hostedPageSpeedReadable(caps);
+  const kinds = properties.type.enum.filter(kind => kind === 'index' ? caps.index_checks?.available === true : pagespeed);
   const dropped = Object.keys(SCAN_ARGS).filter(kind => !kinds.includes(kind)).flatMap(kind => SCAN_ARGS[kind]);
   const kept = Object.fromEntries(Object.entries(properties).filter(([key]) => !dropped.includes(key)));
   return { ...tool, inputSchema: { ...tool.inputSchema, properties: { ...kept, type: { ...properties.type, enum: kinds } } } };

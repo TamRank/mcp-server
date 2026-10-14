@@ -47,6 +47,23 @@ const approve = { type: 'pagespeed', proposal_id: id, confirmation: { plan_hash:
     assert.equal(value(out).code, 'workflow_operation_unavailable'); assert.equal(odd.stub.calls.length, 0);
   } finally { await odd.close(); }
 }
+// Read-only (planning and starting off): earlier results stay reachable through get_scan_status; start_scan offers no PageSpeed.
+{
+  const f = await connect({ responses: [] }, { capabilities: caps({ pagespeed_execution: { ...support, available: false, plan_available: false },
+    index_checks: { contract_version: 1, available: true } }) });
+  try {
+    const tools = new Map((await f.client.listTools()).tools.map(t => [t.name, t]));
+    assert.deepEqual(tools.get('get_scan_status').inputSchema.properties.type.enum, ['index', 'pagespeed']);
+    assert.match(tools.get('get_scan_status').description, /PageSpeed: type pagespeed and the execution_id/);
+    assert.deepEqual(tools.get('start_scan').inputSchema.properties.type.enum, ['index']);
+    assert.doesNotMatch(tools.get('start_scan').description, /PageSpeed/);
+  } finally { await f.close(); }
+  const only = await connect({ responses: [] }, { capabilities: caps({ pagespeed_execution: { ...support, available: false, plan_available: false } }) });
+  try {
+    const names = (await only.client.listTools()).tools.map(t => t.name);
+    assert.equal(names.includes('get_scan_status'), true); assert.equal(names.includes('start_scan'), false);
+  } finally { await only.close(); }
+}
 // Not offered: nothing listed for PageSpeed, the index-only shape is unchanged, and a call sends nothing.
 {
   const f = await connect({ responses: [] }, { capabilities: { ...fullCaps(), index_checks: { contract_version: 1, available: true } } });
@@ -128,7 +145,8 @@ const approve = { type: 'pagespeed', proposal_id: id, confirmation: { plan_hash:
     assert.equal(body.confirmation.agent.name, 'grant:22222222-2222-4222-8222-222222222222');
     assert.equal(body.confirmation.client.name, 'Synthetic MCP client');
     assert.equal(out.execution_id, execution); assert.equal(out.state, 'reserved'); assert.equal(out.targets.length, 2);
-    assert.match(out.explanation, /queued on the site/); assert.equal(out.runtime_hash, undefined); assert.equal(out.proposal_hash, undefined);
+    assert.match(out.explanation, /queued on the site/); assert.match(out.explanation, /does not prove/);
+    assert.equal(out.runtime_hash, undefined); assert.equal(out.proposal_hash, undefined);
   } finally { await f.close(); }
 }
 // A plan that changed, or expired, is never started.
@@ -184,6 +202,15 @@ const approve = { type: 'pagespeed', proposal_id: id, confirmation: { plan_hash:
     assert.deepEqual(out.targets[0].devices.map(d => [d.strategy, d.result.performance_score]), [['mobile', 91], ['desktop', 91]]);
     const plan = value(await f.client.callTool({ name: 'get_scan_status', arguments: { type: 'pagespeed', proposal_id: id } }));
     assert.equal(plan.proposal_id, id); assert.equal(plan.pages.length, 2);
+  } finally { await f.close(); }
+}
+// Waiting states that are not queued say so, instead of "read again in a few minutes".
+for (const [dispatch, said] of [['not_scheduled', /did not schedule it/], ['expired', /expired before it ran/], ['paused', /paused this measurement/]]) {
+  const reply = progress(); reply.dispatch_state = dispatch; reply.scheduled_at = null;
+  const f = await connect({ responses: [{ body: reply }] }, { capabilities: caps() });
+  try {
+    const out = value(await f.client.callTool({ name: 'get_scan_status', arguments: { type: 'pagespeed', execution_id: execution } }));
+    assert.equal(out.dispatch_state, dispatch); assert.match(out.explanation, said); assert.doesNotMatch(out.explanation, /few minutes/);
   } finally { await f.close(); }
 }
 // Mixed or partial shapes are refused before anything is sent or authorized.

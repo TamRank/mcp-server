@@ -26,10 +26,16 @@ export function hostedPageSpeedSupport(c) {
     && JSON.stringify(c.devices) === JSON.stringify(['mobile', 'desktop'])
     && ['available', 'plan_available', 'read_available'].every(k => typeof c[k] === 'boolean');
 }
-/** Is PageSpeed offered on this connection at all (planning or starting)? */
+/** Can this connection plan or start PageSpeed measurements (start_scan)? */
 export function hostedPageSpeedOffered(caps) {
   const support = caps?.pagespeed_execution;
   return hostedPageSpeedSupport(support) && (support.plan_available === true || support.available === true);
+}
+/** Can this connection read PageSpeed plans or results (get_scan_status)? A site may allow reading earlier
+ * measurements while planning and starting are off; those results must stay reachable. */
+export function hostedPageSpeedReadable(caps) {
+  const support = caps?.pagespeed_execution;
+  return hostedPageSpeedOffered(caps) || (hostedPageSpeedSupport(support) && support.read_available === true);
 }
 
 /** start_scan / get_scan_status for a hosted connection: index checks and PageSpeed, each where the site offers it. */
@@ -69,8 +75,15 @@ export function hostedPlanView(draft, perPageLimit) {
         + `Each page can be measured at most ${Number.isSafeInteger(perPageLimit) && perPageLimit > 0 ? perPageLimit + ' times' : 'a limited number of times'} a day by an AI assistant; Google's measurement cannot be undone.` };
 }
 
+// Before it runs, the dispatch state says more than the measurement state (which stays reserved).
+const WAITING = {
+  queued: 'The measurement is queued on the site. Queued does not prove the site\'s background task is running; read the status again in a few minutes with get_scan_status, type pagespeed and this execution_id.',
+  not_scheduled: 'The site saved this start but did not schedule it, so nothing is being measured. Tell the user; do not start it again.',
+  expired: 'This start expired before it ran. Nothing was measured. Make a new plan if the user still wants a measurement.',
+  paused: 'The site paused this measurement; nothing is measured until the site resumes it. Tell the user; do not start it again.',
+};
 const EXPLAIN = {
-  reserved: 'The measurement is queued on the site. Read the status again in a few minutes with get_scan_status, type pagespeed and this execution_id.',
+  reserved: WAITING.queued,
   running: 'The site is measuring these pages now. Read the status again in a few minutes with the same execution_id.',
   blocked: 'The site stopped because it could not tell whether a measurement went through. Nothing is retried automatically; tell the user.',
   completed: 'Done. Each page shows a mobile and a desktop result; a failed device has its error code.',
@@ -79,7 +92,8 @@ const EXPLAIN = {
 /** A started measurement as shown: per page and device, without the site's internal bookkeeping hashes. */
 export function hostedProgressView(data) {
   const { runtime_hash, reservation_state, proposal_hash, worker_liveness, limitations, ...shown } = pageSpeedProgress(data);
-  return { ...shown, explanation: EXPLAIN[shown.state] ?? EXPLAIN.blocked };
+  const explanation = shown.state === 'reserved' && WAITING[shown.dispatch_state] ? WAITING[shown.dispatch_state] : EXPLAIN[shown.state] ?? EXPLAIN.blocked;
+  return { ...shown, explanation };
 }
 
 /** Dispatch one hosted PageSpeed call. Returns {ok:data} or {error:[code, message, details]}. */

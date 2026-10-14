@@ -12,7 +12,7 @@ import {clampToToolProfile} from './workflow-profile.js';
 import {hostedToolSecuritySchemes} from './hosted/tool-scopes.js';
 import {hostedScopeChallengeMeta} from './hosted/auth-challenge.js';
 import {sourceConfirmation,validSourceStart,sourcePath,sourceArgs} from './source-scans.js';
-import {hostedScanDefinitions,hostedPageSpeed,hostedPageSpeedOffered} from './pagespeed-hosted.js';
+import {hostedScanDefinitions,hostedPageSpeed,hostedPageSpeedOffered,hostedPageSpeedReadable} from './pagespeed-hosted.js';
 import {scanConfirmation,pagespeedRoute,pagespeedSupport,discoverPageSpeedScans,validPageSpeedStart,
   validPageSpeedProposal,validPageSpeedProgress,pageSpeedStartBody,pageSpeedProgress} from './pagespeed-scans.js';
 import {executionSchema,rollbackSchema,confirmationBody,isFieldExecutionPlan,validExecutionResponse,fieldOperations} from './field-execution.js';
@@ -177,7 +177,7 @@ const SCAN_TEXT={
     pagespeed:'PageSpeed: type pagespeed and the execution_id from start_scan for the results per page (mobile and desktop), or proposal_id to read a saved plan.'},
 };
 export function hostedScanDescription(name,caps){
-  if(!SCAN_TEXT[name]||!hostedPageSpeedOffered(caps))return undefined;
+  if(!SCAN_TEXT[name]||!(name==='start_scan'?hostedPageSpeedOffered(caps):hostedPageSpeedReadable(caps)))return undefined;
   const parts=[caps?.index_checks?.available===true?SCAN_TEXT[name].index:null,SCAN_TEXT[name].pagespeed].filter(Boolean);
   return (name==='start_scan'?'Only when the user asks. ':'Read a check or measurement started with start_scan. ')+parts.join(' ');
 }
