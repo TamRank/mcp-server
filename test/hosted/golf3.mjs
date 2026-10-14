@@ -9,9 +9,8 @@ const revision = 'a'.repeat(64), at = 1789218000;
 const value = out => JSON.parse(out.content[0].text);
 const sent = call => JSON.parse(new TextDecoder().decode(call.bodyBytes));
 const scopes = ['site:read','meta:write','audit:read','rollback','changes:write','tasks:write','importance:write'];
-const support = { available: true, plan_available: true, read_available: true, route: pagespeedRoute, proposal_policy: pagespeedPolicy,
-  max_targets: 25, attempts_per_device: 1, devices: ['mobile', 'desktop'], automatic_retries: 0, approval: 'chat_attested',
-  scheduling: 'wp_cron', requires_cron_delivery: true, external_requests_reversible: false, results: 'private_scan_progress', legacy_cache_writes: false };
+// What the VPS passes on after checking the site's full contract (no route, policy or internal values).
+const support = { available: true, plan_available: true, read_available: true, max_targets: 25, devices: ['mobile', 'desktop'] };
 const caps = (extra = {}) => ({ ...fullCaps(), pagespeed_execution: support,
   scan_limits: { pagespeed_per_url_per_day: 20, pagespeed_full_scans_per_day: 1, schema_scans_at_once: 1 }, ...extra });
 const targets = [7, 8].map(n => ({ post_id: n, title: 'Page ' + n, type: 'page', url: `https://site.example.invalid/p${n}/` }));
@@ -34,6 +33,20 @@ const progress = () => ({ contract_version: 2, execution_id: execution, proposal
 const wpError = (status, code, message, data = {}) => ({ status, body: { code, message, data: { status, ...data } } });
 const approve = { type: 'pagespeed', proposal_id: id, confirmation: { plan_hash: planHash, confirmed: true } };
 
+// get_capabilities shows the public block as passed, and an unknown shape offers nothing.
+{
+  const f = await connect({ responses: [{ body: caps() }] }, { capabilities: caps() });
+  try {
+    const out = value(await f.client.callTool({ name: 'get_capabilities', arguments: {} }));
+    assert.deepEqual(out.pagespeed_execution, support);
+  } finally { await f.close(); }
+  const odd = await connect({ responses: [] }, { capabilities: caps({ pagespeed_execution: { ...support, max_targets: 50 } }) });
+  try {
+    assert.equal((await odd.client.listTools()).tools.some(t => t.name === 'start_scan'), false);
+    const out = await odd.client.callTool({ name: 'start_scan', arguments: { type: 'pagespeed', post_ids: [7] } });
+    assert.equal(value(out).code, 'workflow_operation_unavailable'); assert.equal(odd.stub.calls.length, 0);
+  } finally { await odd.close(); }
+}
 // Not offered: nothing listed for PageSpeed, the index-only shape is unchanged, and a call sends nothing.
 {
   const f = await connect({ responses: [] }, { capabilities: { ...fullCaps(), index_checks: { contract_version: 1, available: true } } });

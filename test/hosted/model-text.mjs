@@ -55,10 +55,7 @@ const listed = { ...fullCaps(),
   specialist_reads: Object.fromEntries(['get_site_diagnostics','get_gsc_pages','get_redirects','get_images_missing_alt','get_topical_authority']
     .map(name => [name, { available: true }])), reads: { ...fullCaps().reads, get_outcomes: { available: true } },
   live_check: { contract_version: 1, available: true }, index_checks: { contract_version: 1, available: true },
-  pagespeed_execution: { available: true, plan_available: true, read_available: true, route: '/scans/executions',
-    proposal_policy: 'pagespeed-execution-proposal-1', max_targets: 25, attempts_per_device: 1, devices: ['mobile', 'desktop'],
-    automatic_retries: 0, approval: 'chat_attested', scheduling: 'wp_cron', requires_cron_delivery: true,
-    external_requests_reversible: false, results: 'private_scan_progress', legacy_cache_writes: false } };
+  pagespeed_execution: { available: true, plan_available: true, read_available: true, max_targets: 25, devices: ['mobile', 'desktop'] } };
 const fixture = await connect({ responses: [] }, { capabilities: listed });
 try {
   const instructions = fixture.client.getInstructions();

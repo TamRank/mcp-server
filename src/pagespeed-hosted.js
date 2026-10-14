@@ -9,7 +9,7 @@
  * plan and run. No receipts, recovery, schema scans or automatic retries here. */
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { pagespeedRoute, pagespeedAcks, pagespeedSupport, validPageSpeedProposal, validPageSpeedProgress,
+import { pagespeedRoute, pagespeedAcks, validPageSpeedProposal, validPageSpeedProgress,
   pageSpeedStartBody, pageSpeedProgress } from './pagespeed-scans.js';
 import { limitDetails, limitMessage, indexCheckDefinitions } from './live-checks.js';
 import { scanId } from './scan-maintenance.js';
@@ -18,10 +18,18 @@ const pageId = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const MAX_PAGES = 25;
 
+/** The public PageSpeed block a hosted connection gets. The VPS fetched the site's full contract and checked it
+ * against exactly what this library supports (route, policy, approval, retries); it passes only these fields, so
+ * no internal names reach the model through get_capabilities. */
+export function hostedPageSpeedSupport(c) {
+  return c !== null && typeof c === 'object' && !Array.isArray(c) && c.max_targets === 25
+    && JSON.stringify(c.devices) === JSON.stringify(['mobile', 'desktop'])
+    && ['available', 'plan_available', 'read_available'].every(k => typeof c[k] === 'boolean');
+}
 /** Is PageSpeed offered on this connection at all (planning or starting)? */
 export function hostedPageSpeedOffered(caps) {
   const support = caps?.pagespeed_execution;
-  return pagespeedSupport(support) && (support.plan_available === true || support.available === true);
+  return hostedPageSpeedSupport(support) && (support.plan_available === true || support.available === true);
 }
 
 /** start_scan / get_scan_status for a hosted connection: index checks and PageSpeed, each where the site offers it. */
@@ -79,7 +87,7 @@ export async function hostedPageSpeed(canonical, a, { client, capabilities, clie
   const support = capabilities?.pagespeed_execution;
   const plan = canonical === 'start_scan' && a.post_ids !== undefined, start = canonical === 'start_scan' && !plan;
   const grant = start ? 'available' : plan || a.proposal_id !== undefined ? 'plan_available' : 'read_available';
-  if (!pagespeedSupport(support) || support[grant] !== true)
+  if (!hostedPageSpeedSupport(support) || support[grant] !== true)
     return { error: ['workflow_operation_unavailable', 'PageSpeed measurements are not available for this website or connection. Nothing was sent.'] };
   try {
     if (plan) {
