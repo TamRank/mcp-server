@@ -4,6 +4,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { fileURLToPath } from 'node:url';
 import { INSTRUCTIONS_BUDGET } from './instructions-budget.mjs';
+import { CATALOG_BUDGET } from './catalog-budget.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url));
 let input=''; for await(const chunk of process.stdin) input+=chunk;
 const config=JSON.parse(input); assert.match(config.site_url,/^http:\/\/127\.0\.0\.1:[0-9]+$/);
@@ -74,6 +75,6 @@ try {
   const bigState=await call(client,'get_work_queue',{work_id:bigResult.work_ids[0],section:'administration'}); assert.equal(bigState.target_count,200);
   const readonly=await connect('pretty',config.read_token);
   await assert.rejects(call(readonly,'update_work_item',first),/workflow_operation_unavailable/);
-  const surface=JSON.stringify(await client.listTools()).length; assert.ok(surface<16000); assert.ok(client.getInstructions().length<INSTRUCTIONS_BUDGET);
+  const surface=JSON.stringify(await client.listTools()).length; assert.ok(surface<CATALOG_BUDGET); assert.ok(client.getInstructions().length<INSTRUCTIONS_BUDGET);
   console.log(`WORKFLOW PICKUP E2E OK: explicit 2-of-8 selection, overlap/reuse, shared progress, both URL styles, all 200 targets, exact replay and scope refusal; ${surface} core surface chars.`);
 } finally { for(const client of clients) await client.close(); }

@@ -5,6 +5,7 @@ import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
+import { CATALOG_BUDGET } from './catalog-budget.mjs';
 let bytes='';for await(const chunk of process.stdin)bytes+=chunk;
 const f=JSON.parse(bytes),repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 assert.match(f.root||'',/^\/private\/tmp\/tr-maint-wp-[A-Za-z0-9]{6}$/);assert.ok(existsSync(f.root+'/owned-fixture'));
@@ -20,8 +21,8 @@ for(const profile of ['core','specialist'])for(const style of ['pretty','query']
   let errors='';transport.stderr?.on('data',chunk=>{errors=(errors+chunk.toString()).slice(-2000);});
   try{
     await client.connect(transport);
-    const listing=await client.listTools();check(listing.tools.length===(profile==='core'?12:20),'Canonical tool count');
-    check(JSON.stringify(listing).length<16000,'Complete native-enabled catalog stays under budget');
+    const listing=await client.listTools();check(listing.tools.length===(profile==='core'?13:21),'Canonical tool count');
+    check(JSON.stringify(listing).length<CATALOG_BUDGET,'Complete native-enabled catalog stays under budget');
     const caps=JSON.parse((await client.callTool({name:'get_capabilities',arguments:{}})).content[0].text);
     check(caps.schema_preview?.available===true&&caps.schema_preview.schema_proposals_available===false,'Actual native capabilities advertise comparison only');
     for(const comparison of f.comparisons){

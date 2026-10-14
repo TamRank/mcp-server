@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {fileURLToPath} from 'node:url';
+import { CATALOG_BUDGET } from './catalog-budget.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url));
 let input='';for await(const chunk of process.stdin) input+=chunk;
 const config=JSON.parse(input);assert.match(config.site_url,/^http:\/\/127\.0\.0\.1:[0-9]+$/);
@@ -39,6 +40,6 @@ try {
   const same=await call(client,'update_work_item',{...first,client_request_id:'importance-same-0004',expected_value:'important',value:'important'});assert.equal(same.changed,false);
   const standard=await call(query,'update_work_item',{...first,client_request_id:'importance-standard-0005',expected_value:'important',value:'standard'});
   assert.equal(standard.after.present,false);assert.equal((await state(read)).importance.value,'standard');
-  const listing=await client.listTools();assert.equal(listing.tools.length,12);assert.ok(JSON.stringify(listing).length<16000);
+  const listing=await client.listTools();assert.equal(listing.tools.length,13);assert.ok(JSON.stringify(listing).length<CATALOG_BUDGET);
   console.log(`WORKFLOW IMPORTANCE E2E OK: explicit independent permission, current value, all three states, exact replay, stale refusal, shared queue revision and both REST styles; ${JSON.stringify(listing).length} core surface chars.`);
 } finally {for(const client of clients) await client.close();}

@@ -34,7 +34,7 @@ test('Source quota snapshots and bounded refusals traverse existing specialist t
       registerWorkflowTools({registerTool:(name,config,handler)=>tools.set(name,{config,handler})},
         new WorkflowClient({siteUrl:'http://127.0.0.1:'+server.address().port,pat:'synthetic-only',routeStyle}),
         {profile:'specialist',capabilities:{schema_source_jobs:support}});
-      assert.equal(tools.size,20);
+      assert.equal(tools.size,21);
       const read=async()=>{
         const result=await tools.get('get_capabilities').handler({});assert.ok(!result.isError);
         const data=JSON.parse(result.content[0].text);

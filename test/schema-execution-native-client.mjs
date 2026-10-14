@@ -10,6 +10,7 @@ import {validSchemaExecutionResponse,matchesSchemaExecutionRequest,isSchemaExecu
 import {validSchemaRollbackPreview,matchesSchemaRollbackRequest} from '../src/schema-rollback.js';
 import {verifySchemaAuthority} from './schema-execution-native-authority.mjs';
 import {observeSchemaExecution} from './schema-execution-observation.mjs';
+import { CATALOG_BUDGET } from './catalog-budget.mjs';
 let raw='';for await(const chunk of process.stdin)raw+=chunk;
 const f=JSON.parse(raw),root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const runtime=ownedInstalledRuntime(root);
@@ -26,7 +27,7 @@ const call=(name,args)=>client.callTool({name,arguments:args});
 const decode=(r,label)=>{check(!r.isError,label+': '+(r.isError?r.content[0]?.text:''));return JSON.parse(r.content[0].text);};
 try{
   await client.connect(transport);const list=await client.listTools();
-  check(list.tools.length===(f.profile==='core'?12:20)&&JSON.stringify(list).length<16000,'Existing bounded tool catalog');
+  check(list.tools.length===(f.profile==='core'?13:21)&&JSON.stringify(list).length<CATALOG_BUDGET,'Existing bounded tool catalog');
   const caps=decode(await call('get_capabilities',{}),'Capabilities'),c=caps.schema_execution;
   check(c.contract_version===1&&(f.limited?!c.available:c.available)&&c.read_available&&c.record_contract==='schema_execution_view_v1','Ready native schema workflow, operation scopes preserved');
   check(c.rollback_available===f.public_rollback&&!c.recovery_available,'Inverse separately enabled; journal recovery remains unavailable');

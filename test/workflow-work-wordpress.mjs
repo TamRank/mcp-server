@@ -4,6 +4,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { fileURLToPath } from 'node:url';
 import { INSTRUCTIONS_BUDGET } from './instructions-budget.mjs';
+import { CATALOG_BUDGET } from './catalog-budget.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url));
 let input=''; for await(const chunk of process.stdin) input+=chunk;
 const config=JSON.parse(input);
@@ -61,7 +62,7 @@ try {
   assert.equal((await call(readonly,'get_capabilities')).work_administration.available,false);
   await assert.rejects(call(readonly,'update_work_item',payload),/workflow_operation_unavailable/);
   await assert.rejects(call(client,'execute_change_set',{}),/workflow_operation_unavailable/);
-  const listing=await client.listTools(); assert.equal(listing.tools.length,12);
-  assert.ok(JSON.stringify(listing).length<16000); assert.ok(client.getInstructions().length<INSTRUCTIONS_BUDGET);
+  const listing=await client.listTools(); assert.equal(listing.tools.length,13);
+  assert.ok(JSON.stringify(listing).length<CATALOG_BUDGET); assert.ok(client.getInstructions().length<INSTRUCTIONS_BUDGET);
   console.log('WORKFLOW RESEARCH E2E OK: real MCP/HTTP/WP, review + complete + reopen, both URL styles, revision conflicts, exact replay and scope refusal; no website execution.');
 } finally { for(const client of clients) await client.close(); }

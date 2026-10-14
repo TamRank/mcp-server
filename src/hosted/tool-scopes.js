@@ -16,6 +16,7 @@ const scopesByTool = Object.freeze({
   search_pages: siteRead,
   get_page: siteRead,
   diagnose_page: siteRead,
+  get_outcomes: siteRead,
   get_site_diagnostics: siteRead,
   get_gsc_pages: siteRead,
   get_redirects: siteRead,

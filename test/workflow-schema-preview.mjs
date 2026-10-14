@@ -4,6 +4,7 @@ import {createServer} from 'node:http';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {registerWorkflowTools} from '../src/workflow-tools.js';
+import { CATALOG_BUDGET } from './catalog-budget.mjs';
 const hash='a'.repeat(64),revision='b'.repeat(64),job_id='aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 const support={contract_version:2,available:true,operations:['schema.select','schema.detect','schema_settings.update']};
 const detect={operation:'schema.detect',target:{post_id:1},fields:{source_job:{job_id,revision:hash}}};
@@ -74,8 +75,8 @@ try{for(const routeStyle of ['pretty','query']){
     env:{PATH:process.env.PATH,TAMRANK_PAT:'tamrank_pat_synthetic_preview',TAMRANK_SITE_URL:'http://127.0.0.1:'+http.address().port,
       TAMRANK_WORKFLOW_PREVIEW:'1',TAMRANK_TOOL_PROFILE:'core',TAMRANK_REST_STYLE:routeStyle}}));
   try{
-    const listing=await client.listTools();check(listing.tools.length===12,'No additional tool');
-    check(JSON.stringify(listing).length<16000,'Core surface within budget');
+    const listing=await client.listTools();check(listing.tools.length===13,'No additional tool');
+    check(JSON.stringify(listing).length<CATALOG_BUDGET,'Core surface within budget');
     for(const item of [detect,select,identity])check(!(await client.callTool({name:'plan_changes',arguments:{schema_preview:item}})).isError,'SDK to HTTP comparison');
     status=409;const n=requests.length;check((await client.callTool({name:'plan_changes',arguments:{schema_preview:detect}})).isError,'Expired source refusal passed through');
     check(requests.length===n+1,'No auto retry or source acquisition');status=200;

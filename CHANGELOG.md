@@ -23,6 +23,19 @@ project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ### Added
 
+- `get_outcomes` (read-only, `site:read`): what applied changes did in Google Search. Per change
+  the clicks, impressions, CTR and average position in the 14 days before and after, the
+  site-wide trend, and a plain-language explanation of the status (`pending` says when the first
+  result is expected, 14 days plus 3 days Search Console delay). Filters `change_set_id`,
+  `status`, `since` (a date); pages with `next_cursor`. Reads the site's existing
+  `/tamrank/v2/outcomes`; hosted lists it only when the site advertises
+  `reads.get_outcomes.available`. Core profile: 13 tools, specialist 21.
+- `get_capabilities` says how old it is: `as_of` (ISO time the capabilities were read from the
+  site) and `cache_age_s`. Local sessions read live (`cache_age_s: 0`); hosted shows the API's
+  `as_of` and counts the age per call, since the session keeps the copy it opened with.
+- Hosted tool descriptions say what each tool can do and when to use it. Local sessions keep
+  the short descriptions; the shared catalog budget in tests is now 16,500 characters
+  (`test/catalog-budget.mjs`; a full specialist catalog measured 16,472).
 - Historical change reads accept a rollback a site administrator confirmed in WordPress
   admin (`wp_admin_confirmed`, `human_verified: true`; TamRank PRO). A recovery
   attestation stays `chat_attested` only, and everything the bridge sends (plan,

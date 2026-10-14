@@ -5,6 +5,7 @@ import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {InMemoryTransport} from '@modelcontextprotocol/sdk/inMemory.js';
 import {registerWorkflowTools} from '../src/workflow-tools.js';
 import {validSchemaExecutionResponse} from '../src/schema-execution.js';
+import { CATALOG_BUDGET } from './catalog-budget.mjs';
 const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',other='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
   execution='cccccccc-cccc-4ccc-8ccc-cccccccccccc',hash='a'.repeat(64),now=1800000000;
 const itemId=n=>'dddddddd-dddd-4ddd-8ddd-'+String(n+1).padStart(12,'0');
@@ -112,7 +113,7 @@ equal(JSON.parse(uncertain.content[0].text).automatic_retry,false);equal(calls.s
 for(const profile of ['core','specialist']){
   const server=new McpServer({name:'owned-schema-read',version:'1'}),client=new Client({name:'Owned client',version:'1'});
   registerWorkflowTools(server,transport,{capabilities:caps,profile});const [a,b]=InMemoryTransport.createLinkedPair();await server.connect(a);await client.connect(b);
-  try{const listing=await client.listTools();equal(listing.tools.length,profile==='core'?12:20);check(JSON.stringify(listing).length<16000,'Existing catalog budget');
+  try{const listing=await client.listTools();equal(listing.tools.length,profile==='core'?13:21);check(JSON.stringify(listing).length<CATALOG_BUDGET,'Existing catalog budget');
     check(!(await client.callTool({name:'get_changes',arguments:read})).isError,'Real SDK accepts existing read selector');equal(calls.splice(0).length,1);
     check((await client.callTool({name:'get_changes',arguments:{...read,include_private_proofs:true}})).isError,'Real SDK rejects extra arguments');equal(calls,[]);
   }finally{await client.close();await server.close();}

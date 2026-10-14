@@ -6,6 +6,7 @@ import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {existsSync} from 'node:fs';
 import {ownedInstalledRuntime} from './owned-installed-entry.mjs';
+import { CATALOG_BUDGET } from './catalog-budget.mjs';
 const cwd=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 export async function runFieldExecutionClient({origin,fixture:f,inspect,tlsRoot=null,faults=null}){
   const runtime=ownedInstalledRuntime(cwd);
@@ -44,8 +45,8 @@ export async function runFieldExecutionClient({origin,fixture:f,inspect,tlsRoot=
         }
       };
       const call=async(name,args)=>{const r=await raw(name,args);ok(!r.isError,JSON.stringify(r));return JSON.parse(r.content[0].text);};
-      const listing=await client.listTools();equal(listing.tools.length,profile==='core'?12:20,'Stable tool count');
-      ok(JSON.stringify(listing).length<16000,'Catalog remains bounded');
+      const listing=await client.listTools();equal(listing.tools.length,profile==='core'?13:21,'Stable tool count');
+      ok(JSON.stringify(listing).length<CATALOG_BUDGET,'Catalog remains bounded');
       const caps=await call('get_capabilities',{});
       ok(caps.field_execution.available&&caps.field_execution.read_available&&caps.field_execution.rollback_available,'Native readiness/scopes advertised');
       const before=inspect();

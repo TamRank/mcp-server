@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {fileURLToPath} from 'node:url';
+import { CATALOG_BUDGET } from './catalog-budget.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url));
 let input='';for await(const chunk of process.stdin) input+=chunk;
 const config=JSON.parse(input);assert.match(config.site_url,/^http:\/\/127\.0\.0\.1:[0-9]+$/);
@@ -42,6 +43,6 @@ try {
   const opened=await call(client,'update_work_item',{client_request_id:'manual-reopen-0009',operation:'work.reopen',work_id:config.work_id,expected_revision:final.revision});
   assert.equal(opened.status,'open');assert.equal((await state(client)).note,'Final manual note');
   const current=await state(client);assert.deepEqual(await call(query,'update_work_item',first),note);assert.deepEqual(await state(read),current);
-  const listing=await client.listTools();assert.equal(listing.tools.length,12);assert.ok(JSON.stringify(listing).length<16000);
+  const listing=await client.listTools();assert.equal(listing.tools.length,13);assert.ok(JSON.stringify(listing).length<CATALOG_BUDGET);
   console.log(`WORKFLOW MANUAL E2E OK: existing tasks, shared notes, 4000 bytes/clear, complete/reopen, exact version/replay and both REST styles; ${JSON.stringify(listing).length} core surface chars.`);
 } finally {for(const client of clients) await client.close();}

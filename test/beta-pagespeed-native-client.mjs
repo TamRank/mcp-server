@@ -27,7 +27,7 @@ export async function runBetaPageSpeedClient({origin,fixture:f,tlsRoot,control,i
   for(const style of ['pretty','query']){
     const token=f.tokens[style],c=await connect(style,token.token);
     try{
-      equal((await c.client.listTools()).tools.length,20);
+      equal((await c.client.listTools()).tools.length,21);
       const caps=await c.call('get_capabilities',{});equal(caps.pagespeed_execution.available,true);equal(caps.scan_recovery.retained_receipt_review_available,true);
       async function plan(label){
         const before=control('inspect');

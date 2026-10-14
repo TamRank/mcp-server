@@ -4,6 +4,7 @@ import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
+import { CATALOG_BUDGET } from './catalog-budget.mjs';
 const cwd=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 export async function runFieldProposalClient({origin,fixture:f,maximum}){
   assert.match(origin,/^http:\/\/127\.0\.0\.1:\d{4,5}(?:\/client-two)?$/);
@@ -15,8 +16,8 @@ export async function runFieldProposalClient({origin,fixture:f,maximum}){
     try{
       await client.connect(new StdioClientTransport({command:process.execPath,args:['index-workflow.js'],cwd,stderr:'pipe',
         env:{PATH:process.env.PATH,TAMRANK_PAT:f.tokens.owner.token,TAMRANK_SITE_URL:origin,TAMRANK_TOOL_PROFILE:profile,TAMRANK_REST_STYLE:style,TAMRANK_WORKFLOW_PREVIEW:'1'}}));
-      const listing=await client.listTools();assert.equal(listing.tools.length,profile==='core'?12:20);checks++;
-      assert.ok(JSON.stringify(listing).length<16000);checks++;
+      const listing=await client.listTools();assert.equal(listing.tools.length,profile==='core'?13:21);checks++;
+      assert.ok(JSON.stringify(listing).length<CATALOG_BUDGET);checks++;
       const raw=async(name,args)=>{
         // Exercise the real limits. A longer suite must wait, not raise quotas or
         // count a 429 as evidence that an intentionally invalid request was rejected.

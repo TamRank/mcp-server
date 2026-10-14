@@ -99,9 +99,74 @@ function validWork(a) {
   return a.operation==='work.review_target' ? /^pickup_/.test(a.work_id) && a.target_key!==undefined && a.reviewed!==undefined : a.target_key===undefined && a.reviewed===undefined;
 }
 
+// get_outcomes: the site's own measurement rows, shown in plain words. The site decides the status; this
+// only explains it and adds CTR (clicks/impressions), which the site stores implicitly.
+const outcomeStatuses=['pending','measured','low_data','no_gsc','rolled_back'];
+const isoDay=/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
+const validDay=v=>{const d=isoDay.test(v)?new Date(v+'T00:00:00Z'):null;return Boolean(d)&&Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===v;};
+const count=v=>Number.isSafeInteger(v)&&v>=0?v:null;
+const outcomeWindow=w=>w&&typeof w==='object'?{from:w.start??null,to:w.end??null,clicks:count(w.clicks),impressions:count(w.impressions),
+  ctr_percent:count(w.clicks)!==null&&count(w.impressions)>0?Math.round(w.clicks/w.impressions*1000)/10:null,
+  average_position:typeof w.position==='number'?w.position:null}:null;
+function outcomeExplanation(status,item,days){
+  if(status==='pending')return item.monitor_after?`Waiting for data. The first result is expected around ${item.monitor_after} (${days} days after the change plus 3 days before Search Console has the figures).`
+    :`Waiting for data. The first result comes about ${days+3} days after the change.`;
+  if(status==='measured')return `Measured: the ${days} days before and after the change. This shows what happened, not proof that the change caused it; compare with the site-wide trend.`;
+  if(status==='low_data')return `Too little search traffic after the change to compare fairly. The figures are shown, but draw no conclusion from them.`;
+  if(status==='rolled_back')return 'This change was undone, so it is not measured.';
+  if(status==='no_gsc')return 'Not measured: Google Search Console was not connected when this change was saved.';
+  return 'TamRank could not tell the measurement status of this change. Do not draw a conclusion from it.';
+}
+function outcomeItem(item){
+  // A status this bridge does not know is shown as unknown, never as one the site did not report.
+  const status=outcomeStatuses.includes(item?.effect_status)?item.effect_status:'unknown',outcome=item?.outcome&&typeof item.outcome==='object'?item.outcome:{};
+  const effect=['measured','low_data'].includes(status)&&item.gsc_effect&&typeof item.gsc_effect==='object'?item.gsc_effect:null;
+  const days=Number.isSafeInteger(effect?.window_days)&&effect.window_days>0?effect.window_days:14;
+  return {post_id:item?.post_id??null,page_title:item?.post_title??null,page_url:effect?.page_url??null,
+    change_set_id:item?.change_set_id??null,action_id:item?.action_id??null,changed:item?.summary||null,
+    fields:Array.isArray(item?.changes)?[...new Set(item.changes.map(c=>c?.field).filter(f=>typeof f==='string'))]:[],
+    changed_at:item?.created_at??null,status,explanation:outcomeExplanation(status,item??{},days),
+    first_result_expected:status==='pending'?item.monitor_after??null:null,measured_at:item?.measured_at??null,
+    rolled_back_at:item?.rolled_back_at??null,before:outcomeWindow(effect?.before),after:outcomeWindow(effect?.after),
+    click_change_percent:outcome.click_change_percent??null,site_click_change_percent:outcome.site_click_change_percent??null,
+    relative_to_site_percent:outcome.relative_to_site_percent??null,expected_alignment:outcome.expected_alignment??null};
+}
+function outcomesView(data){
+  const page=data?.pagination;
+  if(data?.contract_version!==2||!Array.isArray(data.items)||!page||typeof page!=='object'||!Number.isSafeInteger(page.page))return null;
+  return {contract_version:2,items:data.items.map(outcomeItem),total:count(page.total),
+    next_cursor:page.has_more===true?String(page.page+1):null};
+}
+// Fuller descriptions where the connection is set up in a chat app: the model there has no README, so the
+// listing is what tells it what a tool is for. Local sessions keep the short ones (catalog budget).
+const HOSTED_DESCRIPTIONS={
+  get_site_context:'The site\'s identity: name, address, language, brand profile (tone, audience, selling points, words to avoid) and structured-data identity. Read it before writing text for this site. section: overview (default) or schema_identity.',
+  get_capabilities:'What TamRank can do on this site: which reads and changes are available, whether results of changes are measured, and where the user can switch a setting on. Call it first. as_of and cache_age_s say when this was read from the site; a setting changed after that may not show yet.',
+  get_work_queue:'The TamRank dashboard to-do list, in the dashboard\'s order. Use it when the user asks what to work on. Copy an item\'s action_origin into plan_changes. section targets lists the pages of one item; administration shows picked-up or own tasks.',
+  get_signals:'Things TamRank noticed (for example a ranking drop or a 404), with the pages involved. Signals are evidence, not tasks: discuss them, and act only when the user asks.',
+  search_pages:'Find published posts and pages by title text, post type, or a missing meta title or description. Leave type out to search every type. Returns post_id for get_page, diagnose_page and plan_changes.',
+  get_page:'One page\'s saved fields: overview, metadata (meta title and description, social fields), content, and importance (standard, important, money). Read importance before proposing a change to the page.',
+  diagnose_page:'Saved diagnosis for one page (post_id) or URL: Search Console clicks, impressions and position, index status, PageSpeed, stability, a before/after comparison and keywords. Saved data, not a live check; each part says when it was read. A missing value means unknown, not zero. Keywords: window and compare_to from adjacent available_windows. A diagnosis is not a cause.',
+  update_work_item:'Update work in the dashboard queue: pick up a research item, review a target, replace a note, complete or reopen, or set a page\'s importance. Notes replace the saved text; empty clears. Only on the user\'s instruction; pass the current revision from get_work_queue.',
+  plan_changes:'Prepare an exact plan for meta titles and descriptions, social fields, image alt text or redirects. Nothing changes on the site yet. Copy action_origin, or describe the user\'s request. Targets: post_id/attachment_id; redirects source_url/redirect_id, all fields set. Delete: acknowledge_deletion=true; image: original library URL. Show every target, value and warning, then ask the user to approve it in chat.',
+  execute_change_set:'Apply a plan from plan_changes exactly as the user approved it in chat; copy its acknowledgements. Check delivery.result.outcome_measurement before promising to measure the result. If the reply is unclear, read get_changes(kind=execution) before anything else.',
+  get_changes:'Read one change plan by change_set_id. kind=execution shows what was applied per item and what can be undone; read it after a timeout before retrying. For the results in Google Search, use get_outcomes.',
+  rollback_change_set:'Prepare an undo for applied items of a change set. This only makes a new plan; applying it needs fresh approval in chat and execute_change_set. Newer edits to the same field are kept.',
+  get_site_diagnostics:'Saved site-wide checks: metadata gaps, index status, structured data and 404 errors (404_urls, or 404_events for one url or text). Start with section overview (overview: section only). q is case-sensitive.',
+  get_gsc_pages:'Saved Google Search Console figures per page (clicks, impressions, CTR, position) over 7, 28 or 90 days, sortable. Use it to find pages that matter or underperform. q is case-sensitive.',
+  get_redirects:'The site\'s saved redirect rules (not a live check), redirect chains, and a trace of one rule: trace needs redirect_id (an id from section rules, e.g. 12). Read it before creating or changing a redirect.',
+  get_images_missing_alt:'Images in the media library without alt text. Some may be decorative, and where an image is used is not checked. Add alt text with plan_changes.',
+  get_topical_authority:'How the site\'s content covers its topics: clusters, pages per cluster, topics, gaps and suggestions. Coverage, not search demand or tasks. Start with section overview (overview: section only); pages and topics need cluster.',
+  get_outcomes:'What applied changes did in Google Search: per change the clicks, impressions, CTR and average position in the 14 days before and after, next to the site-wide trend. Filter on change_set_id, status or since (a date). A waiting change says when its first result is expected (14 days plus 3 days Search Console delay). A result is not proof of cause.',
+};
+
 // The bridge profile name gates this session (factory.js) but tells the assistant nothing it can use,
 // and it is an internal codename a user would see quoted. The gating object itself is unchanged.
 const hostedCapabilitiesView = ({ mcp_bridge_compatibility, ...shown }) => shown;
+// The session keeps the copy it opened with, so a status can be older than the site's current one. as_of is
+// when the API read it from the site; the age is counted per call, never frozen with the copy.
+const capabilitiesAge = shown => { const at=typeof shown.as_of==='string'?Date.parse(shown.as_of):NaN;
+  return Number.isFinite(at)?{...shown,cache_age_s:Math.max(0,Math.floor((Date.now()-at)/1000))}:shown; };
 export function workflowDefinitions() {
   return {
     get_site_context: { description: 'Site identity.', schema: { section: z.enum(['overview','schema_identity']).optional() }, path: () => '/site/context' },
@@ -126,6 +191,13 @@ export function workflowDefinitions() {
     search_pages: { description: 'Search published pages.', schema: { q: z.string().max(200).optional(), type: z.string().regex(/^[a-z0-9_-]{1,32}$/).optional(), missing: z.enum(['meta_title','meta_description']).optional(), ...paging }, path: () => '/pages' },
     get_page: { description: 'One page\'s saved fields.', schema: { post_id: pageId, section: z.enum(['overview','metadata','content','importance']).optional(), limit: z.number().int().min(1).max(4).optional(), cursor }, path: a => `/pages/${a.post_id}`, omit: ['post_id'] },
     diagnose_page: { description: 'Missing=unknown. Keywords: adjacent available_windows.', schema: { post_id: pageId.optional(), url: z.string().min(1).max(2048).refine(validDiagnosisUrl).optional(), section: z.enum(['overview','metadata','gsc','index','pagespeed','stability','comparison','keywords']).optional(), query: z.string().min(1).max(512).refine(v=>Buffer.byteLength(v,'utf8')<=512 && !/[\x00-\x1f\x7f]/.test(v)).optional(), window: z.string().refine(validKeywordWindow).optional(), compare_to: z.string().refine(validKeywordWindow).optional(), ...paging }, path: a => a.url!==undefined?'/gsc/diagnosis':`/pages/${a.post_id}/diagnosis`, omit: ['post_id'], validate: validDiagnosis },
+    get_outcomes: { description: 'Search result per applied change.', schema: { change_set_id: scanId.optional(),
+      status: z.enum(outcomeStatuses).optional(), since: z.string().refine(validDay).optional(), ...paging },
+      // The site pages by number; next_cursor carries it. Checked here, not in the schema, to keep the listing small.
+      validate: a => a.cursor===undefined || /^[1-9][0-9]{0,5}$/.test(a.cursor), invalid: () => 'cursor must be a next_cursor from get_outcomes; nothing was sent.',
+      path: () => '/outcomes', present: outcomesView,
+      query: a => Object.fromEntries(Object.entries({ change_set_id: a.change_set_id, status: a.status,
+        created_from: a.since===undefined?undefined:a.since+' 00:00:00', per_page: a.limit, page: a.cursor }).filter(([,v])=>v!==undefined)) },
     update_work_item: { description: 'Pass revision. Notes replace; empty clears.',
       write: true, path: () => '/work-items', schema: {
         client_request_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/),
@@ -261,7 +333,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   const register = (name, def, canonical = name, deprecated = false) => {
     const schema = z.object(def.schema).strict();
     const readOnly=Boolean(def.path)&&!def.write&&!def.scanPlan&&!def.maintenanceWrite&&!def.fieldPlan&&!def.fieldExecution;
-    server.registerTool(name, { description: def.description, inputSchema: schema,
+    server.registerTool(name, { description: hostedContext&&HOSTED_DESCRIPTIONS[name]||def.description, inputSchema: schema,
       ...(hostedContext ? { securitySchemes: hostedToolSecuritySchemes(name,hostedContext.grantContext,hostedContext.filteredCapabilities) } : {}),
       // Read-only already implies idempotence. Omitted open-world hint stays conservative.
       annotations: { readOnlyHint:readOnly, ...(!readOnly?{destructiveHint:Boolean(def.write || def.scanPlan || def.maintenanceWrite || def.fieldExecution==='execute')||!def.path}:{}),
@@ -503,8 +575,12 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
             catch{data.scan_recovery={receipt_review_available:false,settlement_available:false};}}
         }
         // A clamped profile reports the live site through the same clamp that chose its tools.
-        const shown=profileClamp&&canonical==='get_capabilities'?clampToToolProfile(data):data;
-        return result(hostedContext&&canonical==='get_capabilities'?hostedCapabilitiesView(hostedContext.filteredCapabilities)
+        let shown=profileClamp&&canonical==='get_capabilities'?clampToToolProfile(data):data;
+        // Read from the site just now; hosted reports the age of its saved copy instead (capabilitiesAge).
+        if(canonical==='get_capabilities'&&!hostedContext)shown={...shown,as_of:new Date().toISOString(),cache_age_s:0};
+        if(def.present){shown=def.present(data,parsed.data);
+          if(!shown)return failure('outcome_incompatible_response','The website sent an answer TamRank could not read. Nothing was changed.');}
+        return result(hostedContext&&canonical==='get_capabilities'?capabilitiesAge(hostedCapabilitiesView(hostedContext.filteredCapabilities))
           :deprecated ? { deprecated: true, replacement: canonical, remove_in: '0.5.0', data:shown } : shown);
       } catch (err) { const refused=typeof err.code==='string'&&def.refused?.(parsed.data,err.code);
         return failure(typeof err.code === 'string' ? err.code : 'workflow_request_failed', err.status ? `The request to the website did not go through. ${err.message}` : err.message,
