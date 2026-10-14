@@ -4,6 +4,7 @@ import { validateRestBase, workflowUrl, legacyRestBase } from './hosted/rest-bas
 import { createFetchTransport } from './hosted/fetch-transport.js';
 import { isSitePlanRefusal, isSiteReadRefusal, mapHostedOutcome } from './hosted/error-map.js';
 import { isScanReceipt } from './scan-receipt-store.js';
+import { liveCheckRoute, limitDetails, LIMIT_CODES, INDEX_START_REFUSALS } from './live-checks.js';
 
 // Only bounded operational advice crosses the error boundary; never arbitrary server data.
 export function rateLimitAdvice(data) {
@@ -130,15 +131,19 @@ export class WorkflowClient {
           // Only the site's own code classifies; a replaced code is no evidence of a site decision.
           const outcome = {status: response.status, code: siteCode, validWpEnvelope, kind: method === 'GET' ? 'read' : 'write', method, path};
           const mapped = mapHostedOutcome({...outcome, retryAfter: advice?.retry_after});
+          // A limit or an index-check refusal is the site's decision before any work: keep its code and bounded details.
+          const siteDecision = mapped.code === siteCode && (LIMIT_CODES.has(siteCode) || INDEX_START_REFUSALS.has(siteCode));
           throw new ApiError(response.status, mapped.code,
-            mapped.code === siteCode && (isSiteReadRefusal(outcome) || isSitePlanRefusal(outcome)) ? message
-              : mapped.code === 'rate_limited' ? 'The website asked TamRank to slow down. Try again shortly.' : 'No reason was given.', mapped);
+            mapped.code === siteCode && (isSiteReadRefusal(outcome) || isSitePlanRefusal(outcome) || siteDecision) ? message
+              : mapped.code === 'rate_limited' ? 'The website asked TamRank to slow down. Try again shortly.' : 'No reason was given.',
+            siteDecision ? {...mapped, ...limitDetails(data.data)} : mapped);
         }
-        throw new ApiError(response.status, code, message, retained ? { receipt_reference: retained.receipt_reference, receipt_retained: true } : advice);
+        throw new ApiError(response.status, code, message, retained ? { receipt_reference: retained.receipt_reference, receipt_retained: true }
+          : LIMIT_CODES.has(code) || INDEX_START_REFUSALS.has(code) ? {...advice, ...limitDetails(data.data)} : advice);
       }
       // Native execution has its own versioned policy/envelope. Accept v1 only
       // on these exact method/route pairs; every older read/draft remains v2.
-      if (data.contract_version !== (fieldExecution ? 1 : 2)) throw new ApiError(409, 'workflow_upgrade_required', 'The TamRank plugin on this website does not match this connection. Nothing else was tried.');
+      if (data.contract_version !== (fieldExecution || liveCheckRoute(method, path) ? 1 : 2)) throw new ApiError(409, 'workflow_upgrade_required', 'The TamRank plugin on this website does not match this connection. Nothing else was tried.');
       // Native schema rollback IDs share a prefix with private scan receipts.
       // Exempt only the exact envelope field after validating the whole closed
       // semantic response on an execution route, never error data or metadata.

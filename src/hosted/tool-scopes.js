@@ -1,6 +1,7 @@
 /** Public hosted OAuth declarations; actual authorization remains with the VPS. */
 const siteRead = ['site:read'];
 const historyRead = ['site:read','audit:read'];
+const indexChecks = ['site:read','scans:execute'];
 // These tools dispatch field sets and, only when the authorization server
 // offers the eighth scope AND this site exposes the lane, redirect sets. Do not
 // infer from the current grant or available:true: a seven-scope grant must be
@@ -17,6 +18,11 @@ const scopesByTool = Object.freeze({
   get_page: siteRead,
   diagnose_page: siteRead,
   get_outcomes: siteRead,
+  list_changes: siteRead,
+  live_check: siteRead,
+  // An index check spends the site's daily room at Google; PRO demands this exact scope (golf 2).
+  start_scan: indexChecks,
+  get_scan_status: indexChecks,
   get_site_diagnostics: siteRead,
   get_gsc_pages: siteRead,
   get_redirects: siteRead,

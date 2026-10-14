@@ -20,7 +20,21 @@ export function isSitePlanRefusal({ status = 0, code, validWpEnvelope = false, k
     && status === 404 && validWpEnvelope === true && code === 'change_plan_target_unavailable';
 }
 
+// Limits the site enforces for AI assistants, and refusals of an index check start: the site
+// decides these before any work (PRO golf 2), so they are no outage and nothing ran.
+const SITE_LIMITS = new Set(['live_check_limit_reached', 'index_check_daily_limit_reached', 'index_check_too_many_urls',
+  'pagespeed_url_limit_reached', 'pagespeed_full_scan_limit_reached', 'schema_scan_already_running']);
+const INDEX_START = new Set(['index_check_invalid', 'index_check_too_many_urls', 'index_check_unknown_url',
+  'gsc_not_connected', 'gsc_property_mismatch', 'index_check_daily_limit_reached', 'index_check_backend_unavailable']);
+export function isSiteLimitRefusal({ status = 0, code, validWpEnvelope = false, method, path } = {}) {
+  if (validWpEnvelope !== true || typeof code !== 'string') return false;
+  if (SITE_LIMITS.has(code) && [400, 409, 429].includes(status)) return true;
+  return method === 'POST' && path === '/index-checks' && INDEX_START.has(code) && [400, 409, 429, 502].includes(status);
+}
+
 export function mapHostedOutcome({ status = 0, code, validWpEnvelope = false, kind = 'read', method, path, retryAfter } = {}) {
+  if (isSiteLimitRefusal({ status, code, validWpEnvelope, method, path }))
+    return { code, retryable: false, outcome_unknown: false };
   const known = {
     '402:pro_required': 'site_entitlement_required',
     '401:agent_token_revoked': 'site_reconnect_required',

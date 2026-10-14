@@ -9,7 +9,9 @@ export { discoverWorkflows } from '../scan-maintenance.js';
 // fails every session of that grant ('grant scopes'). Knowing it grants nothing by itself; hosted
 // redirects stay governed by the VPS-filtered redirect_execution capability and its authorizer.
 const baseScopes = ['site:read','meta:write','audit:read','rollback','changes:write','tasks:write','importance:write'];
-const scopes = new Set([...baseScopes,'redirects:write']);
+// scans:execute (golf 2b, 14 Oct 2026): same rule as redirects:write. Known so a grant with it opens;
+// the VPS offers it only behind its flag, and PRO checks it again on every index check.
+const scopes = new Set([...baseScopes,'redirects:write','scans:execute']);
 const uuid = value => typeof value === 'string' && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(value);
 const label = (value, max) => typeof value === 'string' && value.trim() !== ''
   && Buffer.byteLength(value, 'utf8') <= max && !/[<>\p{C}]/u.test(value);

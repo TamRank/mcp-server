@@ -27,7 +27,7 @@ const call=(name,args)=>client.callTool({name,arguments:args});
 const decode=(r,label)=>{check(!r.isError,label+': '+(r.isError?r.content[0]?.text:''));return JSON.parse(r.content[0].text);};
 try{
   await client.connect(transport);const list=await client.listTools();
-  check(list.tools.length===(f.profile==='core'?13:21)&&JSON.stringify(list).length<CATALOG_BUDGET,'Existing bounded tool catalog');
+  check(list.tools.length===(f.profile==='core'?15:23)&&JSON.stringify(list).length<CATALOG_BUDGET,'Existing bounded tool catalog');
   const caps=decode(await call('get_capabilities',{}),'Capabilities'),c=caps.schema_execution;
   check(c.contract_version===1&&(f.limited?!c.available:c.available)&&c.read_available&&c.record_contract==='schema_execution_view_v1','Ready native schema workflow, operation scopes preserved');
   check(c.rollback_available===f.public_rollback&&!c.recovery_available,'Inverse separately enabled; journal recovery remains unavailable');

@@ -1,0 +1,92 @@
+/** Golf 2b on the local bridge: list_changes, live_check and index checks; inert registry and a stub transport, no WordPress. */
+import assert from 'node:assert/strict';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { registerWorkflowTools } from '../src/workflow-tools.js';
+import { buildWorkflowServer } from '../src/workflow-server.js';
+import { WorkflowClient } from '../src/workflow-rest.js';
+import { clampToToolProfile } from '../src/workflow-profile.js';
+
+const parse = out => JSON.parse(out.content[0].text);
+const check = 'idx_' + 'd'.repeat(24);
+let calls = [], reply = null, failure = null;
+const fake = { get: async (path, query) => { calls.push({ method: 'GET', path, query }); if (failure) throw failure; return structuredClone(reply); },
+  post: async (path, body) => { calls.push({ method: 'POST', path, body }); if (failure) throw failure; return structuredClone(reply); } };
+const registry = (capabilities, profile = 'core', extra = {}) => { const tools = new Map();
+  registerWorkflowTools({ registerTool: (n, c, h) => tools.set(n, { c, h }) }, fake, { profile, capabilities, ...extra }); return tools; };
+
+// Core: list_changes and live_check are reads; start_scan is not in a plain core profile.
+{
+  const tools = registry({ reads: { get_outcomes: { available: true } }, live_check: { available: true } });
+  assert.equal(tools.get('list_changes').c.annotations.readOnlyHint, true);
+  assert.equal(tools.get('live_check').c.annotations.readOnlyHint, true);
+  assert.equal(tools.has('start_scan'), false);
+  reply = { contract_version: 2, items: [], pagination: { page: 1, per_page: 25, total: 0, total_pages: 0, has_more: false } };
+  const out = parse(await tools.get('list_changes').h({ post_id: 7, since: '2026-10-01' }));
+  assert.deepEqual(calls.pop(), { method: 'GET', path: '/outcomes', query: { post_id: 7, created_from: '2026-10-01 00:00:00' } });
+  assert.deepEqual(out.items, []); assert.equal(out.next_cursor, null); assert.match(out.coverage, /directly in WordPress/);
+  // An explicit false from the site refuses locally; nothing is sent.
+  const off = registry({ reads: { get_outcomes: { available: false } }, live_check: { available: false } });
+  assert.equal((await off.get('list_changes').h({})).isError, true); assert.equal((await off.get('live_check').h({ post_id: 1 })).isError, true);
+  assert.equal(calls.length, 0);
+}
+// Clamped stdio (workflow-v2-1): the golf 2b blocks survive the clamp; index checks are listed only when offered.
+{
+  const raw = { contract_version: 2, full_v2_compatible: false, mcp_bridge_compatibility: 'workflow-v2-1',
+    reads: { get_capabilities: { available: true }, get_outcomes: { available: true } },
+    live_check: { contract_version: 1, available: true, scope: 'site:read', hosts: 'this_site_only', limits: { per_hour: 60 } },
+    index_checks: { contract_version: 1, available: true, scope: 'scans:execute', limits: { max_urls_per_request: 50 } },
+    scan_limits: { pagespeed_per_url_per_day: 20 }, scan_proposals: { available: true } };
+  const clamped = clampToToolProfile(raw);
+  assert.deepEqual(clamped.live_check, { contract_version: 1, available: true, limits: { per_hour: 60 } });
+  assert.equal(clamped.index_checks.available, true); assert.equal(clamped.scan_proposals, undefined);
+  const list = async caps => { const server = buildWorkflowServer(fake, { profile: 'core', capabilities: caps, profileClamp: true, preflight: { ok: true } });
+    const client = new Client({ name: 'golf2b', version: '1' }); const [a, b] = InMemoryTransport.createLinkedPair();
+    await server.connect(a); await client.connect(b);
+    try { return { names: (await client.listTools()).tools.map(t => t.name), instructions: client.getInstructions() }; } finally { await client.close(); } };
+  const on = await list(clamped);
+  for (const name of ['list_changes', 'live_check', 'start_scan', 'get_scan_status']) assert.ok(on.names.includes(name), name);
+  assert.match(on.instructions, /except index checks/);
+  const off = await list(clampToToolProfile({ ...raw, index_checks: { contract_version: 1, available: false } }));
+  assert.equal(off.names.includes('start_scan'), false); assert.doesNotMatch(off.instructions, /except index checks/);
+}
+// Specialist: start_scan takes urls for type index and posts exactly {urls}; get_scan_status reads a check_id.
+{
+  const tools = registry({ index_checks: { available: true } }, 'specialist');
+  reply = { contract_version: 1, check_id: check, status: 'completed', urls: 1, sent_to_google: 0, answered_from_recent_cache: 1,
+    results: [{ url: 'https://example.test/a/', post_id: 3, index_status: 'indexed', checked_at: '2026-10-14T10:00:00Z' }] };
+  const started = parse(await tools.get('start_scan').h({ type: 'index', urls: ['https://example.test/a/'] }));
+  assert.deepEqual(calls.pop(), { method: 'POST', path: '/index-checks', body: { urls: ['https://example.test/a/'] } });
+  assert.equal(started.status, 'completed'); assert.match(started.explanation, /Done/);
+  await tools.get('get_scan_status').h({ type: 'index', check_id: check });
+  assert.deepEqual(calls.pop(), { method: 'GET', path: '/index-checks/' + check, query: undefined });
+  for (const args of [{ type: 'pagespeed', urls: ['https://example.test/a/'] }, { type: 'index', urls: ['https://example.test/a/'], mode: 'preview' }])
+    assert.equal((await tools.get('start_scan').h(args)).isError, true, JSON.stringify(args));
+  assert.equal((await tools.get('get_scan_status').h({ type: 'pagespeed', check_id: check })).isError, true);
+  assert.equal(calls.length, 0, 'invalid shapes send nothing');
+  // Not offered by the site: refused without a request.
+  const none = registry({ index_checks: { available: false } }, 'specialist');
+  assert.equal(parse(await none.get('start_scan').h({ type: 'index', urls: ['https://example.test/a/'] })).code, 'workflow_operation_unavailable');
+  assert.equal(calls.length, 0);
+}
+// The real stdio client: contract 1 on the golf 2 routes, and limit details survive for a plain message.
+{
+  const answers = [];
+  const transport = { request: async ({ method, url }) => { const next = answers.shift(); calls.push({ method, url });
+    return { status: next.status, headers: {}, bodyBytes: new TextEncoder().encode(JSON.stringify(next.body)) }; } };
+  const client = new WorkflowClient({ rest_base_url: 'http://localhost:8080/wp-json/tamrank/v2', transport });
+  const tools = registry({ live_check: { available: true } }, 'core', {});
+  answers.push({ status: 200, body: { contract_version: 1, url: 'http://localhost:8080/a/', status: 200, redirects: [], stopped: null,
+    live: { title: 'A' }, stored: null, matches: {}, limits: { live_checks: { limit: 60, used: 1, remaining: 59 } }, post_id: 3 } });
+  const shown = await client.get('/live-check', { post_id: 3 });
+  assert.equal(shown.contract_version, 1);
+  answers.push({ status: 200, body: { contract_version: 1, items: [] } });
+  await assert.rejects(client.get('/outcomes'), e => e.code === 'workflow_upgrade_required', 'contract 1 only on the golf 2 routes');
+  answers.push({ status: 429, body: { code: 'live_check_limit_reached', message: 'Used.', data: { status: 429, limit: 60, retry_at: '2026-10-14T13:00:00+00:00', retry_after_seconds: 120, secret: 'x' } } });
+  failure = await client.get('/live-check', { post_id: 3 }).catch(e => e);
+  assert.deepEqual(failure.data, { retry_after_seconds: 120, limit: 60, retry_at: '2026-10-14T13:00:00+00:00' });
+  const out = parse(await tools.get('live_check').h({ post_id: 3 }));
+  assert.equal(out.message, 'Live checks by an AI assistant are used up for this hour on this site (60 per hour). Nothing was fetched. There is room again from 2026-10-14T13:00:00+00:00.');
+  assert.equal(out.secret, undefined); failure = null;
+}
+console.log('PASS: local list_changes, live_check and index checks: exact routes and shapes, clamp keeps only the golf 2b blocks, contract 1 only on its routes, plain limit messages.');

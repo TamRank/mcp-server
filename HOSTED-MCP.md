@@ -43,10 +43,15 @@ grant refusal. Factory rejects specialist/legacy/preview/recovery/receipt-store
 contexts; the hosted tool profile is core only. No schema/redirect writes,
 scan execution, recovery mode or legacy aliases are available.
 
-The capable core catalog is the thirteen names: get_site_context,
+The capable core catalog is the fifteen names: get_site_context,
 get_capabilities, get_work_queue, get_signals, search_pages, get_page,
-diagnose_page, get_outcomes, update_work_item, plan_changes, execute_change_set,
-get_changes, rollback_change_set. get_capabilities returns
+diagnose_page, get_outcomes, list_changes, live_check, update_work_item,
+plan_changes, execute_change_set, get_changes, rollback_change_set. Where the
+site advertises index_checks (scope scans:execute), start_scan and
+get_scan_status are listed too, for targeted index checks only (type index,
+urls / check_id); PageSpeed and schema scans stay unavailable hosted.
+list_changes is listed where reads.get_outcomes is, live_check where
+live_check.available is true. get_capabilities returns
 filteredCapabilities; when it carries `as_of` (ISO time the API read the
 capabilities from the site) the library adds `cache_age_s`, counted per call. Reduced capabilities hide unavailable tools in tools/list,
 but a direct call still passes argument validation and current authorization.
