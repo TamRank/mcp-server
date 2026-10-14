@@ -8,6 +8,7 @@ import {fieldOperations} from '../src/field-execution.js';
 import {redirectOperations} from '../src/redirect-execution.js';
 import {fieldRecoveryAcks} from '../src/field-recovery.js';
 import {schemaOperations,validSchemaExecutionResponse,matchesSchemaExecutionRequest} from '../src/schema-execution.js';
+import { CATALOG_BUDGET } from './catalog-budget.mjs';
 const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',other='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
   execution='cccccccc-cccc-4ccc-8ccc-cccccccccccc',hash='a'.repeat(64),now=1800000000;
 const itemId=n=>'dddddddd-dddd-4ddd-8ddd-'+String(n+1).padStart(12,'0');
@@ -142,7 +143,7 @@ for(const profile of ['core','specialist']){
   const server=new McpServer({name:'owned-schema-bridge',version:'1'}),client=new Client({name:'Owned schema client',version:'1'});
   registerWorkflowTools(server,transport,{capabilities:caps,profile});const [a,b]=InMemoryTransport.createLinkedPair();await server.connect(a);await client.connect(b);
   try{
-    const listing=await client.listTools();equal(listing.tools.length,profile==='core'?12:20);check(JSON.stringify(listing).length<16000,'Bounded real catalog');
+    const listing=await client.listTools();equal(listing.tools.length,profile==='core'?13:21);check(JSON.stringify(listing).length<CATALOG_BUDGET,'Bounded real catalog');
     response=fixture(req);check(!(await client.callTool({name:'plan_changes',arguments:req})).isError,'SDK supports complete typed proposal');calls=[];
     response=fixture(req,'executed');check(!(await client.callTool({name:'execute_change_set',arguments:input(req)})).isError,'SDK supports approved execution');
     equal(calls.pop().body.confirmation.client,{name:'Owned schema client',version:'1'},'Client provenance from handshake, not agent input');

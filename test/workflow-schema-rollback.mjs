@@ -7,6 +7,7 @@ import {registerWorkflowTools} from '../src/workflow-tools.js';
 import {schemaOperations,validSchemaExecutionResponse} from '../src/schema-execution.js';
 import {validSchemaRollbackInput,validSchemaRollbackPreview,matchesSchemaRollbackRequest} from '../src/schema-rollback.js';
 import {validRedirectExecutionResponse} from '../src/redirect-execution.js';
+import { CATALOG_BUDGET } from './catalog-budget.mjs';
 const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',set='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
   execution='cccccccc-cccc-4ccc-8ccc-cccccccccccc',hash='a'.repeat(64),revision='b'.repeat(64),now=1800000000;
 const uuid=(n,prefix='d')=>prefix.repeat(8)+'-'+prefix.repeat(4)+'-4'+prefix.repeat(3)+'-8'+prefix.repeat(3)+'-'+String(n+1).padStart(12,'0');
@@ -155,7 +156,7 @@ for(const profile of ['core','specialist']){
   const server=new McpServer({name:'owned-inverse',version:'1'}),client=new Client({name:'Owned rollback client',version:'1'});
   registerWorkflowTools(server,transport,{capabilities:caps,profile});const [a,b]=InMemoryTransport.createLinkedPair();await server.connect(a);await client.connect(b);
   try{
-    const listing=await client.listTools();equal(listing.tools.length,profile==='core'?12:20);check(JSON.stringify(listing).length<16000,'Bounded SDK catalog');
+    const listing=await client.listTools();equal(listing.tools.length,profile==='core'?13:21);check(JSON.stringify(listing).length<CATALOG_BUDGET,'Bounded SDK catalog');
     for(const chosen of [f,fixture(['meta.update'])]){
       response=chosen.preview;check(!(await client.callTool({name:'rollback_change_set',arguments:chosen.input})).isError,'SDK comparison includes empty source_jobs object');calls=[];
       response=record(chosen);check(!(await client.callTool({name:'rollback_change_set',arguments:chosen.proposal})).isError,'SDK inverse proposal');calls=[];

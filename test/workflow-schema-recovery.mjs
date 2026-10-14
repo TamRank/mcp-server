@@ -165,7 +165,7 @@ for(const profile of ['core','specialist']){
   registerWorkflowTools(server,transport,{capabilities:caps,profile});const [a,b]=InMemoryTransport.createLinkedPair();await server.connect(a);await client.connect(b);
   try{response=result(f);check(!(await client.callTool({name:'execute_change_set',arguments:f.input})).isError,'Real SDK recovery mapping');
     const sent=calls.pop();equal(sent.body.confirmation.client,{name:'Owned recovery client',version:'2'});equal(sent.body.confirmation.agent,{name:'unknown'});
-    equal((await client.listTools()).tools.length,profile==='core'?12:20);
+    equal((await client.listTools()).tools.length,profile==='core'?13:21);
   }finally{await client.close();await server.close();}
 }
 console.log(`PASS: ${checks} schema recovery semantic/bridge/SDK checks; native WordPress recovery transport remains separate.`);

@@ -6,6 +6,7 @@ import path from 'node:path';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {validSchemaExecutionResponse} from '../src/schema-execution.js';
+import { CATALOG_BUDGET } from './catalog-budget.mjs';
 let input='';for await(const chunk of process.stdin)input+=chunk;
 const f=JSON.parse(input),repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 assert.match(f.root||'',/^\/private\/tmp\/tr-maint-wp-[A-Za-z0-9]{6}$/);assert.ok(existsSync(f.root+'/owned-fixture'));
@@ -23,7 +24,7 @@ for(const style of ['pretty','query'])for(const profile of ['core','specialist']
   const call=(name,args)=>client.callTool({name,arguments:args});
   try{
     await client.connect(transport);const listing=await client.listTools();
-    check(listing.tools.length===(profile==='core'?12:20)&&JSON.stringify(listing).length<=16000,'Existing tool surface remains bounded');
+    check(listing.tools.length===(profile==='core'?13:21)&&JSON.stringify(listing).length<=CATALOG_BUDGET,'Existing tool surface remains bounded');
     const capsReply=await call('get_capabilities',{});check(!capsReply.isError,'Native capabilities available');
     const caps=JSON.parse(capsReply.content[0].text),c=caps.schema_execution;
     check(c.contract_version===1&&c.read_available&&c.record_contract==='schema_execution_view_v1'&&c.private_proofs_omitted,'Explicit semantic schema-read capability');

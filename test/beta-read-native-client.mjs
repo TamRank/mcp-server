@@ -6,6 +6,7 @@ import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {existsSync} from 'node:fs';
 import {ownedInstalledRuntime} from './owned-installed-entry.mjs';
+import { CATALOG_BUDGET } from './catalog-budget.mjs';
 const cwd=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 export async function runBetaReadClient({origin,fixture:f,inspect,tlsRoot}){
   const runtime=ownedInstalledRuntime(cwd);let checks=f.checks;
@@ -38,8 +39,8 @@ export async function runBetaReadClient({origin,fixture:f,inspect,tlsRoot}){
         }while(cursor);
         equal(items.length,first.total,'No truncated result list');return items;
       };
-      const listing=await client.listTools();equal(listing.tools.length,{core:12,specialist:20,legacy:42}[profile]);
-      if(profile!=='legacy')ok(JSON.stringify(listing).length<16000,'Catalog remains bounded');
+      const listing=await client.listTools();equal(listing.tools.length,{core:13,specialist:21,legacy:42}[profile]);
+      if(profile!=='legacy')ok(JSON.stringify(listing).length<CATALOG_BUDGET,'Catalog remains bounded');
       if(profile==='legacy'){
         const alias=await call('get_priority_actions',{work_id:f.group,section:'targets',limit:1});
         equal(alias.deprecated,true);equal(alias.remove_in,'0.5.0');

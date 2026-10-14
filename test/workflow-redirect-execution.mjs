@@ -7,6 +7,7 @@ import {registerWorkflowTools} from '../src/workflow-tools.js';
 import {fieldOperations,validExecutionResponse} from '../src/field-execution.js';
 import {redirectOperations,redirectDeliveryAcks,validRedirectRecoveryProposal} from '../src/redirect-execution.js';
 import {fieldRecoveryAcks} from '../src/field-recovery.js';
+import { CATALOG_BUDGET } from './catalog-budget.mjs';
 const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',other='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',hash='a'.repeat(64),original='b'.repeat(64);
 const caps={field_execution:{contract_version:1,available:true,read_available:true,rollback_available:true,recovery_available:true,operations:fieldOperations},
   redirect_execution:{contract_version:1,available:true,mixed_available:true,read_available:true,rollback_available:true,recovery_available:true,operations:[...fieldOperations,...redirectOperations]}};
@@ -97,7 +98,7 @@ equal(calls.length,1);check(!uncertain.content[0].text.includes('private detail'
 for(const profile of ['core','specialist']){
   const server=new McpServer({name:'owned-redirect-bridge',version:'1'}),client=new Client({name:'Owned redirect client',version:'2'});
   registerWorkflowTools(server,transport,{capabilities:caps,profile});const [a,b]=InMemoryTransport.createLinkedPair();await server.connect(a);await client.connect(b);
-  try{const listing=await client.listTools();equal(listing.tools.length,profile==='core'?12:20);check(JSON.stringify(listing).length<16000,'Existing catalog budget');
+  try{const listing=await client.listTools();equal(listing.tools.length,profile==='core'?13:21);check(JSON.stringify(listing).length<CATALOG_BUDGET,'Existing catalog budget');
     response=reply('executed');check(!(await client.callTool({name:'execute_change_set',arguments:input})).isError,'Real SDK invocation');
     const sent=calls.pop();equal(sent.body.confirmation.client,{name:'Owned redirect client',version:'2'});equal(sent.body.confirmation.acknowledgements,['redirect_deletion']);
   }finally{await client.close();await server.close();}

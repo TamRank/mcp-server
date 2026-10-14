@@ -72,6 +72,10 @@ async function hosted(filteredCapabilities){
     scopes:['site:read','meta:write','audit:read','rollback','changes:write','tasks:write','importance:write','redirects:write']})));
 }
 
+// get_capabilities read live says when: as_of is now and the copy is zero seconds old. The rest is compared as before.
+const fresh=text=>{const {as_of,cache_age_s,...rest}=JSON.parse(text);
+  assert.ok(Math.abs(Date.now()-Date.parse(as_of))<60000,String(as_of));assert.equal(cache_age_s,0);return rest;};
+
 test('workflow-v2-1 with full_v2_compatible:false passes discovery, clamped to the hosted capabilities',async()=>{
   const {found}=await stdio(v21());
   assert.deepEqual(found.preflight,{ok:true});
@@ -115,7 +119,7 @@ test('get_capabilities on a clamped site reports the clamp, not the raw superset
   try{
     const result=await local.client.callTool({name:'get_capabilities',arguments:{}});
     assert.equal(result.isError,undefined);
-    assert.deepEqual(JSON.parse(result.content[0].text),hostedFiltered());
+    assert.deepEqual(fresh(result.content[0].text),hostedFiltered());
   }finally{await local.close();}
 });
 
@@ -129,16 +133,16 @@ test('a schema execution token is refused locally on a clamped site; nothing is 
   }finally{await local.close();}
 });
 
-test('safe-beta-1 is unchanged: raw capabilities, no clamp, the same twelve core tools',async()=>{
+test('safe-beta-1 is unchanged: raw capabilities, no clamp, the same thirteen core tools',async()=>{
   const raw=v21({mcp_bridge_compatibility:'safe-beta-1'});
   const local=await stdio(raw);
   try{
     assert.deepEqual(local.found.preflight,{ok:true});
     assert.equal(local.found.profileClamp,false);
     assert.deepEqual(local.found.capabilities,raw);
-    assert.deepEqual(local.tools,[...readNames,'update_work_item','plan_changes','execute_change_set','get_changes','rollback_change_set'].sort());
+    assert.deepEqual(local.tools,[...readNames,'get_outcomes','update_work_item','plan_changes','execute_change_set','get_changes','rollback_change_set'].sort());
     const result=await local.client.callTool({name:'get_capabilities',arguments:{}});
-    assert.deepEqual(JSON.parse(result.content[0].text),raw);
+    assert.deepEqual(fresh(result.content[0].text),raw);
   }finally{await local.close();}
 });
 
@@ -171,7 +175,7 @@ test('a specialist session on workflow-v2-1 gets the clamped core toolset and in
     const scan=await specialist.client.callTool({name:'start_scan',arguments:{mode:'preview',type:'index',post_ids:[1]}}).catch(err=>({thrown:err}));
     assert.ok(scan.thrown||scan.isError===true);
     const result=await specialist.client.callTool({name:'get_capabilities',arguments:{}});
-    assert.deepEqual(JSON.parse(result.content[0].text),hostedFiltered());
+    assert.deepEqual(fresh(result.content[0].text),hostedFiltered());
     assert.deepEqual(specialist.wire.calls,['/capabilities','/capabilities']);
   }finally{await core.close();await specialist.close();}
 });

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { fileURLToPath } from 'node:url';
+import { CATALOG_BUDGET } from './catalog-budget.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url));
 let input='';for await(const chunk of process.stdin)input+=chunk;
 const config=JSON.parse(input);assert.match(config.site_url,/^http:\/\/127\.0\.0\.1:[0-9]+$/);
@@ -20,8 +21,8 @@ async function call(client,name,args={}) {
 try {
   for(const style of ['pretty','query']) {
     const client=await connect(config.token,style),listing=await client.listTools();
-    assert.equal(listing.tools.length,20);
-    const size=JSON.stringify(listing).length;assert.ok(size<16000,`Specialist surface too large: ${size}`);
+    assert.equal(listing.tools.length,21);
+    const size=JSON.stringify(listing).length;assert.ok(size<CATALOG_BUDGET,`Specialist surface too large: ${size}`);
     assert.equal(listing.tools.find(t=>t.name==='start_scan').annotations.readOnlyHint,false);
     const preview=await call(client,'start_scan',{mode:'preview',type:'pagespeed',post_ids:[205,1]});
     assert.equal(preview.plan_persisted,false);
@@ -38,6 +39,6 @@ try {
     const reader=await connect(config.read_token,style);
     await assert.rejects(call(reader,'start_scan',args),/workflow_operation_unavailable/);
     await assert.rejects(call(reader,'get_scan_status',{proposal_id:draft.proposal_id}),/workflow_operation_unavailable/);
-    console.log(`Scan proposals MCP -> WordPress OK: ${style}, exact private planning/read/replay, no scan; specialist ${size}/16000 chars.`);
+    console.log(`Scan proposals MCP -> WordPress OK: ${style}, exact private planning/read/replay, no scan; specialist ${size}/${CATALOG_BUDGET} chars.`);
   }
 } finally {for(const client of clients)await client.close();}

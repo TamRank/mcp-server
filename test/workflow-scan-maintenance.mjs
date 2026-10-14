@@ -5,6 +5,7 @@ import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {registerWorkflowTools} from '../src/workflow-tools.js';
 import {discoverWorkflows,maintenanceAcks,sourceMaintenanceAcks} from '../src/scan-maintenance.js';
+import { CATALOG_BUDGET } from './catalog-budget.mjs';
 const id='11111111-1111-4111-8111-111111111111';
 const input={execution_id:id,client_request_id:'close-fixture-0001',expected_runtime_hash:'a'.repeat(64),confirmation:{
   mode:'chat_attested',review_hash:'b'.repeat(64),confirmed:true,client:{name:'Fixture',version:null},agent:{name:'Test agent'},acknowledgements:maintenanceAcks}};
@@ -14,7 +15,7 @@ function registry(options={}) {const calls=[],tools=new Map();registerWorkflowTo
     post:async(path,body)=>{calls.push({method:'POST',path,body});return {contract_version:2};}},
   {profile:'specialist',capabilities:caps,...options});return {calls,tools};}
 test('Separate destructive closure; status stays read-only; core and legacy gain no writer',async()=>{
-  const {tools,calls}=registry();assert.equal(tools.size,20);
+  const {tools,calls}=registry();assert.equal(tools.size,21);
   assert.equal(tools.get('close_scan').c.annotations.readOnlyHint,false);assert.equal(tools.get('close_scan').c.annotations.destructiveHint,true);
   assert.equal(tools.get('get_scan_status').c.annotations.readOnlyHint,true);
   await tools.get('get_scan_status').h({execution_id:id});await tools.get('close_scan').h(input);
@@ -51,7 +52,7 @@ test('Source maintenance uses the same tools with independent support and exact 
   const sourceInput={source_job_id:id,client_request_id:'source-close-0001',expected_revision:'a'.repeat(64),
     confirmation:{...input.confirmation,acknowledgements:sourceMaintenanceAcks}};
   const sourceCaps={scan_maintenance:{available:false,read_available:false,schema_source:{available:true,read_available:true}}};
-  const {tools,calls}=registry({capabilities:sourceCaps,maintenanceOnly:true});assert.equal(tools.size,20);
+  const {tools,calls}=registry({capabilities:sourceCaps,maintenanceOnly:true});assert.equal(tools.size,21);
   assert.ok(!(await tools.get('get_scan_status').h({source_job_id:id})).isError);
   assert.ok(!(await tools.get('close_scan').h(sourceInput)).isError);
   assert.deepEqual(calls,[{method:'GET',path:'/scans/maintenance/sources/'+id,query:{}},
@@ -105,8 +106,8 @@ test('Real stdio SDK -> HTTP, both URL styles, no scan or silent replay',async()
     try{
       await client.connect(new StdioClientTransport({command:process.execPath,args:['index-workflow.js'],cwd:process.cwd(),stderr:'pipe',
         env:{PATH:process.env.PATH,TAMRANK_PAT:pat,TAMRANK_SITE_URL:'http://127.0.0.1:'+server.address().port,TAMRANK_TOOL_PROFILE:'specialist',TAMRANK_WORKFLOW_PREVIEW:'1',TAMRANK_REST_STYLE:style}}));
-      const listing=await client.listTools();assert.equal(listing.tools.length,20);const size=JSON.stringify(listing).length;
-      assert.ok(size<16000,`Specialist surface ${size}`);console.log(`Maintenance surface: ${size} characters (12 core / 20 specialist / 42 legacy).`);
+      const listing=await client.listTools();assert.equal(listing.tools.length,21);const size=JSON.stringify(listing).length;
+      assert.ok(size<CATALOG_BUDGET,`Specialist surface ${size}`);console.log(`Maintenance surface: ${size} characters (12 core / 20 specialist / 42 legacy).`);
       const review=await client.callTool({name:'get_scan_status',arguments:{execution_id:id}});assert.equal(JSON.parse(review.content[0].text).targets.length,50);
       const n=requests.length;assert.equal((await client.callTool({name:'close_scan',arguments:{...input,force:true}})).isError,true);assert.equal(requests.length,n);
       const result=await client.callTool({name:'close_scan',arguments:input});assert.equal(JSON.parse(result.content[0].text).outcome,'unknown');

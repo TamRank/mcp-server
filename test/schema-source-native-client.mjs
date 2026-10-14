@@ -8,6 +8,7 @@ import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {sourceAcks,sourceProbeAcks} from '../src/source-scans.js';
 import {workflowIdentity} from '../src/workflow-identity.js';
 import {ownedInstalledRuntime} from './owned-installed-entry.mjs';
+import { CATALOG_BUDGET } from './catalog-budget.mjs';
 let input='';for await(const chunk of process.stdin)input+=chunk;
 const f=JSON.parse(input),repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const runtime=ownedInstalledRuntime(repo);
@@ -27,7 +28,7 @@ for(const style of ['pretty','query']){
   const ok=async(name,args)=>{const r=await call(name,args);check(!r.isError,`${name}: ${r.isError?r.content[0]?.text:''}`);return JSON.parse(r.content[0].text);};
   try{
     await client.connect(transport);
-    const listing=await client.listTools();check(listing.tools.length===20&&JSON.stringify(listing).length<16000,'Native acquisition preserves canonical tool budget');
+    const listing=await client.listTools();check(listing.tools.length===21&&JSON.stringify(listing).length<CATALOG_BUDGET,'Native acquisition preserves canonical tool budget');
     const caps=await ok('get_capabilities',{});check(caps.schema_preview?.available===true,'Native preview available after actual discovery');
     const sourceBudget=caps.schema_source_jobs?.hourly_budget;
     // Older PRO branches remain usable by this shared runner while an isolated

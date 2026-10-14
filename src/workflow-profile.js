@@ -10,7 +10,7 @@ export const bridgeCompatible=caps=>caps?.full_v2_compatible===true || BRIDGE_SI
 export const needsProfileClamp=caps=>caps?.full_v2_compatible!==true && typeof caps?.mcp_bridge_compatibility==='string'
   && caps.mcp_bridge_compatibility!==BRIDGE_TOOL_PROFILE && BRIDGE_SITE_PROFILES.has(caps.mcp_bridge_compatibility);
 
-const READ_TOOLS=['get_site_context','get_capabilities','get_work_queue','get_signals','search_pages','get_page','diagnose_page'];
+const READ_TOOLS=['get_site_context','get_capabilities','get_work_queue','get_signals','search_pages','get_page','diagnose_page','get_outcomes'];
 const FIELD_OPERATIONS=['meta.update','social.update','image_alt.update'];
 // redirect-execution.js has the same list, but it imports scan-maintenance.js, which imports this module.
 const REDIRECT_OPERATIONS=['redirect.create','redirect.update','redirect.delete'];

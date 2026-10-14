@@ -8,6 +8,7 @@ import {createInterface} from 'node:readline';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {validSchemaRecoveryProposal,validSchemaRecoveryResult} from '../src/schema-recovery.js';
+import { CATALOG_BUDGET } from './catalog-budget.mjs';
 const input=createInterface({input:process.stdin,crlfDelay:Infinity})[Symbol.asyncIterator]();
 const first=await input.next();assert.ok(!first.done&&first.value.length<16384,'Bounded owned fixture input');
 const f=JSON.parse(first.value),root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -26,7 +27,7 @@ const transport=new StdioClientTransport({command:process.execPath,args:['--impo
 const call=(name,args)=>client.callTool({name,arguments:args});
 const decode=(r,label)=>{check(!r.isError,label+': '+(r.isError?JSON.parse(r.content[0].text).code:''));return JSON.parse(r.content[0].text);};
 try{
-  await client.connect(transport);const list=await client.listTools();check(list.tools.length===(f.profile==='core'?12:20)&&JSON.stringify(list).length<16000,'Bounded existing tools');
+  await client.connect(transport);const list=await client.listTools();check(list.tools.length===(f.profile==='core'?13:21)&&JSON.stringify(list).length<CATALOG_BUDGET,'Bounded existing tools');
   const c=decode(await call('get_capabilities',{}),'Capabilities').schema_execution;
   check(c.recovery_available&&c.read_available&&c.recovery_contract==='schema_journal_recovery_v1','Separate actual recovery capability');
   check(!c.available&&!c.rollback_available,'Recovery enabled with forward/inverse website writers still disabled');
