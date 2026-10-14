@@ -12,6 +12,7 @@ import {clampToToolProfile} from './workflow-profile.js';
 import {hostedToolSecuritySchemes} from './hosted/tool-scopes.js';
 import {hostedScopeChallengeMeta} from './hosted/auth-challenge.js';
 import {sourceConfirmation,validSourceStart,sourcePath,sourceArgs} from './source-scans.js';
+import {hostedScanDefinitions,hostedPageSpeed,hostedPageSpeedOffered,hostedPageSpeedReadable} from './pagespeed-hosted.js';
 import {scanConfirmation,pagespeedRoute,pagespeedSupport,discoverPageSpeedScans,validPageSpeedStart,
   validPageSpeedProposal,validPageSpeedProgress,pageSpeedStartBody,pageSpeedProgress} from './pagespeed-scans.js';
 import {executionSchema,rollbackSchema,confirmationBody,isFieldExecutionPlan,validExecutionResponse,fieldOperations} from './field-execution.js';
@@ -167,6 +168,19 @@ const HOSTED_DESCRIPTIONS={
   start_scan:'Ask Google now for the index status of up to 50 pages of this site: type index and urls. Only when the user asks. Each page counts toward the site\'s daily room for checks by AI assistants; answers from the last 48 hours are reused for free. Returns check_id; results usually follow within minutes.',
   get_scan_status:'Read the result of an index check: type index and the check_id from start_scan. Each page shows the index status Google reported.',
 };
+
+// Golf 3: hosted start_scan/get_scan_status describe only the kinds this connection offers (index, PageSpeed).
+const SCAN_TEXT={
+  start_scan:{index:'Index check: ask Google now for the index status of up to 50 pages of this site (type index, urls). Each page counts toward the site\'s daily room for checks by AI assistants; answers from the last 48 hours are reused for free. Returns check_id; results usually follow within minutes.',
+    pagespeed:'PageSpeed: measure up to 25 pages of this site on mobile and desktop, in two steps. First type pagespeed with post_ids: this makes a plan and measures nothing. Show the user every page and warning and ask. Only after an explicit yes in chat, call again with type pagespeed, proposal_id and confirmation {plan_hash, confirmed: true}. Each page can be measured a limited number of times a day. Returns execution_id.'},
+  get_scan_status:{index:'Index check: type index and the check_id from start_scan; each page shows the index status Google reported.',
+    pagespeed:'PageSpeed: type pagespeed and the execution_id from start_scan for the results per page (mobile and desktop), or proposal_id to read a saved plan.'},
+};
+export function hostedScanDescription(name,caps){
+  if(!SCAN_TEXT[name]||!(name==='start_scan'?hostedPageSpeedOffered(caps):hostedPageSpeedReadable(caps)))return undefined;
+  const parts=[caps?.index_checks?.available===true?SCAN_TEXT[name].index:null,SCAN_TEXT[name].pagespeed].filter(Boolean);
+  return (name==='start_scan'?'Only when the user asks. ':'Read a check or measurement started with start_scan. ')+parts.join(' ');
+}
 
 // The bridge profile name gates this session (factory.js) but tells the assistant nothing it can use,
 // and it is an internal codename a user would see quoted. The gating object itself is unchanged.
@@ -348,8 +362,8 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   }
   const register = (name, def, canonical = name, deprecated = false) => {
     const schema = z.object(def.schema).strict();
-    const readOnly=Boolean(def.path)&&!def.write&&!def.scanPlan&&!def.maintenanceWrite&&!def.fieldPlan&&!def.fieldExecution&&def.indexCheck!=='start';
-    server.registerTool(name, { description: hostedContext&&HOSTED_DESCRIPTIONS[name]||def.description, inputSchema: schema,
+    const readOnly=Boolean(def.path)&&!def.write&&!def.scanPlan&&!def.maintenanceWrite&&!def.fieldPlan&&!def.fieldExecution&&def.indexCheck!=='start'&&!def.scanStart;
+    server.registerTool(name, { description: hostedContext&&(hostedScanDescription(name,capabilities)??HOSTED_DESCRIPTIONS[name])||def.description, inputSchema: schema,
       ...(hostedContext ? { securitySchemes: hostedToolSecuritySchemes(name,hostedContext.grantContext,hostedContext.filteredCapabilities) } : {}),
       // Read-only already implies idempotence. Omitted open-world hint stays conservative.
       // An index check changes nothing on the site but spends daily room, so it is neither destructive nor idempotent;
@@ -432,6 +446,11 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
             ?'The website did not confirm the index check; it may or may not have started. Read get_scan_status only with a check_id you have; do not start it again automatically.'
             :`The website turned this down. ${err.message}`,{automatic_retry:false,...details});
         }
+      }
+      // Golf 3: hosted PageSpeed, plan → explicit chat approval → start (pagespeed-hosted.js).
+      if(hostedContext && parsed.data.type==='pagespeed' && (canonical==='start_scan'||canonical==='get_scan_status')){
+        const out=await hostedPageSpeed(canonical,parsed.data,{client,capabilities,clientInfo:clientInfo(),auditContext:hostedContext.auditContext});
+        return out.error?failure(...out.error):result(out.ok);
       }
       if(pagespeedStart || pagespeedRead){
         const a=parsed.data,support=capabilities?.pagespeed_execution,run=pagespeedStart&&a.mode==='run';
@@ -718,7 +737,9 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   if ((hostedContext || profileClamp) && profile === 'core') for (const [name, def] of Object.entries(specialistReads)) register(name, def);
   // Hosted and a clamped stdio core have no PageSpeed/schema scan machinery: scans there are targeted index
   // checks only, listed where the site offers them (index_checks) and limited by the site.
-  if ((hostedContext || profileClamp) && profile === 'core') for (const [name, def] of Object.entries(indexCheckDefinitions(siteUrl))) register(name, def);
+  // Golf 3: hosted also plans and starts PageSpeed measurements where the site offers them (pagespeed_execution).
+  if (hostedContext && profile === 'core') for (const [name, def] of Object.entries(hostedScanDefinitions(siteUrl))) register(name, def);
+  else if (profileClamp && profile === 'core') for (const [name, def] of Object.entries(indexCheckDefinitions(siteUrl))) register(name, def);
   if (profile === 'specialist') for (const name of ['get_site_diagnostics','get_gsc_pages','get_redirects','get_images_missing_alt','get_topical_authority','start_scan','get_scan_status']) {
     register(name, specialistReads[name]??(name==='get_scan_status'?{
       description:'schema_source+proposal_id:own; other IDs:admin.',

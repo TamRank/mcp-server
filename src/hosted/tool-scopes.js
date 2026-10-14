@@ -47,9 +47,14 @@ export function hostedToolSecuritySchemes(name, grantContext, filteredCapabiliti
   if (granted.some(scope => !offered.includes(scope))) return undefined;
   const redirectOffered = offered.includes('redirects:write')
     && Object.hasOwn(filteredCapabilities, 'redirect_execution');
+  // Golf 3: PageSpeed plans need scans:plan and a start needs both scan scopes (PRO). Asked for only
+  // where the server offers scans:plan and this site exposes PageSpeed, like redirects:write above.
+  const pagespeedOffered = offered.includes('scans:plan')
+    && Object.hasOwn(filteredCapabilities, 'pagespeed_execution');
   const required = [...scopes,
     ...(redirectOffered && ['plan_changes','execute_change_set','rollback_change_set'].includes(name)
-      ? ['redirects:write'] : [])];
+      ? ['redirects:write'] : []),
+    ...(pagespeedOffered && ['start_scan','get_scan_status'].includes(name) ? ['scans:plan'] : [])];
   if (required.some(scope => !offered.includes(scope))) return undefined;
   const requested = required.every(scope => granted.includes(scope))
     ? required : offered.filter(scope => granted.includes(scope) || required.includes(scope));

@@ -16,7 +16,11 @@ export function isSiteReadRefusal({ status = 0, code, validWpEnvelope = false, k
 // These two POST routes only prepare a draft. The PRO planner resolves the
 // target before inserting a set, so this exact validated refusal proves that
 // no proposal was created. The same code on execute/recovery remains uncertain.
+// A PageSpeed plan (golf 3) measures nothing and PRO stores it in one transaction: any validated
+// refusal of the site's own (not auth, not a rate limit) means no plan was saved.
 export function isSitePlanRefusal({ status = 0, code, validWpEnvelope = false, kind, method, path } = {}) {
+  if (kind === 'write' && method === 'POST' && path === '/scans/executions/proposals')
+    return isSiteReadRefusal({ status, code, validWpEnvelope, kind: 'read' });
   return kind === 'write' && method === 'POST' && PLAN_ROUTES.has(path)
     && status === 404 && validWpEnvelope === true && code === 'change_plan_target_unavailable';
 }

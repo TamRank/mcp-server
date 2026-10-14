@@ -36,6 +36,10 @@ for (const file of sources) {
     scanned++;
     if (bad(msg, m[1] !== "'invalid_request'")) offenders.push(`${file}: ${msg}`);
   }
+  // Golf 3 (pagespeed-hosted.js) returns its refusals as error: [code, message, details] for the caller's failure().
+  for (const m of text.matchAll(/error:\s*\[\s*('[^']*'|[^,()\[]+),\s*('[^'\n]*'|`[^`\n]*`)/g)) {
+    scanned++; if (bad(m[2].slice(1, -1))) offenders.push(`${file}: ${m[2]}`);
+  }
   for (const m of text.matchAll(/new ApiError\([^,]+,\s*[^,]+,\s*('[^'\n]*'|`[^`\n]*`)/g)) {
     scanned++; if (bad(m[1].slice(1, -1))) offenders.push(`${file}: ${m[1]}`);
   }
@@ -50,7 +54,8 @@ const listed = { ...fullCaps(),
     operations: ['redirect.create','redirect.update','redirect.delete'] },
   specialist_reads: Object.fromEntries(['get_site_diagnostics','get_gsc_pages','get_redirects','get_images_missing_alt','get_topical_authority']
     .map(name => [name, { available: true }])), reads: { ...fullCaps().reads, get_outcomes: { available: true } },
-  live_check: { contract_version: 1, available: true }, index_checks: { contract_version: 1, available: true } };
+  live_check: { contract_version: 1, available: true }, index_checks: { contract_version: 1, available: true },
+  pagespeed_execution: { available: true, plan_available: true, read_available: true, max_targets: 25, devices: ['mobile', 'desktop'] } };
 const fixture = await connect({ responses: [] }, { capabilities: listed });
 try {
   const instructions = fixture.client.getInstructions();

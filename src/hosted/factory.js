@@ -11,7 +11,8 @@ export { discoverWorkflows } from '../scan-maintenance.js';
 const baseScopes = ['site:read','meta:write','audit:read','rollback','changes:write','tasks:write','importance:write'];
 // scans:execute (golf 2b, 14 Oct 2026): same rule as redirects:write. Known so a grant with it opens;
 // the VPS offers it only behind its flag, and PRO checks it again on every index check.
-const scopes = new Set([...baseScopes,'redirects:write','scans:execute']);
+// scans:plan (golf 3): same rule again, for PageSpeed plans; a start needs it next to scans:execute.
+const scopes = new Set([...baseScopes,'redirects:write','scans:execute','scans:plan']);
 const uuid = value => typeof value === 'string' && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(value);
 const label = (value, max) => typeof value === 'string' && value.trim() !== ''
   && Buffer.byteLength(value, 'utf8') <= max && !/[<>\p{C}]/u.test(value);

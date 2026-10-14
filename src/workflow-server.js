@@ -2,6 +2,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerWorkflowTools, WORKFLOW_INSTRUCTIONS } from './workflow-tools.js';
 import { workflowIdentity } from './workflow-identity.js';
+import { hostedPageSpeedOffered, hostedPageSpeedReadable } from './pagespeed-hosted.js';
 
 const invalidRequest = () => ({ isError: true, content: [{ type: 'text', text: JSON.stringify({ code: 'invalid_request',
   message: 'Invalid or unsupported tool request; nothing was sent.' }) }] });
@@ -27,7 +28,8 @@ function visible(name, caps) {
   // have their own capability blocks (PRO), and scans here are index checks only.
   if (name === 'list_changes') return caps.reads?.get_outcomes?.available === true;
   if (name === 'live_check') return caps.live_check?.available === true;
-  if (name === 'start_scan' || name === 'get_scan_status') return caps.index_checks?.available === true;
+  if (name === 'start_scan') return caps.index_checks?.available === true || hostedPageSpeedOffered(caps);
+  if (name === 'get_scan_status') return caps.index_checks?.available === true || hostedPageSpeedReadable(caps);
   // Hosted listing is positive: a read the capabilities do not advertise is absent.
   return caps.reads?.[name]?.available === true;
 }
@@ -37,6 +39,17 @@ const RECOVERY_TOKEN = /^tr[fr]r1$/;
 /** The listed shape of a tool where recovery is masked (hosted, clamped profile). The closed argument
  * schema that parses a call is unchanged, so a direct recovery call still reaches the authorizer and
  * its operation_unavailable; the listing just stops offering what that refusal takes away. */
+// Golf 3: a scan tool lists only the arguments of the kinds this connection offers (index, PageSpeed).
+const SCAN_ARGS = { index: ['urls', 'check_id'], pagespeed: ['post_ids', 'proposal_id', 'confirmation', 'execution_id'] };
+function listedScanKinds(tool, caps) {
+  const properties = tool.inputSchema?.properties;
+  if (!['start_scan', 'get_scan_status'].includes(tool.name) || !properties?.type?.enum) return tool;
+  const pagespeed = tool.name === 'start_scan' ? hostedPageSpeedOffered(caps) : hostedPageSpeedReadable(caps);
+  const kinds = properties.type.enum.filter(kind => kind === 'index' ? caps.index_checks?.available === true : pagespeed);
+  const dropped = Object.keys(SCAN_ARGS).filter(kind => !kinds.includes(kind)).flatMap(kind => SCAN_ARGS[kind]);
+  const kept = Object.fromEntries(Object.entries(properties).filter(([key]) => !dropped.includes(key)));
+  return { ...tool, inputSchema: { ...tool.inputSchema, properties: { ...kept, type: { ...properties.type, enum: kinds } } } };
+}
 function listedWithoutRecovery(tool) {
   const properties = tool.inputSchema?.properties;
   if (!properties) return tool;
@@ -54,8 +67,13 @@ function listedWithoutRecovery(tool) {
   return tool;
 }
 
+function scanExceptions(caps) {
+  const kinds = [caps.index_checks?.available === true ? 'index checks (start_scan type index, only when asked)' : null,
+    hostedPageSpeedOffered(caps) ? 'PageSpeed measurements (start_scan type pagespeed: plan, show it, explicit chat approval, then start; only when asked)' : null].filter(Boolean);
+  return kinds.length ? ' except ' + kinds.join(' and ') : '';
+}
 const withoutRecovery = (prefix, caps) => WORKFLOW_INSTRUCTIONS.replace(/ Recovery: get_changes\(kind=recovery\)[\s\S]*?No automatic retries or other write paths\./,
-  ` ${prefix} recovery and scans are unavailable` + (caps.index_checks?.available === true ? ' except index checks (start_scan type index, only when asked)' : '')
+  ` ${prefix} recovery and scans are unavailable` + scanExceptions(caps)
   + (HOSTED_SPECIALIST_READS.some(name => specialistReadVisible(name, caps))
     ? '; the listed saved-report tools work' : '') + '. No automatic retries or other write paths.');
 
@@ -76,7 +94,7 @@ export function buildWorkflowServer(client, options = {}) {
     const method = schema.shape?.method?.value;
     const guarded = method === 'tools/list' ? async (...args) => {
       const listing = await handler(...args);
-      return { ...listing, tools: listing.tools.filter(tool => visible(tool.name, listed)).map(listedWithoutRecovery) };
+      return { ...listing, tools: listing.tools.filter(tool => visible(tool.name, listed)).map(listedWithoutRecovery).map(tool => listedScanKinds(tool, listed)) };
     } : handler;
     return setHandler.call(this, schema, guarded);
   };
