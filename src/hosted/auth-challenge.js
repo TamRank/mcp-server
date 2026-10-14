@@ -1,6 +1,6 @@
 /** Forward only the configured resource's bounded, explicit scope-upgrade challenge. */
 const knownScopes = new Set(['site:read','meta:write','audit:read','rollback','changes:write',
-  'tasks:write','importance:write','redirects:write','scans:execute']);
+  'tasks:write','importance:write','redirects:write','scans:execute','scans:plan']);
 const challengePattern = /^Bearer resource_metadata="([^"]+)", scope="([a-z0-9: ]+)", error="insufficient_scope", error_description="([A-Za-z0-9 .:-]+)"$/;
 
 export function hostedScopeChallengeMeta(code, value, resourceMetadataUrl) {
