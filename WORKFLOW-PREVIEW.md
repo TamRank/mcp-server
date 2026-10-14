@@ -1347,7 +1347,7 @@ for 0.5.0; names retained in the canonical surface are not removed.
 - Site-wide metadata/index/schema and retained 404 coverage, complete stored
   topical lists (205 each), current-page privacy, passive scan state without polling.
 - Core tools/list: 8848 compact characters; specialist: 15159 characters;
-  instructions remain below 1500 characters.
+  instructions remain below 1700 characters.
 
 ## Reproduce safely
 

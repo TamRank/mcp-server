@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { registerWorkflowTools, WORKFLOW_INSTRUCTIONS } from '../src/workflow-tools.js';
 import { WorkflowClient } from '../src/workflow-rest.js';
+import { INSTRUCTIONS_BUDGET } from './instructions-budget.mjs';
 
 let calls = [];
 const fake = { get: async (path, query) => { calls.push({ path, query }); return { contract_version: 2, items: [], next_cursor: null }; },
@@ -10,7 +11,7 @@ const fake = { get: async (path, query) => { calls.push({ path, query }); return
 function registry(profile,capabilities=null) { const tools = new Map(); registerWorkflowTools({ registerTool: (n,c,h) => tools.set(n,{c,h}) },fake,{profile,capabilities}); return tools; }
 const core = registry('core'), legacy = registry('legacy'), specialist = registry('specialist');
 assert.equal(core.size,12); assert.equal(legacy.size,42); assert.equal(specialist.size,20);
-assert.ok(WORKFLOW_INSTRUCTIONS.length<1500);
+assert.ok(WORKFLOW_INSTRUCTIONS.length<INSTRUCTIONS_BUDGET);
 assert.equal(core.has('get_gsc_pages'),false);
 await specialist.get('get_gsc_pages').h({q:'/category/?x=%2B',order:'impressions_desc',period:28,limit:50,cursor:'opaque'});
 assert.deepEqual(calls.pop(),{path:'/gsc/pages',query:{q:'/category/?x=%2B',order:'impressions_desc',period:28,limit:50,cursor:'opaque'}});

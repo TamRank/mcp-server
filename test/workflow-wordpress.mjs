@@ -5,6 +5,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { ownedInstalledRuntime } from './owned-installed-entry.mjs';
+import { INSTRUCTIONS_BUDGET } from './instructions-budget.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const runtime=ownedInstalledRuntime(root);
 let input=''; for await(const chunk of process.stdin) input+=chunk;
@@ -33,7 +34,7 @@ try {
   const client=await connect(); const listing=await client.listTools();
   assert.equal(listing.tools.length,12);
   const surface=JSON.stringify(listing).length; assert.ok(surface<16000,`Core tools/list too large: ${surface}`);
-  assert.ok(client.getInstructions().length<1500);
+  assert.ok(client.getInstructions().length<INSTRUCTIONS_BUDGET);
   const caps=await call(client,'get_capabilities'); assert.equal(caps.contract_version,2); assert.equal(caps.execution_enabled,false);
   const pages=[]; let cursor;
   do { const data=await call(client,'search_pages',{limit:50,...(cursor?{cursor}:{})}); pages.push(...data.items); cursor=data.next_cursor; } while(cursor);
