@@ -133,14 +133,14 @@ test('a schema execution token is refused locally on a clamped site; nothing is 
   }finally{await local.close();}
 });
 
-test('safe-beta-1 is unchanged: raw capabilities, no clamp, the same thirteen core tools',async()=>{
+test('safe-beta-1 is unchanged: raw capabilities, no clamp, the same fifteen core tools',async()=>{
   const raw=v21({mcp_bridge_compatibility:'safe-beta-1'});
   const local=await stdio(raw);
   try{
     assert.deepEqual(local.found.preflight,{ok:true});
     assert.equal(local.found.profileClamp,false);
     assert.deepEqual(local.found.capabilities,raw);
-    assert.deepEqual(local.tools,[...readNames,'get_outcomes','update_work_item','plan_changes','execute_change_set','get_changes','rollback_change_set'].sort());
+    assert.deepEqual(local.tools,[...readNames,'get_outcomes','list_changes','live_check','update_work_item','plan_changes','execute_change_set','get_changes','rollback_change_set'].sort());
     const result=await local.client.callTool({name:'get_capabilities',arguments:{}});
     assert.deepEqual(fresh(result.content[0].text),raw);
   }finally{await local.close();}

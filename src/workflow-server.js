@@ -23,6 +23,11 @@ function visible(name, caps) {
     || caps.field_proposals?.contract_version === 2 && caps.field_proposals.read_available === true;
   if (name === 'update_work_item') return caps.work_administration?.available === true;
   if (HOSTED_SPECIALIST_READS.includes(name)) return specialistReadVisible(name, caps);
+  // Golf 2b: the change list reads the same site rows as get_outcomes; a live check and index checks
+  // have their own capability blocks (PRO), and scans here are index checks only.
+  if (name === 'list_changes') return caps.reads?.get_outcomes?.available === true;
+  if (name === 'live_check') return caps.live_check?.available === true;
+  if (name === 'start_scan' || name === 'get_scan_status') return caps.index_checks?.available === true;
   // Hosted listing is positive: a read the capabilities do not advertise is absent.
   return caps.reads?.[name]?.available === true;
 }
@@ -50,7 +55,8 @@ function listedWithoutRecovery(tool) {
 }
 
 const withoutRecovery = (prefix, caps) => WORKFLOW_INSTRUCTIONS.replace(/ Recovery: get_changes\(kind=recovery\)[\s\S]*?No automatic retries or other write paths\./,
-  ` ${prefix} recovery and scans are unavailable` + (HOSTED_SPECIALIST_READS.some(name => specialistReadVisible(name, caps))
+  ` ${prefix} recovery and scans are unavailable` + (caps.index_checks?.available === true ? ' except index checks (start_scan type index, only when asked)' : '')
+  + (HOSTED_SPECIALIST_READS.some(name => specialistReadVisible(name, caps))
     ? '; the listed saved-report tools work' : '') + '. No automatic retries or other write paths.');
 
 export function buildWorkflowServer(client, options = {}) {

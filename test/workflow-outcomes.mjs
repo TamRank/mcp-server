@@ -26,10 +26,13 @@ await tool.h({ change_set_id: set, status: 'pending', since: '2026-10-01', limit
 assert.deepEqual(calls.pop(), { path: '/outcomes', query: { change_set_id: set, status: 'pending', created_from: '2026-10-01 00:00:00', per_page: 10, page: '2' } });
 await tool.h({});
 assert.deepEqual(calls.pop(), { path: '/outcomes', query: {} });
+// One page (golf 2b, PRO filter): post_id or url, passed on unchanged.
+await tool.h({ post_id: 7, url: 'https://example.test/a/' });
+assert.deepEqual(calls.pop(), { path: '/outcomes', query: { post_id: 7, url: 'https://example.test/a/' } });
 
 // Wrong arguments send nothing.
 for (const args of [{ status: 'done' }, { since: '2026-13-01' }, { since: '2026-02-30' }, { since: 'yesterday' }, { cursor: 'abc' }, { cursor: '0' },
-  { change_set_id: 'x' }, { post_id: 7 }, { limit: 51 }, { execute: true }]) {
+  { change_set_id: 'x' }, { post_id: 0 }, { url: 'ftp://x/' }, { limit: 51 }, { execute: true }]) {
   assert.equal((await tool.h(args)).isError, true, JSON.stringify(args)); assert.equal(calls.length, 0, JSON.stringify(args));
 }
 assert.match(parse(await tool.h({ cursor: 'abc' })).message, /next_cursor/);

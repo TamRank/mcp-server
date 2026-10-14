@@ -33,7 +33,7 @@ async function call(client,name,args={}) {
 }
 try {
   const client=await connect(); const listing=await client.listTools();
-  assert.equal(listing.tools.length,13);
+  assert.equal(listing.tools.length,15);
   const surface=JSON.stringify(listing).length; assert.ok(surface<CATALOG_BUDGET,`Core tools/list too large: ${surface}`);
   assert.ok(client.getInstructions().length<INSTRUCTIONS_BUDGET);
   const caps=await call(client,'get_capabilities'); assert.equal(caps.contract_version,2); assert.equal(caps.execution_enabled,false);
@@ -122,7 +122,7 @@ try {
   const query=await connect('core',config.token,'1','query'); assert.equal((await call(query,'search_pages',{limit:1})).total,205);
   const noPreview=await connect('core',config.token,''); await assert.rejects(call(noPreview,'get_capabilities'),/workflow_upgrade_required/);
   const specialist=await connect('specialist');const specialistListing=await specialist.listTools();
-  assert.equal(specialistListing.tools.length,21);
+  assert.equal(specialistListing.tools.length,23);
   const specialistSurface=JSON.stringify(specialistListing).length;assert.ok(specialistSurface<CATALOG_BUDGET);
   assert.equal(caps.specialist_reads.get_gsc_pages.available,true);
   const discovered=[];let discovery=await call(specialist,'get_gsc_pages',{limit:50});const discoveryCursor=discovery.next_cursor;

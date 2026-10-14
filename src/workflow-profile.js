@@ -46,6 +46,15 @@ export function clampToToolProfile(raw){
       .map(tool=>[tool,{...specialist[tool],available:specialist[tool].available===true}]));
     if(Object.keys(filtered).length>0)out.specialist_reads=filtered;
   }
+  // Golf 2b blocks: a live check (site:read) and targeted index checks (scans:execute); the site decides
+  // availability per token. Only these keys pass, as in the hosted filter.
+  const live=object(source.live_check);
+  if(live)out.live_check={contract_version:live.contract_version,available:live.available===true,
+    ...(object(live.limits)?{limits:live.limits}:{})};
+  const index=object(source.index_checks);
+  if(index)out.index_checks={contract_version:index.contract_version,available:index.available===true,
+    ...(object(index.limits)?{limits:index.limits}:{})};
+  if(object(source.scan_limits))out.scan_limits=source.scan_limits;
   const work=object(source.work_administration);
   if(work){
     const allowed=op=>typeof op==='string' && (op==='importance.update' || op.startsWith('work.'));

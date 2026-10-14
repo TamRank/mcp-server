@@ -55,7 +55,7 @@ export async function runFieldExecutionClient({origin,fixture:f,inspect,tlsRoot,
   for(const profile of ['core','specialist'])for(const style of ['pretty','query']){
     const {client,raw,call}=await connect(profile,style),label=profile+'-'+style;
     try{
-      const catalog=await client.listTools();equal(catalog.tools.length,profile==='core'?13:21);ok(JSON.stringify(catalog).length<CATALOG_BUDGET,'Bounded real native catalog');
+      const catalog=await client.listTools();equal(catalog.tools.length,profile==='core'?15:23);ok(JSON.stringify(catalog).length<CATALOG_BUDGET,'Bounded real native catalog');
       const caps=await call('get_capabilities',{});
       ok(caps.redirect_execution.available&&caps.redirect_execution.mixed_available&&caps.redirect_execution.rollback_available&&caps.redirect_execution.recovery_available,'Actual native redirect capabilities');
       const before=inspect(),original=rowAt(before,'/redirect-old');ok(original,'Owned existing row');

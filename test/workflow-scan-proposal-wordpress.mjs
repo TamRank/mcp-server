@@ -21,7 +21,7 @@ async function call(client,name,args={}) {
 try {
   for(const style of ['pretty','query']) {
     const client=await connect(config.token,style),listing=await client.listTools();
-    assert.equal(listing.tools.length,21);
+    assert.equal(listing.tools.length,23);
     const size=JSON.stringify(listing).length;assert.ok(size<CATALOG_BUDGET,`Specialist surface too large: ${size}`);
     assert.equal(listing.tools.find(t=>t.name==='start_scan').annotations.readOnlyHint,false);
     const preview=await call(client,'start_scan',{mode:'preview',type:'pagespeed',post_ids:[205,1]});

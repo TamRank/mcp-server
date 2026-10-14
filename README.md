@@ -116,15 +116,16 @@ This does not verify every Node version, operating system, host or theme/builder
 
 | Profile | Tool names | Use |
 |---|---:|---|
-| `core` (default) | 13 | Day-to-day research and approved change workflows. |
-| `specialist` | 21 | Core plus deeper diagnostics and explicit scan/recovery workflows. |
+| `core` (default) | 15 | Day-to-day research and approved change workflows. |
+| `specialist` | 23 | Core plus deeper diagnostics and explicit scan/recovery workflows. |
 | `legacy` | 42 | Temporary migration surface, **not** the old writer implementation. |
 
-The thirteen core names are:
+The fifteen core names are:
 
 - `get_site_context`, `get_capabilities`
 - `get_work_queue`, `get_signals`
 - `search_pages`, `get_page`, `diagnose_page`, `get_outcomes`
+- `list_changes`, `live_check`
 - `update_work_item`
 - `plan_changes`, `execute_change_set`
 - `get_changes`, `rollback_change_set`

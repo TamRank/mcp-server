@@ -62,7 +62,7 @@ try {
   assert.equal((await call(readonly,'get_capabilities')).work_administration.available,false);
   await assert.rejects(call(readonly,'update_work_item',payload),/workflow_operation_unavailable/);
   await assert.rejects(call(client,'execute_change_set',{}),/workflow_operation_unavailable/);
-  const listing=await client.listTools(); assert.equal(listing.tools.length,13);
+  const listing=await client.listTools(); assert.equal(listing.tools.length,15);
   assert.ok(JSON.stringify(listing).length<CATALOG_BUDGET); assert.ok(client.getInstructions().length<INSTRUCTIONS_BUDGET);
   console.log('WORKFLOW RESEARCH E2E OK: real MCP/HTTP/WP, review + complete + reopen, both URL styles, revision conflicts, exact replay and scope refusal; no website execution.');
 } finally { for(const client of clients) await client.close(); }

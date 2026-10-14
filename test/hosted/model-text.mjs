@@ -49,13 +49,14 @@ const listed = { ...fullCaps(),
   redirect_execution: { contract_version: 1, available: true, read_available: true, rollback_available: true,
     operations: ['redirect.create','redirect.update','redirect.delete'] },
   specialist_reads: Object.fromEntries(['get_site_diagnostics','get_gsc_pages','get_redirects','get_images_missing_alt','get_topical_authority']
-    .map(name => [name, { available: true }])), reads: { ...fullCaps().reads, get_outcomes: { available: true } } };
+    .map(name => [name, { available: true }])), reads: { ...fullCaps().reads, get_outcomes: { available: true } },
+  live_check: { contract_version: 1, available: true }, index_checks: { contract_version: 1, available: true } };
 const fixture = await connect({ responses: [] }, { capabilities: listed });
 try {
   const instructions = fixture.client.getInstructions();
   assert.ok(!CODENAMES.test(instructions), `hosted instructions: ${instructions.match(CODENAMES)?.[0]}`);
   const { tools } = await fixture.client.listTools();
-  assert.equal(tools.length, 18, tools.map(t => t.name).join());
+  assert.equal(tools.length, 22, tools.map(t => t.name).join());
   for (const tool of tools) {
     assert.ok(!CODENAMES.test(tool.description), `${tool.name}: ${tool.description}`);
     for (const [arg, schema] of Object.entries(tool.inputSchema.properties || {}))
