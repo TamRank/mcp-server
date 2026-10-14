@@ -202,6 +202,8 @@ const approve = { type: 'pagespeed', proposal_id: id, confirmation: { plan_hash:
     assert.deepEqual(out.targets[0].devices.map(d => [d.strategy, d.result.performance_score]), [['mobile', 91], ['desktop', 91]]);
     const plan = value(await f.client.callTool({ name: 'get_scan_status', arguments: { type: 'pagespeed', proposal_id: id } }));
     assert.equal(plan.proposal_id, id); assert.equal(plan.pages.length, 2);
+    // Read back, a plan never claims "nothing measured yet, ask": it may already have been started.
+    assert.match(plan.approval, /^This is the saved plan\./); assert.doesNotMatch(plan.approval, /Nothing has been measured yet/);
   } finally { await f.close(); }
 }
 // Waiting states that are not queued say so, instead of "read again in a few minutes".

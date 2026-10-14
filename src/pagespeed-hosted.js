@@ -63,13 +63,16 @@ const exact = (a, keys) => Object.keys(a).length === keys.length && keys.every(k
 
 const iso = s => Number.isSafeInteger(s) ? new Date(s * 1000).toISOString() : null;
 /** A saved plan as the model shows it to the user: every page, every warning, and how to approve. */
-export function hostedPlanView(draft, perPageLimit) {
+export function hostedPlanView(draft, perPageLimit, saved = false) {
   const p = draft.proposal;
   const expired = draft.state === 'expired';
   return { type: 'pagespeed', proposal_id: draft.proposal_id, plan_hash: draft.proposal_hash, state: draft.state,
     expires_at: iso(p.expires_at), pages: p.targets.map(t => ({ post_id: t.post_id, title: t.title, url: t.url })),
     measurements: p.targets.length * 2, devices: ['mobile', 'desktop'], warnings: p.warnings,
     approval: expired ? 'This plan has expired and can no longer be started. Make a new plan if the user still wants a measurement.'
+      // Read back later, the site cannot say whether it was started; never ask again for a plan the user already approved.
+      : saved ? 'This is the saved plan. If the user already approved it and it was started, read the measurement with get_scan_status, type pagespeed and the execution_id from that start; '
+        + 'repeating the identical start returns that same measurement and never measures twice. If it was never approved, show every page and warning and ask first.'
       : 'Nothing has been measured yet. Show the user every page and warning above and ask whether to start. Only after an explicit yes in this chat: '
         + 'start_scan with type pagespeed, this proposal_id and confirmation {plan_hash, confirmed: true}. '
         + `Each page can be measured at most ${Number.isSafeInteger(perPageLimit) && perPageLimit > 0 ? perPageLimit + ' times' : 'a limited number of times'} a day by an AI assistant; Google's measurement cannot be undone.` };
@@ -87,7 +90,7 @@ const EXPLAIN = {
   running: 'The site is measuring these pages now. Read the status again in a few minutes with the same execution_id.',
   blocked: 'The site stopped because it could not tell whether a measurement went through. Nothing is retried automatically; tell the user.',
   completed: 'Done. Each page shows a mobile and a desktop result; a failed device has its error code.',
-  cancelled: 'This measurement was cancelled before it finished. Nothing more will be measured for it.',
+  cancelled: 'This measurement was cancelled before it finished. Nothing more will be measured for it. The site gives no reason here; a page Google cannot reach (for example a local, private or password-protected address) is cancelled before anything is sent.',
 };
 /** A started measurement as shown: per page and device, without the site's internal bookkeeping hashes. */
 export function hostedProgressView(data) {
@@ -121,7 +124,7 @@ export async function hostedPageSpeed(canonical, a, { client, capabilities, clie
       const draft = await client.get(pagespeedRoute + '/proposals/' + a.proposal_id);
       if (!validPageSpeedProposal(draft, { proposal_id: a.proposal_id }))
         return { error: ['pagespeed_incompatible_response', 'The website sent an answer TamRank could not read.', { automatic_retry: false }] };
-      return { ok: hostedPlanView(draft, capabilities?.scan_limits?.pagespeed_per_url_per_day) };
+      return { ok: hostedPlanView(draft, capabilities?.scan_limits?.pagespeed_per_url_per_day, true) };
     }
     if (start) {
       // Re-read the exact plan the user approved. A changed, expired or unknown plan is never started.
