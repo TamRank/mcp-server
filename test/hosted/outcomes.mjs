@@ -63,4 +63,17 @@ const reply = { contract_version: 2, items: [{ post_id: 7, post_title: 'Pricing'
     assert.equal(Object.hasOwn(out, 'cache_age_s'), false, 'an API without as_of: no age invented');
   } finally { await old.close(); }
 }
+// The fuller hosted descriptions keep every rule the short local ones carry (review of PR #19).
+{
+  const caps = withOutcomes({ work_administration: { available: true, operations: ['work.note'] } });
+  const f = await connect({ responses: [] }, { capabilities: caps });
+  try {
+    const tools = new Map((await f.client.listTools()).tools.map(t => [t.name, t.description]));
+    for (const [name, rule] of [['update_work_item', /Notes replace the saved text; empty clears/], ['update_work_item', /revision/],
+      ['plan_changes', /acknowledge_deletion=true/], ['plan_changes', /original library URL/], ['plan_changes', /source_url\/redirect_id, all fields set/],
+      ['diagnose_page', /available_windows/], ['diagnose_page', /unknown, not zero/], ['get_work_queue', /action_origin/],
+      ['execute_change_set', /outcome_measurement/], ['execute_change_set', /acknowledgements/], ['get_signals', /evidence, not tasks/]])
+      assert.match(tools.get(name) ?? '', rule, name);
+  } finally { await f.close(); }
+}
 console.log('PASS: hosted get_outcomes is listed only when advertised, read-only under site:read, authorized and recorded; get_capabilities reports its age.');

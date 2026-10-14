@@ -114,10 +114,12 @@ function outcomeExplanation(status,item,days){
   if(status==='measured')return `Measured: the ${days} days before and after the change. This shows what happened, not proof that the change caused it; compare with the site-wide trend.`;
   if(status==='low_data')return `Too little search traffic after the change to compare fairly. The figures are shown, but draw no conclusion from them.`;
   if(status==='rolled_back')return 'This change was undone, so it is not measured.';
-  return 'Not measured: Google Search Console was not connected when this change was saved.';
+  if(status==='no_gsc')return 'Not measured: Google Search Console was not connected when this change was saved.';
+  return 'TamRank could not tell the measurement status of this change. Do not draw a conclusion from it.';
 }
 function outcomeItem(item){
-  const status=outcomeStatuses.includes(item?.effect_status)?item.effect_status:'no_gsc',outcome=item?.outcome&&typeof item.outcome==='object'?item.outcome:{};
+  // A status this bridge does not know is shown as unknown, never as one the site did not report.
+  const status=outcomeStatuses.includes(item?.effect_status)?item.effect_status:'unknown',outcome=item?.outcome&&typeof item.outcome==='object'?item.outcome:{};
   const effect=['measured','low_data'].includes(status)&&item.gsc_effect&&typeof item.gsc_effect==='object'?item.gsc_effect:null;
   const days=Number.isSafeInteger(effect?.window_days)&&effect.window_days>0?effect.window_days:14;
   return {post_id:item?.post_id??null,page_title:item?.post_title??null,page_url:effect?.page_url??null,
@@ -144,9 +146,9 @@ const HOSTED_DESCRIPTIONS={
   get_signals:'Things TamRank noticed (for example a ranking drop or a 404), with the pages involved. Signals are evidence, not tasks: discuss them, and act only when the user asks.',
   search_pages:'Find published posts and pages by title text, post type, or a missing meta title or description. Leave type out to search every type. Returns post_id for get_page, diagnose_page and plan_changes.',
   get_page:'One page\'s saved fields: overview, metadata (meta title and description, social fields), content, and importance (standard, important, money). Read importance before proposing a change to the page.',
-  diagnose_page:'Saved diagnosis for one page (post_id) or URL: Search Console clicks, impressions and position, index status, PageSpeed, stability, a before/after comparison and keywords. Saved data, not a live check; each part says when it was read. A missing value means unknown, not zero. A diagnosis is not a cause.',
-  update_work_item:'Update work in the dashboard queue: pick up a research item, review a target, add a note, complete or reopen, or set a page\'s importance. Only on the user\'s instruction; pass the current revision from get_work_queue.',
-  plan_changes:'Prepare an exact plan for meta titles and descriptions, social fields, image alt text or redirects. Nothing changes on the site yet. Copy action_origin, or describe the user\'s request. Show every target, value and warning, then ask the user to approve it in chat.',
+  diagnose_page:'Saved diagnosis for one page (post_id) or URL: Search Console clicks, impressions and position, index status, PageSpeed, stability, a before/after comparison and keywords. Saved data, not a live check; each part says when it was read. A missing value means unknown, not zero. Keywords: window and compare_to from adjacent available_windows. A diagnosis is not a cause.',
+  update_work_item:'Update work in the dashboard queue: pick up a research item, review a target, replace a note, complete or reopen, or set a page\'s importance. Notes replace the saved text; empty clears. Only on the user\'s instruction; pass the current revision from get_work_queue.',
+  plan_changes:'Prepare an exact plan for meta titles and descriptions, social fields, image alt text or redirects. Nothing changes on the site yet. Copy action_origin, or describe the user\'s request. Targets: post_id/attachment_id; redirects source_url/redirect_id, all fields set. Delete: acknowledge_deletion=true; image: original library URL. Show every target, value and warning, then ask the user to approve it in chat.',
   execute_change_set:'Apply a plan from plan_changes exactly as the user approved it in chat; copy its acknowledgements. Check delivery.result.outcome_measurement before promising to measure the result. If the reply is unclear, read get_changes(kind=execution) before anything else.',
   get_changes:'Read one change plan by change_set_id. kind=execution shows what was applied per item and what can be undone; read it after a timeout before retrying. For the results in Google Search, use get_outcomes.',
   rollback_change_set:'Prepare an undo for applied items of a change set. This only makes a new plan; applying it needs fresh approval in chat and execute_change_set. Newer edits to the same field are kept.',

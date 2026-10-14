@@ -58,12 +58,13 @@ assert.match(parse(await tool.h({ cursor: 'abc' })).message, /next_cursor/);
   assert.equal(item.page_url, 'https://site.example.invalid/pricing/'); assert.equal(item.first_result_expected, null);
   assert.match(item.explanation, /not proof/); assert.equal(out.next_cursor, '2');
 }
-// The other states explain themselves; an unknown status is never shown as measured.
+// The other states explain themselves; an unknown status is shown as unknown, never as a status the site did not report.
 for (const [status, text] of [['low_data', /Too little search traffic/], ['no_gsc', /Search Console was not connected/],
-  ['rolled_back', /undone/], ['surprise', /Search Console was not connected/]]) {
+  ['rolled_back', /undone/], ['surprise', /could not tell the measurement status/], [undefined, /could not tell the measurement status/]]) {
   reply = page([row({ effect_status: status, monitor_after: null })]);
   const [item] = parse(await tool.h({})).items;
   assert.match(item.explanation, text, status); assert.equal(item.first_result_expected, null, status);
+  if (!['low_data','no_gsc','rolled_back'].includes(status)) assert.equal(item.status, 'unknown', 'an unknown status is not passed off as a known one');
 }
 // Zero impressions: no CTR invented.
 reply = page([row({ effect_status: 'low_data', gsc_effect: { before: { clicks: 0, impressions: 0, position: null }, after: { clicks: 0, impressions: 0, position: null } } })]);
