@@ -1,0 +1,74 @@
+/** Testronde 14 Oct 2026: every time in get_outcomes and list_changes is ISO-8601 UTC with Z, and get_outcomes
+ * names the page URL. PRO keeps created_at/measured_at on the site's clock and rolled_back_at in UTC. */
+import assert from 'node:assert/strict';
+import { connect, fullCaps } from './factory-fixtures.mjs';
+import { naiveTimes } from './naive-times.mjs';
+import { siteZone, siteSqlToIso, utcSqlToIso, utcDayToSiteSql } from '../../src/site-time.js';
+
+const set = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const value = out => JSON.parse(out.content[0].text);
+const caps = () => { const c = fullCaps(); c.reads.get_outcomes = { available: true }; return c; };
+const row = (extra = {}) => ({ post_id: 7, post_title: 'Pricing', summary: 'Meta title', changes: [{ field: 'meta_title' }], change_set_id: set,
+  effect_status: 'pending', monitor_after: '2026-10-31', created_at: '2026-10-14 10:00:00', outcome: { state: 'pending' }, ...extra });
+const reply = items => ({ contract_version: 2, items, pagination: { page: 1, per_page: 25, total: items.length, total_pages: 1, has_more: false } });
+async function call(tool, items, options = {}, args = {}) {
+  const f = await connect({ responses: [{ body: reply(items) }], ...options }, { capabilities: caps() });
+  try { return { out: value(await f.client.callTool({ name: tool, arguments: args })), stub: f.stub }; } finally { await f.close(); }
+}
+
+// Conversion: zones WordPress reports, both sides of a clock change, garbage stays null.
+{
+  const ams = siteZone('Europe/Amsterdam');
+  assert.equal(siteSqlToIso('2026-10-14 10:00:00', ams), '2026-10-14T08:00:00Z', 'summer time');
+  assert.equal(siteSqlToIso('2026-12-01 10:00:00', ams), '2026-12-01T09:00:00Z', 'winter time');
+  assert.equal(siteSqlToIso('2026-10-25 02:30:00', ams), '2026-10-25T01:30:00Z', 'repeated hour: the later offset, like PHP');
+  assert.equal(siteSqlToIso('2026-10-14 10:00:00', siteZone('+05:30')), '2026-10-14T04:30:00Z');
+  assert.equal(siteSqlToIso('2026-10-14 10:00:00', siteZone('UTC')), '2026-10-14T10:00:00Z');
+  assert.equal(siteSqlToIso('2026-10-14 10:00:00', siteZone('-03:00')), '2026-10-14T13:00:00Z');
+  for (const bad of [null, '', 'Mars/Olympus', '+25:00', 'x'.repeat(65), 7]) assert.equal(siteZone(bad), null, String(bad));
+  assert.equal(siteSqlToIso('2026-10-14 10:00:00', null), null);
+  for (const bad of ['2026-02-30 10:00:00', '2026-10-14T10:00:00', '0000-00-00 00:00:00', '']) assert.equal(siteSqlToIso(bad, ams), null, bad);
+  assert.equal(utcSqlToIso('2026-10-14 10:00:00'), '2026-10-14T10:00:00Z');
+  assert.equal(utcDayToSiteSql('2026-10-01', ams), '2026-10-01 02:00:00');
+  assert.equal(utcDayToSiteSql('2026-12-01', ams), '2026-12-01 01:00:00');
+}
+// get_outcomes: site-clock and UTC columns both leave in UTC with Z; a time already zoned passes on in UTC.
+{
+  const { out, stub } = await call('get_outcomes', [
+    row({ effect_status: 'rolled_back', measured_at: '2026-10-20 09:15:00', rolled_back_at: '2026-10-21 07:00:00' }),
+    row({ created_at: '2026-10-14T10:00:00+02:00' })]);
+  assert.equal(out.items[0].changed_at, '2026-10-14T08:00:00Z');
+  assert.equal(out.items[0].measured_at, '2026-10-20T07:15:00Z');
+  assert.equal(out.items[0].rolled_back_at, '2026-10-21T07:00:00Z', 'rolled_back_at is UTC already');
+  assert.equal(out.items[1].changed_at, '2026-10-14T08:00:00Z');
+  assert.deepEqual(naiveTimes(out), []);
+  assert.equal(stub.zoneCalls.length, 1);
+  assert.deepEqual([...new URL(stub.zoneCalls[0].url).searchParams.keys()].sort(), ['from', 'through']);
+}
+// Without a readable zone: site-clock times are left out with a note, never guessed; since stays the site's day.
+{
+  const { out, stub } = await call('get_outcomes', [row({ rolled_back_at: '2026-10-21 07:00:00' })], { siteTimezone: null }, { since: '2026-10-01' });
+  assert.equal(out.items[0].changed_at, null); assert.equal(out.items[0].rolled_back_at, '2026-10-21T07:00:00Z');
+  assert.match(out.times_note, /time zone could not be read/);
+  assert.equal(new URL(stub.calls[0].url).searchParams.get('created_from'), '2026-10-01 00:00:00');
+  const changes = await call('list_changes', [row()], { siteTimezone: null });
+  assert.equal(changes.out.items[0].changed_at, null); assert.match(changes.out.times_note, /time zone could not be read/);
+}
+// The zone is read once per session, also across tools.
+{
+  const f = await connect({ responses: [{ body: reply([row()]) }, { body: reply([row()]) }] }, { capabilities: caps() });
+  try {
+    await f.client.callTool({ name: 'get_outcomes', arguments: {} }); await f.client.callTool({ name: 'list_changes', arguments: {} });
+    assert.equal(f.stub.zoneCalls.length, 1); assert.equal(f.stub.calls.length, 2);
+  } finally { await f.close(); }
+}
+// Bevinding 2: the page URL, from the row when the site sends it, else from a measurement; never a non-URL.
+{
+  const { out } = await call('get_outcomes', [
+    row({ page_url: 'https://site.example.invalid/pricing/' }),
+    row({ effect_status: 'measured', gsc_effect: { page_url: 'https://site.example.invalid/about/' } }),
+    row({ page_url: 'javascript:alert(1)' }),
+    row()]);
+  assert.deepEqual(out.items.map(i => i.page_url), ['https://site.example.invalid/pricing/', 'https://site.example.invalid/about/', null, null]);
+}
+console.log('times: ok');
