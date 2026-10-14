@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { fileURLToPath } from 'node:url';
+import { INSTRUCTIONS_BUDGET } from './instructions-budget.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url));
 let input=''; for await(const chunk of process.stdin) input+=chunk;
 const config=JSON.parse(input); assert.match(config.site_url,/^http:\/\/127\.0\.0\.1:[0-9]+$/);
@@ -53,6 +54,6 @@ try {
   const current=await state(query); assert.equal(current.note,'Final shared note');
   assert.deepEqual(await call(query,'update_work_item',first),changed); assert.deepEqual(await state(client),current);
   const listing=await client.listTools(); assert.equal(listing.tools.length,12);
-  const chars=JSON.stringify(listing).length; assert.ok(chars<16000); assert.ok(client.getInstructions().length<1500);
+  const chars=JSON.stringify(listing).length; assert.ok(chars<16000); assert.ok(client.getInstructions().length<INSTRUCTIONS_BUDGET);
   console.log(`WORKFLOW NOTE E2E OK: shared note, exact revision/replay, same-value no-op, 4000 UTF-8 bytes, explicit clear, completed-state preservation and both REST styles; ${chars} core surface chars.`);
 } finally { for(const client of clients) await client.close(); }

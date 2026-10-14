@@ -18,6 +18,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { writeFileSync } from 'node:fs';
+import { INSTRUCTIONS_BUDGET } from './instructions-budget.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -28,7 +29,7 @@ const BUDGET = {
   // for prose, so this number moves with the tool count, not with the writing.
   toolsList: Number(process.env.SURFACE_MAX_TOOLS_LIST) || 24000,
   description: Number(process.env.SURFACE_MAX_DESCRIPTION) || 400,
-  instructions: Number(process.env.SURFACE_MAX_INSTRUCTIONS) || 1500,
+  instructions: Number(process.env.SURFACE_MAX_INSTRUCTIONS) || INSTRUCTIONS_BUDGET,
 };
 
 /** Required space for growth; passing one character below the ceiling is not healthy. */
