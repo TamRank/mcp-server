@@ -34,11 +34,12 @@ await point('1 diagnose_page overview not_applicable', async () => {
 await point('2a 409 changed_sources + retryable', async () => {
   const changed = sources => ({ status: 409, body: { code: 'workflow_read_changed', message: 'The work evidence changed during the read. Restart the read.',
     data: { status: 409, retryable: true, changed_sources: sources } } });
-  const f = await connect({ responses: [changed(['posts', 'options']), changed(['options'])] }, { capabilities: caps() });
+  const f = await connect({ responses: [changed(['posts', 'options']), changed(['options', '404_urls'])] }, { capabilities: caps() });
   try {
     const out = value(await f.client.callTool({ name: 'get_work_queue', arguments: {} }));
     assert.equal(out.code, 'workflow_read_changed'); assert.equal(out.retryable, true);
-    assert.deepEqual(out.changed_sources, ['options'], 'the sources of the last attempt');
+    // PRO's own row names (class-tamrank-work-source.php stamp_rows), including 404_urls.
+    assert.deepEqual(out.changed_sources, ['options', '404_urls'], 'the sources of the last attempt');
   } finally { await f.close(); }
   // Anything that is not a short list of plain names is dropped, never half passed.
   for (const odd of [['Posts Table'], 'posts', [1], Array(20).fill('x')]) {

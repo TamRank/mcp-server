@@ -168,6 +168,6 @@ export const ENABLE_NOTE = 'how_to_enable lists what the user must do in WordPre
 /** PRO 0.9.52 names the stamp rows that moved during a read (workflow_read_changed): short plain names only. */
 export function changedSources(data) {
   const v = data !== null && typeof data === 'object' ? data.changed_sources : undefined;
-  return Array.isArray(v) && v.length > 0 && v.length <= 12 && v.every(x => typeof x === 'string' && /^[a-z][a-z0-9_]{0,39}$/.test(x))
+  return Array.isArray(v) && v.length > 0 && v.length <= 12 && v.every(x => typeof x === 'string' && /^[a-z0-9][a-z0-9_]{0,39}$/.test(x))
     ? { changed_sources: v } : {};
 }
