@@ -164,3 +164,10 @@ export function pageSpeedEnableHelp(c) {
   return { reason, how_to_enable: c !== null && typeof c === 'object' ? plainHelp(c.how_to_enable) : null };
 }
 export const ENABLE_NOTE = 'how_to_enable lists what the user must do in WordPress to switch this on: explain those steps to the user in plain words; you cannot do them.';
+
+/** PRO 0.9.52 names the stamp rows that moved during a read (workflow_read_changed): short plain names only. */
+export function changedSources(data) {
+  const v = data !== null && typeof data === 'object' ? data.changed_sources : undefined;
+  return Array.isArray(v) && v.length > 0 && v.length <= 12 && v.every(x => typeof x === 'string' && /^[a-z][a-z0-9_]{0,39}$/.test(x))
+    ? { changed_sources: v } : {};
+}

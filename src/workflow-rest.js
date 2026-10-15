@@ -4,7 +4,7 @@ import { validateRestBase, workflowUrl, legacyRestBase } from './hosted/rest-bas
 import { createFetchTransport } from './hosted/fetch-transport.js';
 import { isSitePlanRefusal, isSiteReadRefusal, mapHostedOutcome } from './hosted/error-map.js';
 import { isScanReceipt } from './scan-receipt-store.js';
-import { liveCheckRoute, limitDetails, pageSpeedEnableHelp, LIMIT_CODES, INDEX_START_REFUSALS } from './live-checks.js';
+import { liveCheckRoute, limitDetails, pageSpeedEnableHelp, changedSources, LIMIT_CODES, INDEX_START_REFUSALS } from './live-checks.js';
 
 // Only bounded operational advice crosses the error boundary; never arbitrary server data.
 export function rateLimitAdvice(data) {
@@ -129,7 +129,7 @@ export class WorkflowClient {
         const advice=response.status===429?rateLimitAdvice(data.data):undefined;
         // A refused PageSpeed plan may say why (reason) and how the user switches it on (how_to_enable).
         const help=(method==='POST'&&path==='/scans/executions/proposals')||(method==='GET'&&path==='/scans/preview')?pageSpeedEnableHelp(data.data):{};
-        const enable=help.reason||help.how_to_enable?help:{};
+        const enable=help.reason||help.how_to_enable?help:siteCode==='workflow_read_changed'?changedSources(data.data):{};
         if (this.#hosted) {
           // Only the site's own code classifies; a replaced code is no evidence of a site decision.
           const outcome = {status: response.status, code: siteCode, validWpEnvelope, kind: method === 'GET' ? 'read' : 'write', method, path};
