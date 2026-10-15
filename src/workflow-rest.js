@@ -4,7 +4,7 @@ import { validateRestBase, workflowUrl, legacyRestBase } from './hosted/rest-bas
 import { createFetchTransport } from './hosted/fetch-transport.js';
 import { isSitePlanRefusal, isSiteReadRefusal, mapHostedOutcome } from './hosted/error-map.js';
 import { isScanReceipt } from './scan-receipt-store.js';
-import { liveCheckRoute, limitDetails, LIMIT_CODES, INDEX_START_REFUSALS } from './live-checks.js';
+import { liveCheckRoute, limitDetails, pageSpeedEnableHelp, LIMIT_CODES, INDEX_START_REFUSALS } from './live-checks.js';
 
 // Only bounded operational advice crosses the error boundary; never arbitrary server data.
 export function rateLimitAdvice(data) {
@@ -127,6 +127,9 @@ export class WorkflowClient {
           : siteCode?.startsWith('rest_') ? 'The website could not handle this request. The TamRank plugin may be inactive or out of date.'
           : typeof data.message === 'string' ? data.message.slice(0,500) : 'No reason was given.';
         const advice=response.status===429?rateLimitAdvice(data.data):undefined;
+        // A refused PageSpeed plan may say why (reason) and how the user switches it on (how_to_enable).
+        const help=(method==='POST'&&path==='/scans/executions/proposals')||(method==='GET'&&path==='/scans/preview')?pageSpeedEnableHelp(data.data):{};
+        const enable=help.reason||help.how_to_enable?help:{};
         if (this.#hosted) {
           // Only the site's own code classifies; a replaced code is no evidence of a site decision.
           const outcome = {status: response.status, code: siteCode, validWpEnvelope, kind: method === 'GET' ? 'read' : 'write', method, path};
@@ -135,11 +138,14 @@ export class WorkflowClient {
           const siteDecision = mapped.code === siteCode && (LIMIT_CODES.has(siteCode) || INDEX_START_REFUSALS.has(siteCode));
           throw new ApiError(response.status, mapped.code,
             mapped.code === siteCode && (isSiteReadRefusal(outcome) || isSitePlanRefusal(outcome) || siteDecision) ? message
-              : mapped.code === 'rate_limited' ? 'The website asked TamRank to slow down. Try again shortly.' : 'No reason was given.',
-            siteDecision ? {...mapped, ...limitDetails(data.data)} : mapped);
+              : mapped.code === 'rate_limited' ? 'The website asked TamRank to slow down. Try again shortly.'
+              : mapped.code === 'workflow_work_not_found' ? 'The website has no open work item with this ID. Nothing was changed.'
+              : 'No reason was given.',
+            siteDecision ? {...mapped, ...limitDetails(data.data)}
+              : mapped.code === 'workflow_work_not_found' ? {...mapped, assistant_note: 'Read get_work_queue for the current work and its revision before changing anything.'} : isSitePlanRefusal(outcome) || isSiteReadRefusal(outcome) ? {...mapped, ...enable} : mapped);
         }
         throw new ApiError(response.status, code, message, retained ? { receipt_reference: retained.receipt_reference, receipt_retained: true }
-          : LIMIT_CODES.has(code) || INDEX_START_REFUSALS.has(code) ? {...advice, ...limitDetails(data.data)} : advice);
+          : LIMIT_CODES.has(code) || INDEX_START_REFUSALS.has(code) ? {...advice, ...limitDetails(data.data)} : Object.keys(enable).length ? {...advice, ...enable} : advice);
       }
       // Native execution has its own versioned policy/envelope. Accept v1 only
       // on these exact method/route pairs; every older read/draft remains v2.

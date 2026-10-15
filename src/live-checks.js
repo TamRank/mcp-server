@@ -147,3 +147,20 @@ export function changesView(data, present) {
     total: shown.total, next_cursor: shown.next_cursor, site_timezone: shown.site_timezone ?? null, ...(shown.times_note ? { times_note: shown.times_note } : {}),
     coverage: 'Only changes applied through a TamRank change plan approved in chat are listed. Edits made directly in WordPress are not.' };
 }
+
+/** Why PageSpeed is off and how the user switches it on (PRO 0.9.51+, testronde 15 Oct B2): reason (for example
+ * key_missing) and how_to_enable (steps, where in wp-admin, admin URL) pass unchanged when they are plain bounded
+ * text; anything else, and an older PRO without them, is null. The model explains the steps; it cannot do them. */
+const helpText = v => typeof v === 'string' && v.length > 0 && v.length <= 1000 && !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(v);
+function plainHelp(v) {
+  if (v === null || typeof v !== 'object' || Array.isArray(v) || JSON.stringify(v).length > 4096) return null;
+  const entries = Object.entries(v);
+  if (entries.length === 0 || entries.length > 12 || !entries.every(([k, x]) => /^[a-z][a-z0-9_]{0,39}$/.test(k)
+    && (helpText(x) || (Array.isArray(x) && x.length > 0 && x.length <= 12 && x.every(helpText))))) return null;
+  return v;
+}
+export function pageSpeedEnableHelp(c) {
+  const reason = c !== null && typeof c === 'object' && typeof c.reason === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(c.reason) ? c.reason : null;
+  return { reason, how_to_enable: c !== null && typeof c === 'object' ? plainHelp(c.how_to_enable) : null };
+}
+export const ENABLE_NOTE = 'how_to_enable lists what the user must do in WordPress to switch this on: explain those steps to the user in plain words; you cannot do them.';

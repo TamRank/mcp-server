@@ -34,6 +34,14 @@ export function isSiteLimitRefusal({ status = 0, code, validWpEnvelope = false, 
   return method === 'POST' && path === '/index-checks' && INDEX_START_REFUSALS.has(code) && [400, 409, 429, 502, 503].includes(status);
 }
 
+// PRO resolves the work item (manual task or picked-up research) before it writes anything and answers
+// 404 with one of these codes when it does not exist or is no longer open: nothing was changed.
+const WORK_ITEM_MISSING = new Set(['manual_task_unavailable', 'workflow_work_unavailable']);
+export function isWorkItemNotFound({ status = 0, code, validWpEnvelope = false, kind, method, path } = {}) {
+  return kind === 'write' && method === 'POST' && path === '/work-items' && status === 404
+    && validWpEnvelope === true && WORK_ITEM_MISSING.has(code);
+}
+
 export function mapHostedOutcome({ status = 0, code, validWpEnvelope = false, kind = 'read', method, path, retryAfter } = {}) {
   if (isSiteLimitRefusal({ status, code, validWpEnvelope, method, path }))
     return { code, retryable: false, outcome_unknown: false };
@@ -57,6 +65,11 @@ export function mapHostedOutcome({ status = 0, code, validWpEnvelope = false, ki
   if (mapped) return { code: mapped, retryable: false, outcome_unknown: false };
   if (isSitePlanRefusal({ status, code, validWpEnvelope, kind, method, path }))
     return { code, retryable: false, outcome_unknown: false };
+  // The site's data changed between its two stamps of one read: nothing is wrong with the request, so reading again is fine.
+  if (kind === 'read' && status === 409 && validWpEnvelope && code === 'workflow_read_changed')
+    return { code, retryable: true, outcome_unknown: false };
   if (isSiteReadRefusal({ status, code, validWpEnvelope, kind })) return { code, retryable: false, outcome_unknown: false };
+  if (isWorkItemNotFound({ status, code, validWpEnvelope, kind, method, path }))
+    return { code: 'workflow_work_not_found', retryable: false, outcome_unknown: false };
   return { code: 'site_unavailable', retryable: kind === 'read', outcome_unknown: kind === 'write' };
 }

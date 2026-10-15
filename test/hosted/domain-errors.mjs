@@ -24,14 +24,14 @@ const unavailable = { code: 'site_unavailable', message: 'The request to the web
     wp(404, 'workflow_work_unavailable', 'The work operation could not be completed.'));
   assert.equal(url, 'https://site.example.invalid/wp-json/tamrank/v2/work-items/grp_alt_images');
   assert.deepEqual(output, { code: 'workflow_work_unavailable',
-    message: 'The request to the website did not go through. The work operation could not be completed.',
+    message: 'The website answered: The work operation could not be completed.',
     assistant_note: 'No administration state exists for this work_id: only picked-up research work and manual tasks have one. If this is a dashboard group from the queue, read it with section targets.',
     retryable: false, outcome_unknown: false });
 }
 // The same code outside administration keeps the site's own text.
 assert.deepEqual((({ url, ...o }) => o)(await call('get_work_queue', { work_id: 'grp_alt_images', section: 'targets' },
   wp(404, 'workflow_work_unavailable', 'The work operation could not be completed.'))),
-  { code: 'workflow_work_unavailable', message: 'The request to the website did not go through. The work operation could not be completed.',
+  { code: 'workflow_work_unavailable', message: 'The website answered: The work operation could not be completed.',
     retryable: false, outcome_unknown: false });
 // 400 and 409 domain refusals from the shared read path, not a work-items exception.
 for (const [name, args, response] of [
@@ -41,7 +41,7 @@ for (const [name, args, response] of [
   ['get_page', { post_id: 1 }, wp(404, 'signal_subject_unavailable', 'Synthetic domain refusal.')],
 ]) {
   const { url, ...output } = await call(name, args, response);
-  assert.deepEqual(output, { code: response.body.code, message: `The request to the website did not go through. ${response.body.message}`,
+  assert.deepEqual(output, { code: response.body.code, message: `The website answered: ${response.body.message}`,
     retryable: false, outcome_unknown: false }, name);
 }
 // No route, a WAF/HTML page, WordPress' own refusals and a mismatched envelope are no domain evidence.
@@ -72,15 +72,15 @@ for (const code of ['Workflow-Work-Unavailable', 'x'.repeat(81), '9workflow']) {
 {
   const { url, ...output } = await call('get_work_queue', { section: 'administration', work_id: 'manual_never_existed' },
     wp(404, 'workflow_work_unavailable', 'Synthetic site reason.'));
-  assert.equal(output.message, 'The request to the website did not go through. Synthetic site reason.');
+  assert.equal(output.message, 'The website answered: Synthetic site reason.');
   assert.ok(output.assistant_note.startsWith('No administration state exists for this work_id:'), output.assistant_note);
   assert.doesNotMatch(output.assistant_note, /in the queue but|This work item is/);
 }
-// Ordinary refused writes still report an unknown outcome.
+// Ordinary refused writes still report an unknown outcome. (A 404 for a missing work item is the exception, testronde-m1.)
 {
   const { url, ...output } = await call('update_work_item', { client_request_id: 'synthetic-work-001', operation: 'work.note',
     work_id: 'manual_fixture', expected_revision: 'a'.repeat(64), note: 'Synthetic note' },
-    wp(404, 'workflow_work_unavailable', 'The work operation could not be completed.'));
+    wp(404, 'workflow_store_unavailable', 'The work operation could not be completed.'));
   assert.deepEqual(output, { code: 'site_unavailable', message: 'The request to the website did not go through. No reason was given.',
     retryable: false, outcome_unknown: true });
 }

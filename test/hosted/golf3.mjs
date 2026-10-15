@@ -38,7 +38,7 @@ const approve = { type: 'pagespeed', proposal_id: id, confirmation: { plan_hash:
   const f = await connect({ responses: [{ body: caps() }] }, { capabilities: caps() });
   try {
     const out = value(await f.client.callTool({ name: 'get_capabilities', arguments: {} }));
-    assert.deepEqual(out.pagespeed_execution, support);
+    assert.deepEqual(out.pagespeed_execution, { ...support, reason: null, how_to_enable: null }); // older PRO: no help (testronde 15 okt B2)
   } finally { await f.close(); }
   const odd = await connect({ responses: [] }, { capabilities: caps({ pagespeed_execution: { ...support, max_targets: 50 } }) });
   try {

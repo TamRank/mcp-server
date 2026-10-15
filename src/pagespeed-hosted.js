@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { pagespeedRoute, pagespeedAcks, validPageSpeedProposal, validPageSpeedProgress,
   pageSpeedStartBody, pageSpeedProgress } from './pagespeed-scans.js';
-import { limitDetails, limitMessage, indexCheckDefinitions } from './live-checks.js';
+import { limitDetails, limitMessage, indexCheckDefinitions, pageSpeedEnableHelp, ENABLE_NOTE } from './live-checks.js';
 import { scanId } from './scan-maintenance.js';
 
 const pageId = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
@@ -155,6 +155,8 @@ export async function hostedPageSpeed(canonical, a, { client, capabilities, clie
       return { error: [code, 'The website did not confirm the start; the measurement may or may not have started. Do not make a new plan.',
         { automatic_retry: false, proposal_id: a.proposal_id,
           assistant_note: 'Only if the user wants: repeat start_scan with exactly the same proposal_id and confirmation. The same start is never measured twice.' }] };
-    return { error: [code, `The website turned this down. ${typeof err.message === 'string' ? err.message : ''}`.trim(), { automatic_retry: false }] };
+    const help = pageSpeedEnableHelp(err.data);
+    return { error: [code, `The website turned this down. ${typeof err.message === 'string' ? err.message : ''}`.trim(),
+      { automatic_retry: false, ...(plan ? help : {}), ...(plan && help.how_to_enable ? { assistant_note: ENABLE_NOTE } : {}) }] };
   }
 }
