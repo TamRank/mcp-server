@@ -85,7 +85,7 @@ function validDiagnosisUrl(value) {
 }
 function validDiagnosis(a) {
   if((a.post_id!==undefined)===(a.url!==undefined)) return false;
-  if(a.url!==undefined && !['overview','gsc','stability','comparison','keywords'].includes(a.section || 'overview')) return false;
+  if(a.url!==undefined && !['overview','gsc','index','stability','comparison','keywords'].includes(a.section || 'overview')) return false;
   return a.section==='keywords' ? (!a.compare_to || (!!a.window && adjacentKeywordWindows(a.window,a.compare_to)))
     : !['window','compare_to'].some(k=>Object.hasOwn(a,k)) && (a.section==='stability' || !['query','limit','cursor'].some(k=>Object.hasOwn(a,k)));
 }
@@ -164,7 +164,7 @@ const HOSTED_DESCRIPTIONS={
   get_signals:'Things TamRank noticed (for example a ranking drop or a 404), with the pages involved. Signals are evidence, not tasks: discuss them, and act only when the user asks.',
   search_pages:'Find published posts and pages by title text, post type, or a missing meta title or description. Leave type out to search every type. Returns post_id for get_page, diagnose_page and plan_changes.',
   get_page:'One page\'s saved fields: overview, metadata (meta title and description, social fields), content, and importance (standard, important, money). Read importance before proposing a change to the page.',
-  diagnose_page:'Saved diagnosis for one page (post_id) or URL: Search Console clicks, impressions and position, index status, PageSpeed, stability, a before/after comparison and keywords. Saved data, not a live check (use live_check for the page as it is now); each part says when it was read. A missing value means unknown, not zero. Keywords: window and compare_to from adjacent available_windows. A diagnosis is not a cause.',
+  diagnose_page:'Saved diagnosis for one page (post_id) or URL: Search Console clicks, impressions and position, index status, PageSpeed, stability, a before/after comparison and keywords. Saved data, not a live check (use live_check for the page as it is now); each part says when it was read. A missing value means unknown, not zero. Index for a url the site does not manage as a page: not_applicable with reason url_not_a_managed_page, which means the url is not one of the site pages, not a missing check. Keywords: window and compare_to from adjacent available_windows. A diagnosis is not a cause.',
   update_work_item:'Update work in the dashboard queue: pick up a research item, review a target, replace a note, complete or reopen, or set a page\'s importance. Notes replace the saved text; empty clears. Only on the user\'s instruction; pass the current revision from get_work_queue.',
   plan_changes:'Prepare an exact plan for meta titles and descriptions, social fields, image alt text or redirects. Nothing changes on the site yet. Copy action_origin, or describe the user\'s request. Targets: post_id/attachment_id; redirects source_url/redirect_id, all fields set. Delete: acknowledge_deletion=true; image: original library URL. Show every target, value and warning, then ask the user to approve it in chat.',
   execute_change_set:'Apply a plan from plan_changes exactly as the user approved it in chat; copy its acknowledgements. Check delivery.result.outcome_measurement before promising to measure the result. If the reply is unclear, read get_changes(kind=execution) before anything else.',

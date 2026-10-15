@@ -165,8 +165,11 @@ await core.get('diagnose_page').h({url:exactUrl,section:'keywords',limit:50});
 assert.deepEqual(calls.pop(),{path:'/gsc/diagnosis',query:{url:exactUrl,section:'keywords',limit:50}});
 await core.get('diagnose_page').h({url:exactUrl});
 assert.deepEqual(calls.pop(),{path:'/gsc/diagnosis',query:{url:exactUrl}});
+// PRO 0.9.49 serves url + index (same facts as via post_id, or not_applicable with reason url_not_a_managed_page).
+await core.get('diagnose_page').h({url:exactUrl,section:'index'});
+assert.deepEqual(calls.pop(),{path:'/gsc/diagnosis',query:{url:exactUrl,section:'index'}});
 for(const args of [{},{url:exactUrl,post_id:1},{url:exactUrl,section:'metadata'},{url:exactUrl,section:'content'},
-  {url:exactUrl,section:'index'},{url:exactUrl,section:'pagespeed'},{url:exactUrl,refresh:true},
+  {url:exactUrl,section:'pagespeed'},{url:exactUrl,refresh:true},
   ...['/relative','ftp://fixture.invalid/','https://fixture.invalid/#part','https://user@fixture.invalid/',
     'https://fixture.invalid/a/%2e%2E/b','https://fixture.invalid/%2fsecret','https://fixture.invalid/%ZZ',
     'https://fixture.invalid:0/','https://fixture.invalid:65536/','https://fixture.invalid\\evil.invalid/',

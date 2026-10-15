@@ -105,7 +105,7 @@ try {
   const urlDates=[...urlDaily.items];
   while(urlDaily.next_cursor){urlDaily=await call(client,'diagnose_page',{url:archiveUrl,section:'stability',query:'zoekwoord 001',limit:50,cursor:urlDaily.next_cursor});urlDates.push(...urlDaily.items);}
   assert.equal(urlDates.length,90);assert.equal(new Set(urlDates.map(r=>r.date)).size,90);
-  for(const args of [{url:archiveUrl,post_id:1},{url:archiveUrl,section:'metadata'},{url:archiveUrl,section:'index'},
+  for(const args of [{url:archiveUrl,post_id:1},{url:archiveUrl,section:'metadata'},
     {url:archiveUrl,section:'pagespeed'},{url:archiveUrl,refresh:true},{url:'https://fixture.invalid.evil.invalid/',section:'gsc'},
     {post_id:1,section:'keywords',limit:50,cursor:urlCursor}])
     assert.equal((await client.callTool({name:'diagnose_page',arguments:args})).isError,true);

@@ -6,6 +6,7 @@ import { registerWorkflowTools } from '../src/workflow-tools.js';
 import { buildWorkflowServer } from '../src/workflow-server.js';
 import { WorkflowClient } from '../src/workflow-rest.js';
 import { clampToToolProfile } from '../src/workflow-profile.js';
+import { indexCheckView } from '../src/live-checks.js';
 
 const parse = out => JSON.parse(out.content[0].text);
 const check = 'idx_' + 'd'.repeat(24);
@@ -103,4 +104,31 @@ assert.equal(registry({}, 'specialist').get('start_scan').c.annotations.idempote
   assert.equal(out.message, 'Live checks by an AI assistant are used up for this hour on this site (60 per hour). Nothing was fetched. There is room again from 2026-10-14T13:00:00+00:00.');
   assert.equal(out.secret, undefined); failure = null;
 }
-console.log('PASS: local list_changes, live_check and index checks: exact routes and shapes, clamp keeps only the golf 2b blocks, contract 1 only on its routes, plain limit messages.');
+// Testronde 15 Oct 2026: a cached answer was shown as a fresh check. source and from_cache pass through, the
+// explanation says what checked_at means, and a result without a source is never called fresh.
+{
+  const base = { contract_version: 1, check_id: check, status: 'completed', urls: 3, sent_to_google: 1, answered_from_recent_cache: 2 };
+  const view = indexCheckView({ ...base, results: [
+    { url: 'https://example.test/a/', post_id: 3, index_status: 'indexed', checked_at: '2026-10-14T09:22:05Z', source: 'url_inspection', from_cache: true },
+    { url: 'https://example.test/b/', post_id: 4, index_status: 'indexed', checked_at: '2026-10-15T09:45:30Z', source: 'url_inspection', from_cache: false },
+    { url: 'https://example.test/c/', post_id: 5, index_status: 'indexed', checked_at: '2026-10-13T06:00:00Z', source: 'search_console_impressions', from_cache: false }] });
+  assert.deepEqual(view.results.map(r => [r.checked_at, r.source, r.from_cache]), [
+    ['2026-10-14T09:22:05Z', 'url_inspection', true], ['2026-10-15T09:45:30Z', 'url_inspection', false],
+    ['2026-10-13T06:00:00Z', 'search_console_impressions', false]]);
+  assert.match(view.explanation, /checked_at is when Google gave that answer, not when this check was asked/);
+  assert.match(view.explanation, /from_cache true was answered from an earlier check \(at most 48 hours old\): no new request went to Google/);
+  assert.match(view.explanation, /search_console_impressions is marked indexed because it had impressions in Search Console; Google was not asked/);
+  assert.doesNotMatch(view.explanation, /did not say where its status came from/);
+  // An older PRO (0.9.48) sends neither: both stay null and the explanation refuses to call the time fresh.
+  const old = indexCheckView({ ...base, results: [{ url: 'https://example.test/a/', post_id: 3, index_status: 'indexed', checked_at: '2026-10-15T09:45:04Z' }] });
+  assert.deepEqual(old.results[0], { url: 'https://example.test/a/', post_id: 3, index_status: 'indexed', checked_at: '2026-10-15T09:45:04Z', source: null, from_cache: null });
+  assert.match(old.explanation, /did not say where its status came from: its checked_at may be when the site saved it\. Do not present it as a fresh check\./);
+  assert.doesNotMatch(old.explanation, /from_cache true/);
+  // Unknown values are not passed on as if the site had said them.
+  const odd = indexCheckView({ ...base, results: [{ url: 'https://example.test/a/', index_status: 'indexed', checked_at: null, source: 'guess', from_cache: 'yes' }] });
+  assert.equal(odd.results[0].source, null); assert.equal(odd.results[0].from_cache, null);
+  // A still-running page without a status gets no provenance note.
+  const running = indexCheckView({ ...base, status: 'running', results: [{ url: 'https://example.test/a/', index_status: null, checked_at: null }] });
+  assert.equal(running.explanation, 'Google is still checking these pages. Read the status again in a minute or two with the same check_id.');
+}
+console.log('PASS: local list_changes, live_check and index checks: exact routes and shapes, clamp keeps only the golf 2b blocks, contract 1 only on its routes, plain limit messages, index provenance (source, from_cache, checked_at meaning).');
