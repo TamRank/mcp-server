@@ -10,7 +10,9 @@ import { clampToToolProfile } from '../src/workflow-profile.js';
 const parse = out => JSON.parse(out.content[0].text);
 const check = 'idx_' + 'd'.repeat(24);
 let calls = [], reply = null, failure = null;
-const fake = { get: async (path, query) => { calls.push({ method: 'GET', path, query }); if (failure) throw failure; return structuredClone(reply); },
+// The site's zone comes from the outcome-report summary, once per session (list_changes shows UTC with Z).
+const fake = { get: async (path, query) => { if (path === '/reports/outcomes/summary') return { contract_version: 2, site_timezone: 'Europe/Amsterdam' };
+  calls.push({ method: 'GET', path, query }); if (failure) throw failure; return structuredClone(reply); },
   post: async (path, body) => { calls.push({ method: 'POST', path, body }); if (failure) throw failure; return structuredClone(reply); } };
 const registry = (capabilities, profile = 'core', extra = {}) => { const tools = new Map();
   registerWorkflowTools({ registerTool: (n, c, h) => tools.set(n, { c, h }) }, fake, { profile, capabilities, ...extra }); return tools; };

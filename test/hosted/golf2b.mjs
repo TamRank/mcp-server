@@ -62,7 +62,7 @@ const started = { contract_version: 1, check_id: check, status: 'running', urls:
     assert.equal(url.searchParams.get('url'), 'https://site.example.invalid/pricing/');
     assert.equal(url.searchParams.get('created_from'), '2026-10-01 00:00:00'); assert.equal(url.searchParams.get('per_page'), '1');
     assert.deepEqual(out.items[0], { post_id: 7, page_title: 'Pricing', change_set_id: set, changed: 'Meta title', fields: ['meta_title'],
-      changed_at: '2026-10-14 10:00:00', undone_at: null, result_in_search: 'pending' });
+      changed_at: '2026-10-14T08:00:00Z', undone_at: null, result_in_search: 'pending' });
     assert.equal(out.next_cursor, '2'); assert.equal(out.total, 3); assert.match(out.coverage, /Edits made directly in WordPress are not/);
     assert.deepEqual(f.stub.events.find(e => e.type === 'authorize').toolName, 'list_changes');
   } finally { await f.close(); }

@@ -119,6 +119,6 @@ export function changesView(data, present) {
   if (!shown) return null;
   return { items: shown.items.map(i => ({ post_id: i.post_id, page_title: i.page_title, change_set_id: i.change_set_id, changed: i.changed,
     fields: i.fields, changed_at: i.changed_at, undone_at: i.rolled_back_at, result_in_search: i.status })),
-    total: shown.total, next_cursor: shown.next_cursor,
+    total: shown.total, next_cursor: shown.next_cursor, site_timezone: shown.site_timezone ?? null, ...(shown.times_note ? { times_note: shown.times_note } : {}),
     coverage: 'Only changes applied through a TamRank change plan approved in chat are listed. Edits made directly in WordPress are not.' };
 }

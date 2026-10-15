@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import { registerWorkflowTools } from '../src/workflow-tools.js';
 
 const set = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-let calls = [], reply = null;
-const fake = { get: async (path, query) => { calls.push({ path, query }); return structuredClone(reply); },
+let calls = [], reply = null, zoneCalls = 0;
+// The site's zone comes from the outcome-report summary (read once per session; times leave in UTC with Z).
+const fake = { get: async (path, query) => { if (path === '/reports/outcomes/summary') { zoneCalls++; return { contract_version: 2, site_timezone: 'Europe/Amsterdam' }; }
+  calls.push({ path, query }); return structuredClone(reply); },
   post: async () => { throw new Error('get_outcomes never writes'); } };
 const registry = (capabilities = null) => { const tools = new Map();
   registerWorkflowTools({ registerTool: (n, c, h) => tools.set(n, { c, h }) }, fake, { profile: 'core', capabilities }); return tools; };
@@ -20,7 +22,7 @@ const tool = tools.get('get_outcomes');
 assert.equal(tool.c.annotations.readOnlyHint, true, 'get_outcomes is a read');
 assert.ok(!/workflow|legacy|hosted|specialist/i.test(tool.c.description));
 
-// Filters map onto the site's own query names; since is a whole day.
+// Filters map onto the site's own query names; since is a whole day on the site's own calendar, also with a known zone.
 reply = page([row()]);
 await tool.h({ change_set_id: set, status: 'pending', since: '2026-10-01', limit: 10, cursor: '2' });
 assert.deepEqual(calls.pop(), { path: '/outcomes', query: { change_set_id: set, status: 'pending', created_from: '2026-10-01 00:00:00', per_page: 10, page: '2' } });
@@ -57,7 +59,7 @@ assert.match(parse(await tool.h({ cursor: 'abc' })).message, /next_cursor/);
   const [item] = out.items;
   assert.deepEqual(item.before, { from: '2026-09-30', to: '2026-10-13', clicks: 20, impressions: 1000, ctr_percent: 2, average_position: 8.4 });
   assert.deepEqual(item.after, { from: '2026-10-15', to: '2026-10-28', clicks: 30, impressions: 1200, ctr_percent: 2.5, average_position: 6.1 });
-  assert.equal(item.click_change_percent, 50); assert.equal(item.relative_to_site_percent, 45); assert.equal(item.measured_at, '2026-11-01 03:00:00');
+  assert.equal(item.click_change_percent, 50); assert.equal(item.relative_to_site_percent, 45); assert.equal(item.measured_at, '2026-11-01T02:00:00Z');
   assert.equal(item.page_url, 'https://site.example.invalid/pricing/'); assert.equal(item.first_result_expected, null);
   assert.match(item.explanation, /not proof/); assert.equal(out.next_cursor, '2');
 }
