@@ -65,7 +65,7 @@ await point('2c get_work_queue likely_bot_probe', async () => {
 });
 // (2d) get_gsc_pages: available_periods passes on; capabilities periods pass on; both named in the description.
 await point('2d get_gsc_pages available_periods + capabilities periods', async () => {
-  const out = await read('get_gsc_pages', { period: 7 }, { status: 'insufficient_evidence', items: [], available_periods: [28],
+  const out = await read('get_gsc_pages', {}, { status: 'insufficient_evidence', items: [], available_periods: [28],
     data_quality: { reason: 'period_not_in_snapshot' } });
   assert.deepEqual(out.available_periods, [28]);
   assert.match(text.get_gsc_pages, /available_periods/);

@@ -7,9 +7,15 @@ import { LIMIT_CODES, INDEX_START_REFUSALS } from '../live-checks.js';
 // - 408 (timeout), 425 (too early), 429 (rate limit): transient, the read stays retryable.
 // rest_* is WordPress itself (no route, forbidden), not a TamRank decision.
 const NOT_A_REFUSAL = [401, 402, 403, 407, 408, 425, 429];
+// Exactly these status:code pairs are the site's own decision despite an excluded status; any other 403 stays auth/outage.
+// 403 workflow_url_outside_property (PRO 0.9.52): the url lies outside the site's Search Console property, nothing was read.
+const DECISION_AT_EXCLUDED_STATUS = new Set(['403:workflow_url_outside_property']);
+export function isRefusalStatus(status, code) {
+  return status >= 400 && status < 500 && (!NOT_A_REFUSAL.includes(status) || DECISION_AT_EXCLUDED_STATUS.has(`${status}:${code}`));
+}
 const PLAN_ROUTES = new Set(['/changes/proposals', '/changes/executions']);
 export function isSiteReadRefusal({ status = 0, code, validWpEnvelope = false, kind = 'read' } = {}) {
-  return kind === 'read' && validWpEnvelope === true && status >= 400 && status < 500 && !NOT_A_REFUSAL.includes(status)
+  return kind === 'read' && validWpEnvelope === true && isRefusalStatus(status, code)
     && typeof code === 'string' && !/^(rest|agent|cloud|pro)_/.test(code);
 }
 

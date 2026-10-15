@@ -5,6 +5,7 @@ import { closeScanSchema, scanId } from './scan-maintenance.js';
 import {receiptReference,recoveryAcks} from './scan-recovery-chat.js';
 import {maintenanceAcks,sourceMaintenanceAcks,discoverSourceScans} from './scan-maintenance.js';
 import { rateLimitAdvice } from './workflow-rest.js';
+import { isRefusalStatus } from './hosted/error-map.js';
 import {fieldProposalSchema,fieldProposalItem,validFieldProposal} from './field-proposals.js';
 import {schemaPreviewItem,validSchemaPreviewResponse} from './schema-preview.js';
 import {workflowCatalog} from './workflow-catalog.js';
@@ -86,7 +87,7 @@ function validDiagnosisUrl(value) {
 // The site itself answered with a decision of its own (a 4xx with its own code), not an outage or a rate limit.
 const NO_SITE_DECISION=new Set(['site_unavailable','rate_limited','invalid_response','workflow_request_failed','network_error','timeout','workflow_upgrade_required']);
 function siteAnswered(err){
-  return Number.isInteger(err?.status)&&err.status>=400&&err.status<500&&![401,402,403,407,408,425,429].includes(err.status)
+  return Number.isInteger(err?.status)&&isRefusalStatus(err.status,err.code)
     &&typeof err.code==='string'&&!NO_SITE_DECISION.has(err.code)&&!/^site_/.test(err.code);
 }
 // C4 (15 Oct): a url of another website. www. counts as the same site.
@@ -701,7 +702,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         if(err.code==='workflow_read_changed')return failure(err.code,'The website\'s data changed while it was being read, so this answer was not used. Restart the read from the first page.',
           {retryable:true,outcome_unknown:false,...changedSources(err.data),assistant_note:`Call ${canonical} again without cursor and with the same filters; never combine pages from before and after.`});
         const elsewhere=canonical==='diagnose_page'&&siteAnswered(err)&&otherSiteUrl(parsed.data.url,hostedContext?.validatedInstallation.canonical_home_url??client.base);
-        if(elsewhere)return failure('workflow_url_not_on_site',`That address is on another website (${elsewhere.url}), not on this site (${elsewhere.site}). Nothing was read.`,
+        if(elsewhere)return failure('workflow_url_not_on_site',`The website answered: that address is on another website (${elsewhere.url}), not on this site (${elsewhere.site}). Nothing was read.`,
           {retryable:false,outcome_unknown:false,assistant_note:'Use list_sites to pick the site this url belongs to and call diagnose_page with that site.'});
         // "Did not go through" only when no site decision came back: no answer, an outage, a rate limit or an unusable reply.
         const message=!err.status?err.message:siteAnswered(err)?`The website answered: ${err.message}`:`The request to the website did not go through. ${err.message}`;
@@ -759,7 +760,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       specialist:true, path:()=>'/gsc/pages', schema:{
         q:z.string().max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200 && !/[\x00-\x1f\x7f]/.test(v)).optional(),
         order:z.enum(['clicks_desc','impressions_desc','ctr_asc','position_asc','url_asc']).optional(),
-        period:z.union([z.literal(7),z.literal(28),z.literal(90)]).optional(),...paging,
+        period:z.literal(28).optional(),...paging,
       }
     },
     get_redirects:{
