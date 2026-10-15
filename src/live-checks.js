@@ -63,8 +63,25 @@ export function indexCheckDefinitions(siteUrl) {
   };
 }
 
+// Where a stored status came from (testronde 15 Oct 2026: a cached answer was shown as a fresh check). A PRO that
+// knows sends source and from_cache; anything else stays null, which the explanation calls unknown, never fresh.
+const INDEX_SOURCES = ['url_inspection', 'search_console_impressions'];
 const result = r => r && typeof r === 'object' ? { url: typeof r.url === 'string' ? r.url : null, post_id: integer(r.post_id) ?? null,
-  index_status: typeof r.index_status === 'string' ? r.index_status : null, checked_at: typeof r.checked_at === 'string' ? r.checked_at : null } : null;
+  index_status: typeof r.index_status === 'string' ? r.index_status : null, checked_at: typeof r.checked_at === 'string' ? r.checked_at : null,
+  source: INDEX_SOURCES.includes(r.source) ? r.source : null, from_cache: typeof r.from_cache === 'boolean' ? r.from_cache : null } : null;
+/** What the times and sources of these results mean, only for the cases that occur. */
+function provenanceNote(results) {
+  const notes = [];
+  if (results.some(r => r.source === 'url_inspection'))
+    notes.push('For source url_inspection, checked_at is when Google gave that answer, not when this check was asked.');
+  if (results.some(r => r.from_cache === true))
+    notes.push('A page with from_cache true was answered from an earlier check (at most 48 hours old): no new request went to Google for it.');
+  if (results.some(r => r.source === 'search_console_impressions'))
+    notes.push('A page with source search_console_impressions is marked indexed because it had impressions in Search Console; Google was not asked about it.');
+  if (results.some(r => r.index_status !== null && r.source === null))
+    notes.push('For a page without a source the site did not say where its status came from: its checked_at may be when the site saved it. Do not present it as a fresh check.');
+  return notes.join(' ');
+}
 /** The site's answer to a start or status read, as shown. Unknown shapes are refused by the caller. */
 export function indexCheckView(data) {
   if (data?.contract_version !== 1 || typeof data.check_id !== 'string' || !/^idx_[a-f0-9]{24}$/.test(data.check_id)
@@ -73,11 +90,13 @@ export function indexCheckView(data) {
     remaining: integer(data.quota.remaining) ?? null, resets_at: isoMoment(data.quota.resets_at) ?? null } : undefined;
   const explanation = data.status === 'running' ? 'Google is still checking these pages. Read the status again in a minute or two with the same check_id.'
     : data.status === 'expired' ? 'TamRank lost track of this check before Google answered. The results below are what was known; start a new check only if the user asks.'
-    : 'Done. Each page shows the index status Google reported.';
-  return { check_id: data.check_id, status: data.status, explanation, urls: integer(data.urls) ?? data.results.length,
+    : 'Done. Each page shows its index status, when it was established (checked_at) and where it came from (source).';
+  const results = data.results.map(result).filter(Boolean);
+  const note = provenanceNote(results);
+  return { check_id: data.check_id, status: data.status, explanation: note ? explanation + ' ' + note : explanation, urls: integer(data.urls) ?? data.results.length,
     ...(integer(data.sent_to_google) !== undefined ? { sent_to_google: data.sent_to_google } : {}),
     ...(integer(data.answered_from_recent_cache) !== undefined ? { answered_from_recent_cache: data.answered_from_recent_cache } : {}),
-    results: data.results.map(result).filter(Boolean), ...(quota ? { todays_room: quota } : {}) };
+    results, ...(quota ? { todays_room: quota } : {}) };
 }
 
 const plain = v => v !== null && typeof v === 'object' && !Array.isArray(v);
