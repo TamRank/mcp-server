@@ -66,9 +66,13 @@ export function indexCheckDefinitions(siteUrl) {
 // Where a stored status came from (testronde 15 Oct 2026: a cached answer was shown as a fresh check). A PRO that
 // knows sends source and from_cache; anything else stays null, which the explanation calls unknown, never fresh.
 const INDEX_SOURCES = ['url_inspection', 'search_console_impressions'];
+// Which URL and which Search Console property Google answered (15 Oct 2026: http/https and www variants). The API sends
+// them per URL, from the original inspection on a cache hit; an older API or PRO sends neither and they stay null.
+const bounded = (v, max) => typeof v === 'string' && v.length > 0 && v.length <= max ? v : null;
 const result = r => r && typeof r === 'object' ? { url: typeof r.url === 'string' ? r.url : null, post_id: integer(r.post_id) ?? null,
   index_status: typeof r.index_status === 'string' ? r.index_status : null, checked_at: typeof r.checked_at === 'string' ? r.checked_at : null,
-  source: INDEX_SOURCES.includes(r.source) ? r.source : null, from_cache: typeof r.from_cache === 'boolean' ? r.from_cache : null } : null;
+  source: INDEX_SOURCES.includes(r.source) ? r.source : null, from_cache: typeof r.from_cache === 'boolean' ? r.from_cache : null,
+  inspected_url: bounded(r.inspected_url, 2048), property: bounded(r.property, 512) } : null;
 /** What the times and sources of these results mean, only for the cases that occur. */
 function provenanceNote(results) {
   const notes = [];
@@ -80,6 +84,8 @@ function provenanceNote(results) {
     notes.push('A page with source search_console_impressions is marked indexed because it had impressions in Search Console; Google was not asked about it.');
   if (results.some(r => r.index_status !== null && r.source === null))
     notes.push('For a page without a source the site did not say where its status came from: its checked_at may be when the site saved it. Do not present it as a fresh check.');
+  if (results.some(r => r.inspected_url !== null))
+    notes.push('inspected_url is the exact URL Google was asked about and property the Search Console property it was asked under; where inspected_url differs from url (http/https, www, trailing slash), the status is about inspected_url.');
   return notes.join(' ');
 }
 /** The site's answer to a start or status read, as shown. Unknown shapes are refused by the caller. */
