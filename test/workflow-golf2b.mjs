@@ -121,14 +121,27 @@ assert.equal(registry({}, 'specialist').get('start_scan').c.annotations.idempote
   assert.doesNotMatch(view.explanation, /did not say where its status came from/);
   // An older PRO (0.9.48) sends neither: both stay null and the explanation refuses to call the time fresh.
   const old = indexCheckView({ ...base, results: [{ url: 'https://example.test/a/', post_id: 3, index_status: 'indexed', checked_at: '2026-10-15T09:45:04Z' }] });
-  assert.deepEqual(old.results[0], { url: 'https://example.test/a/', post_id: 3, index_status: 'indexed', checked_at: '2026-10-15T09:45:04Z', source: null, from_cache: null });
+  assert.deepEqual(old.results[0], { url: 'https://example.test/a/', post_id: 3, index_status: 'indexed', checked_at: '2026-10-15T09:45:04Z', source: null, from_cache: null, inspected_url: null, property: null });
   assert.match(old.explanation, /did not say where its status came from: its checked_at may be when the site saved it\. Do not present it as a fresh check\./);
   assert.doesNotMatch(old.explanation, /from_cache true/);
+  assert.doesNotMatch(old.explanation, /inspected_url/);
+  // Which URL and property Google answered: passed through per page, on a cache hit the values of the original inspection.
+  const asked = indexCheckView({ ...base, results: [
+    { url: 'https://example.test/a/', post_id: 3, index_status: 'indexed', checked_at: '2026-10-14T09:22:05Z', source: 'url_inspection', from_cache: true,
+      inspected_url: 'https://www.example.test/a/', property: 'sc-domain:example.test' },
+    { url: 'http://example.test/b', post_id: 4, index_status: 'crawled', checked_at: '2026-10-15T09:45:30Z', source: 'url_inspection', from_cache: false,
+      inspected_url: 'http://example.test/b', property: 'https://example.test/' }] });
+  assert.deepEqual(asked.results.map(r => [r.inspected_url, r.property, r.from_cache]), [
+    ['https://www.example.test/a/', 'sc-domain:example.test', true], ['http://example.test/b', 'https://example.test/', false]]);
+  assert.match(asked.explanation, /inspected_url is the exact URL Google was asked about and property the Search Console property it was asked under/);
   // Unknown values are not passed on as if the site had said them.
   const odd = indexCheckView({ ...base, results: [{ url: 'https://example.test/a/', index_status: 'indexed', checked_at: null, source: 'guess', from_cache: 'yes' }] });
   assert.equal(odd.results[0].source, null); assert.equal(odd.results[0].from_cache, null);
+  const oddAsked = indexCheckView({ ...base, results: [{ url: 'https://example.test/a/', index_status: 'indexed', checked_at: null, inspected_url: 7, property: 'x'.repeat(513) },
+    { url: 'https://example.test/b/', index_status: 'indexed', checked_at: null, inspected_url: '', property: null }] });
+  assert.deepEqual(oddAsked.results.map(r => [r.inspected_url, r.property]), [[null, null], [null, null]]);
   // A still-running page without a status gets no provenance note.
   const running = indexCheckView({ ...base, status: 'running', results: [{ url: 'https://example.test/a/', index_status: null, checked_at: null }] });
   assert.equal(running.explanation, 'Google is still checking these pages. Read the status again in a minute or two with the same check_id.');
 }
-console.log('PASS: local list_changes, live_check and index checks: exact routes and shapes, clamp keeps only the golf 2b blocks, contract 1 only on its routes, plain limit messages, index provenance (source, from_cache, checked_at meaning).');
+console.log('PASS: local list_changes, live_check and index checks: exact routes and shapes, clamp keeps only the golf 2b blocks, contract 1 only on its routes, plain limit messages, index provenance (source, from_cache, checked_at meaning, inspected_url, property).');
