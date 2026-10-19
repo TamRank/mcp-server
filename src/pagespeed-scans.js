@@ -26,7 +26,7 @@ export function pagespeedSupport(c){
   return object(c)&&c.route===pagespeedRoute&&c.proposal_policy===pagespeedPolicy&&c.max_targets===25
     &&c.attempts_per_device===1&&same(c.devices,['mobile','desktop'])&&c.automatic_retries===0
     &&c.approval==='chat_attested'&&c.scheduling==='wp_cron'&&c.requires_cron_delivery===true
-    &&c.external_requests_reversible===false&&c.results==='private_scan_progress'&&c.legacy_cache_writes===false
+    &&c.external_requests_reversible===false&&c.results==='private_scan_progress'&&typeof c.legacy_cache_writes==='boolean'
     &&['available','plan_available','read_available'].every(k=>typeof c[k]==='boolean');
 }
 export async function discoverPageSpeedScans(client){
@@ -54,7 +54,7 @@ function validPlan(p,id,digest){
     ||p.reservation?.mode!=='exclusive'||p.reservation?.blocks!=='tamrank_pagespeed_requests'||p.reservation?.dispatch_enabled!==true
     ||p.reservation?.release!=='known_completion_or_never_started_cancellation'||p.dispatch?.concurrency!==1
     ||p.dispatch?.stop_on_uncertainty!==true||p.dispatch?.result_storage!=='private_scan_progress'
-    ||p.dispatch?.website_content_writes!==false||p.dispatch?.legacy_cache_writes!==false)return false;
+    ||p.dispatch?.website_content_writes!==false||typeof p.dispatch?.legacy_cache_writes!=='boolean')return false;
   if(!p.targets.every(t=>object(t)&&positive(t.post_id)&&typeof t.title==='string'&&Buffer.byteLength(t.title)<=4096
     &&typeof t.type==='string'&&/^[a-z0-9_-]{1,32}$/.test(t.type)&&typeof t.url==='string'&&/^https?:\/\//.test(t.url))
     ||new Set(p.targets.map(t=>t.post_id)).size!==p.targets.length||new Set(p.targets.map(t=>t.url)).size!==p.targets.length)return false;
@@ -120,5 +120,6 @@ export function pageSpeedProgress(d){
     targets:d.proposal.targets.map((t,i)=>({...t,devices:d.progress.runtime.measurements.slice(i*2,i*2+2).map((m,j)=>({
       strategy:j?'desktop':'mobile',state:m.state,result:m.result,error_code:m.attempts[0]?.error_code??null}))})),
     limitations:['Queued is not proof of a live worker. Unknown attempts require reconciliation, never a new scan or automatic retry.',
-      'Private measurement results only; no legacy cache, website content change or SEO outcome is claimed.']};
+      d.proposal.dispatch.legacy_cache_writes?'Results are also shown in the PageSpeed overview in wp-admin; no website content change or SEO outcome is claimed.'
+        :'Private measurement results only; no legacy cache, website content change or SEO outcome is claimed.']};
 }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {registerWorkflowTools} from '../src/workflow-tools.js';
 import {discoverWorkflows} from '../src/scan-maintenance.js';
-import {pagespeedRoute,pagespeedPolicy,pagespeedAcks,pagespeedHash,validPageSpeedProposal,validPageSpeedProgress,pageSpeedProgress} from '../src/pagespeed-scans.js';
+import {pagespeedRoute,pagespeedPolicy,pagespeedSupport,pagespeedAcks,pagespeedHash,validPageSpeedProposal,validPageSpeedProgress,pageSpeedProgress} from '../src/pagespeed-scans.js';
 import {sourceAcks} from '../src/source-scans.js';
 const id='11111111-1111-4111-8111-111111111111',execution='22222222-2222-4222-8222-222222222222',hash='a'.repeat(64),at=1789218000;
 const clone=structuredClone;
@@ -103,4 +103,19 @@ test('Discovery only asks optional capabilities in approved specialist startup',
   }
   const d=await discoverWorkflows({get:async p=>p==='/capabilities'?{contract_version:2}:p===pagespeedRoute+'/capabilities'?{contract_version:2,pagespeed_execution:support}:{}},
     {preview:true,profile:'specialist'});assert.deepEqual(d.capabilities.pagespeed_execution,support);
+});
+test('Older PRO (legacy_cache_writes false) and PRO that also fills the PageSpeed overview (true) are both accepted',async()=>{
+  for(const v of [false,true]){
+    assert.ok(pagespeedSupport({...support,legacy_cache_writes:v}));
+    const r=registry({pagespeed_execution:{...support,legacy_cache_writes:v}});assert.ok(!(await r.tools.get('start_scan').h(plan)).isError);
+    const d=clone(draft);d.proposal.dispatch.legacy_cache_writes=v;d.proposal_hash=pagespeedHash(d.proposal);assert.ok(validPageSpeedProposal(d,plan));
+    const g=progress();g.proposal=d.proposal;g.proposal_hash=d.proposal_hash;assert.ok(validPageSpeedProgress(g));
+    const said=pageSpeedProgress(g).limitations[1];
+    assert.match(said,v?/also shown in the PageSpeed overview/:/^Private measurement results only; no legacy cache/);
+  }
+  for(const v of [undefined,null,'true',1]){
+    const c={...support,legacy_cache_writes:v};if(v===undefined)delete c.legacy_cache_writes;assert.equal(pagespeedSupport(c),false);
+    const r=registry({pagespeed_execution:c});assert.equal((await r.tools.get('start_scan').h(plan)).isError,true);assert.equal(r.calls.length,0);
+    const d=clone(draft);d.proposal.dispatch.legacy_cache_writes=v;d.proposal_hash=pagespeedHash(d.proposal);assert.equal(validPageSpeedProposal(d,plan),false);
+  }
 });

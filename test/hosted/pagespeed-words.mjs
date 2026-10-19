@@ -26,6 +26,10 @@ const words = [/page speed test/, /Core Web Vitals/, /performance score, FCP, LC
     }
     assert.match(tools.get('start_scan').description, /^Only when the user asks\. Index check: .* PageSpeed: /);
     assert.match(tools.get('start_scan').description, /makes a plan and measures nothing/);
+    // PRO with legacy_cache_writes true also fills the PageSpeed overview; an older PRO does not. The text promises neither
+    // chat-only results nor results that always appear in wp-admin.
+    assert.match(tools.get('start_scan').description, /With a recent TamRank PRO the results also appear in the PageSpeed overview in wp-admin\./);
+    assert.doesNotMatch(tools.get('start_scan').description, /only (in|to) (the )?chat|not (saved|stored|shown)|always (appear|shown)/i);
     assert.equal(f.stub.calls.length, 0);
   } finally { await f.close(); }
 }
