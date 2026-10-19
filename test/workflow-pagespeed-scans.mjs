@@ -29,11 +29,11 @@ function progress(){return {contract_version:2,execution_id:execution,proposal_i
       registration_hash:hash,binding:proposal.binding,created_at:at,updated_at:at,revision:0,dispatch_enabled:true,reservation_state:'held',state:'reserved',
       measurements:targets.flatMap((_,i)=>['mobile','desktop'].map(s=>({measurement_id:createHash('sha256').update(execution+':'+i+':'+s).digest('hex'),
         state:'not_started',attempts:[],result:null})))}}};}
-function registry(caps={pagespeed_execution:support},opts={}){
+function registry(caps={pagespeed_execution:support},opts={},planned=draft){
   const calls=[],tools=new Map();let response=progress();
   registerWorkflowTools({server:{getClientVersion:()=>({name:'Owned MCP client',version:'1'})},registerTool:(n,c,h)=>tools.set(n,{c,h})},
-    {get:async(p,q)=>{calls.push(['GET',p,q]);return clone(p.includes('/proposals/')?draft:p===pagespeedRoute+'/'+execution?response:{contract_version:2});},
-      post:async(p,b)=>{calls.push(['POST',p,b]);return clone(p===pagespeedRoute+'/proposals'?draft:response);}},
+    {get:async(p,q)=>{calls.push(['GET',p,q]);return clone(p.includes('/proposals/')?planned:p===pagespeedRoute+'/'+execution?response:{contract_version:2});},
+      post:async(p,b)=>{calls.push(['POST',p,b]);return clone(p===pagespeedRoute+'/proposals'?planned:response);}},
     {profile:'specialist',capabilities:caps,...opts});
   return {calls,tools,setResponse:r=>{response=r;}};
 }
@@ -107,11 +107,17 @@ test('Discovery only asks optional capabilities in approved specialist startup',
 test('Older PRO (legacy_cache_writes false) and PRO that also fills the PageSpeed overview (true) are both accepted',async()=>{
   for(const v of [false,true]){
     assert.ok(pagespeedSupport({...support,legacy_cache_writes:v}));
-    const r=registry({pagespeed_execution:{...support,legacy_cache_writes:v}});assert.ok(!(await r.tools.get('start_scan').h(plan)).isError);
     const d=clone(draft);d.proposal.dispatch.legacy_cache_writes=v;d.proposal_hash=pagespeedHash(d.proposal);assert.ok(validPageSpeedProposal(d,plan));
     const g=progress();g.proposal=d.proposal;g.proposal_hash=d.proposal_hash;assert.ok(validPageSpeedProgress(g));
-    const said=pageSpeedProgress(g).limitations[1];
-    assert.match(said,v?/also shown in the PageSpeed overview/:/^Private measurement results only; no legacy cache/);
+    // The fake PRO returns this value's own plan and progress: plan, start with its hash and read go through the tools.
+    const r=registry({pagespeed_execution:{...support,legacy_cache_writes:v}},{},d);r.setResponse(g);
+    const planned=await r.tools.get('start_scan').h(plan);assert.ok(!planned.isError);
+    assert.ok(JSON.stringify(planned).includes(d.proposal_hash));
+    const started=await r.tools.get('start_scan').h({...run,confirmation:{...run.confirmation,plan_hash:d.proposal_hash}});assert.ok(!started.isError);
+    const read=await r.tools.get('get_scan_status').h({type:'pagespeed',execution_id:execution});assert.ok(!read.isError);
+    assert.equal(r.calls.filter(c=>c[0]==='POST').length,2);assert.equal(r.calls.at(-1)[1],pagespeedRoute+'/'+execution);
+    for(const out of [started,read])assert.match(JSON.stringify(out),v?/also shown in the PageSpeed overview/:/Private measurement results only; no legacy cache/);
+    assert.doesNotMatch(JSON.stringify(read),v?/Private measurement results only/:/also shown in the PageSpeed overview/);
   }
   for(const v of [undefined,null,'true',1]){
     const c={...support,legacy_cache_writes:v};if(v===undefined)delete c.legacy_cache_writes;assert.equal(pagespeedSupport(c),false);
