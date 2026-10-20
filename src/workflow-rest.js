@@ -140,9 +140,11 @@ export class WorkflowClient {
             mapped.code === siteCode && (isSiteReadRefusal(outcome) || isSitePlanRefusal(outcome) || siteDecision) ? message
               : mapped.code === 'rate_limited' ? 'The website asked TamRank to slow down. Try again shortly.'
               : mapped.code === 'workflow_work_not_found' ? 'The website has no open work item with this ID. Nothing was changed.'
+              : mapped.code === 'work_item_changed' ? 'This item changed since you read it; read get_work_queue/get_page again before retrying. Nothing was changed.'
               : 'No reason was given.',
             siteDecision ? {...mapped, ...limitDetails(data.data)}
-              : mapped.code === 'workflow_work_not_found' ? {...mapped, assistant_note: 'Read get_work_queue for the current work and its revision before changing anything.'} : isSitePlanRefusal(outcome) || isSiteReadRefusal(outcome) ? {...mapped, ...enable} : mapped);
+              : mapped.code === 'workflow_work_not_found' ? {...mapped, assistant_note: 'Read get_work_queue for the current work and its revision before changing anything.'}
+              : mapped.code === 'work_item_changed' ? {...mapped, assistant_note: 'Read get_work_queue (get_page for importance, get_signals for a pickup) for the current revision, value or selection; tell the user what changed if it matters, then send a new request with a NEW client_request_id. Never repeat this one.'} : isSitePlanRefusal(outcome) || isSiteReadRefusal(outcome) ? {...mapped, ...enable} : mapped);
         }
         throw new ApiError(response.status, code, message, retained ? { receipt_reference: retained.receipt_reference, receipt_retained: true }
           : LIMIT_CODES.has(code) || INDEX_START_REFUSALS.has(code) ? {...advice, ...limitDetails(data.data)} : Object.keys(enable).length ? {...advice, ...enable} : advice);

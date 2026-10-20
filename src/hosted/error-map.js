@@ -48,6 +48,15 @@ export function isWorkItemNotFound({ status = 0, code, validWpEnvelope = false, 
     && validWpEnvelope === true && WORK_ITEM_MISSING.has(code);
 }
 
+// PRO checks the revision (or, for importance and pickup, the value or selection the caller read) before it writes
+// anything and answers 409 with one of these codes when that has moved on: nothing was changed, and repeating the
+// same request can never succeed. One code for the assistant: read again, then send a new request.
+const WORK_ITEM_STALE = new Set(['workflow_work_changed', 'importance_value_changed', 'signal_pickup_snapshot_changed', 'pickup_note_origin_changed']);
+export function isWorkItemStale({ status = 0, code, validWpEnvelope = false, kind, method, path } = {}) {
+  return kind === 'write' && method === 'POST' && path === '/work-items' && status === 409
+    && validWpEnvelope === true && WORK_ITEM_STALE.has(code);
+}
+
 export function mapHostedOutcome({ status = 0, code, validWpEnvelope = false, kind = 'read', method, path, retryAfter } = {}) {
   if (isSiteLimitRefusal({ status, code, validWpEnvelope, method, path }))
     return { code, retryable: false, outcome_unknown: false };
@@ -77,5 +86,7 @@ export function mapHostedOutcome({ status = 0, code, validWpEnvelope = false, ki
   if (isSiteReadRefusal({ status, code, validWpEnvelope, kind })) return { code, retryable: false, outcome_unknown: false };
   if (isWorkItemNotFound({ status, code, validWpEnvelope, kind, method, path }))
     return { code: 'workflow_work_not_found', retryable: false, outcome_unknown: false };
+  if (isWorkItemStale({ status, code, validWpEnvelope, kind, method, path }))
+    return { code: 'work_item_changed', retryable: false, outcome_unknown: false };
   return { code: 'site_unavailable', retryable: kind === 'read', outcome_unknown: kind === 'write' };
 }

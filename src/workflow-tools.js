@@ -107,17 +107,53 @@ function validDiagnosis(a) {
   return a.section==='keywords' ? (!a.compare_to || (!!a.window && adjacentKeywordWindows(a.window,a.compare_to)))
     : !['window','compare_to'].some(k=>Object.hasOwn(a,k)) && (a.section==='stability' || !['query','limit','cursor'].some(k=>Object.hasOwn(a,k)));
 }
+// PRO's pickup answer carries two flags that are its own bookkeeping. Show the counts; say in words when
+// earlier work was reused, because the details of this call (title, note, priority, deadline) only reach new work.
+function pickupView(data,a){
+  if(a?.operation!=='work.pickup'||!data||typeof data!=='object')return data;
+  const {source_selection_reused,details_applied_to_new_work_only,...shown}=data;
+  return source_selection_reused===true||shown.reused_target_count>0
+    ?{...shown,assistant_note:'Some or all selected targets already had work, so that work was reused: a title, note, priority or deadline sent now was not applied to it, only to newly created work. Read get_work_queue for the items.'}:shown;
+}
+const IMPORTANCE_FIELDS=['post_id','expected_value','value'], PICKUP_REQUIRED=['signal_id','snapshot_hash','target_keys','research_operation','title'];
 function validWork(a) {
-  if(a.operation==='importance.update') return ['post_id','expected_value','value'].every(k=>a[k]!==undefined)
-    && Object.keys(a).every(k=>['client_request_id','operation','post_id','expected_value','value'].includes(k));
-  if(['post_id','expected_value','value'].some(k=>Object.hasOwn(a,k))) return false;
-  if(a.operation==='work.pickup') return ['signal_id','snapshot_hash','target_keys','research_operation','title'].every(k=>a[k]!==undefined)
+  if(a.operation==='importance.update') return IMPORTANCE_FIELDS.every(k=>a[k]!==undefined)
+    && Object.keys(a).every(k=>['client_request_id','operation',...IMPORTANCE_FIELDS].includes(k));
+  if(IMPORTANCE_FIELDS.some(k=>Object.hasOwn(a,k))) return false;
+  if(a.operation==='work.pickup') return PICKUP_REQUIRED.every(k=>a[k]!==undefined)
     && Object.keys(a).every(k=>['client_request_id','operation',...pickupFields].includes(k))
     && new Set(a.target_keys).size===a.target_keys.length;
   if(pickupFields.filter(k=>k!=='note').some(k=>Object.hasOwn(a,k)) || a.work_id===undefined || a.expected_revision===undefined) return false;
   if(a.operation==='work.note') return a.note!==undefined && a.target_key===undefined && a.reviewed===undefined;
   if(Object.hasOwn(a,'note')) return false;
   return a.operation==='work.review_target' ? /^pickup_/.test(a.work_id) && a.target_key!==undefined && a.reviewed!==undefined : a.target_key===undefined && a.reviewed===undefined;
+}
+// The same rules as validWork, said as the rule that refused (the three forms differ: importance, pickup, and the
+// operations on an existing item). An agent that reads "work.pickup refuses expected_revision" fixes it in one retry.
+function invalidWork(a) {
+  const op=a.operation, list=names=>names.join(', '), end='; nothing was sent.';
+  const present=names=>names.filter(k=>Object.hasOwn(a,k)), absent=names=>names.filter(k=>a[k]===undefined);
+  if(op==='importance.update'){
+    const missing=absent(IMPORTANCE_FIELDS), extra=Object.keys(a).filter(k=>!['client_request_id','operation',...IMPORTANCE_FIELDS].includes(k));
+    return `importance.update needs ${list(IMPORTANCE_FIELDS)} and accepts nothing else (no work_id or expected_revision)${missing.length?`; missing ${list(missing)}`:''}${extra.length?`; remove ${list(extra)}`:''}${end}`;
+  }
+  const stray=present(IMPORTANCE_FIELDS);
+  if(stray.length) return `${list(stray)} belong to importance.update only; remove ${stray.length>1?'them':'it'}. ${op==='work.pickup'?'work.pickup takes signal_id, snapshot_hash, target_keys, research_operation and title (no work_id or expected_revision)'
+    :`${op} takes work_id and expected_revision`}${end}`;
+  if(op==='work.pickup'){
+    const missing=absent(PICKUP_REQUIRED), extra=Object.keys(a).filter(k=>!['client_request_id','operation',...pickupFields].includes(k));
+    if(extra.length||missing.length) return `work.pickup ${missing.length?`needs ${list(missing)}`:''}${missing.length&&extra.length?' and ':''}${extra.length?`refuses ${list(extra)}`:''}`
+      +` (it picks up research from signal_id, snapshot_hash and target_keys and has no work_id or expected_revision yet)${end}`;
+    return `work.pickup target_keys must not repeat a key${end}`;
+  }
+  const pickupOnly=present(pickupFields.filter(k=>k!=='note'));
+  if(pickupOnly.length) return `${list(pickupOnly)} belong to work.pickup only; ${op} needs work_id and expected_revision${end}`;
+  const missing=absent(['work_id','expected_revision']);
+  if(missing.length) return `${op} needs work_id and expected_revision (both from get_work_queue); missing ${list(missing)}${end}`;
+  if(op==='work.note') return a.note===undefined ? `work.note needs note${end}` : `work.note accepts only work_id, expected_revision and note${end}`;
+  if(Object.hasOwn(a,'note')) return `note belongs to work.pickup and work.note only${end}`;
+  if(op==='work.review_target') return `work.review_target needs a pickup_ work_id, target_key and reviewed${end}`;
+  return `${op} accepts only work_id and expected_revision${end}`;
 }
 
 // get_outcomes: the site's own measurement rows, shown in plain words. The site decides the status; this
@@ -183,7 +219,7 @@ const HOSTED_DESCRIPTIONS={
   search_pages:'Find published posts and pages by text (q matches title or content; q_match per item says which), post type, or a missing meta title or description. Leave type out to search every type. Returns post_id for get_page, diagnose_page and plan_changes.',
   get_page:'One page\'s saved fields: overview, metadata (meta title and description, social fields), content, and importance (standard, important, money). Read importance before proposing a change to the page.',
   diagnose_page:'Saved diagnosis for one page (post_id) or URL: Search Console clicks, impressions and position, index status, PageSpeed (page speed test results from Google PageSpeed Insights / Lighthouse: performance score, FCP, LCP, TBT and CLS, with the Core Web Vitals LCP and CLS; INP is not available: it is a field measurement, not part of a Lighthouse lab run), stability, a before/after comparison and keywords. Saved data, not a live check (where live_check is listed, it reads the page as it is now); each part says when it was read. A missing value means unknown, not zero. Index for a url the site does not manage as a page: not_applicable with reason url_not_a_managed_page, which means the url is not one of the site pages, not a missing check. Keywords: window and compare_to from adjacent available_windows. section overview only lists the sections (diagnosis_status not_applicable, reason overview_lists_sections_only): it says nothing about data, so read a section. A part without saved data (for example snapshot_missing_or_expired) stays empty: this connection cannot refresh or investigate it, so tell the user it is not measured yet. A diagnosis is not a cause. Page speed: use this instead of calling the PageSpeed Insights API yourself; if a site has no key, get_capabilities says how to add one.',
-  update_work_item:'Update work in the dashboard queue: pick up a research item, review a target, replace a note, complete or reopen, or set a page\'s importance. Notes replace the saved text; empty clears. Only on the user\'s instruction; pass the current revision from get_work_queue.',
+  update_work_item:'Update work in the dashboard queue: pick up a research item, review a target, replace a note, complete or reopen, or set a page\'s importance. Notes replace the saved text; empty clears. Only on the user\'s instruction. work.pickup needs title (with signal_id, snapshot_hash, target_keys, research_operation) and refuses expected_revision; the other operations need work_id + expected_revision from get_work_queue; importance.update takes post_id, expected_value and value instead.',
   plan_changes:'Prepare an exact plan for meta titles and descriptions, social fields, image alt text or redirects. Nothing changes on the site yet. Copy action_origin, or describe the user\'s request. Targets: post_id/attachment_id; redirects source_url/redirect_id, all fields set. Delete: acknowledge_deletion=true; image: original library URL. One item per page, image or redirect: meta fields together in one item, social fields in a separate plan. Show every target, value and warning (warnings[].text), then ask the user to approve it in chat.',
   execute_change_set:'Apply a plan from plan_changes exactly as the user approved it in chat; copy its acknowledgements. Check delivery.result.outcome_measurement before promising to measure the result. If the reply is unclear, read get_changes(kind=execution) before anything else.',
   get_changes:'Read one change plan by change_set_id: by default (kind=execution) its state, what was applied per item and what can be undone, with a summary; read it after a timeout before retrying. For the results in Google Search, use get_outcomes where listed.',
@@ -262,7 +298,7 @@ export function workflowDefinitions() {
     live_check: { description: 'Fetch one own page now; url or post_id.', schema: { url: siteUrl.optional(), post_id: pageId.optional() },
       validate: a => a.url!==undefined || a.post_id!==undefined, invalid: () => 'live_check needs url or post_id; nothing was sent.',
       path: () => '/live-check', present: liveCheckView, capability: 'live_check' },
-    update_work_item: { description: 'Pass revision. Notes replace; empty clears.',
+    update_work_item: { description: 'Pickup: title, no revision. importance.update: post_id + expected_value + value, no work_id or expected_revision. Others: work_id + expected_revision. Notes replace; empty clears.',
       write: true, path: () => '/work-items', schema: {
         client_request_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/),
         operation: z.enum(['work.review_target','work.complete','work.reopen','work.pickup','work.note','importance.update']), work_id: z.string().regex(/^(?:pickup_[a-f0-9]{32}|manual_[A-Za-z0-9][A-Za-z0-9_.:-]{0,151})$/).optional(),
@@ -273,7 +309,7 @@ export function workflowDefinitions() {
         title: z.string().min(1).max(240).refine(v=>Buffer.byteLength(v,'utf8')<=240).describe('UTF-8 bytes.').optional(),
         note: z.string().max(4000).refine(v=>Buffer.byteLength(v,'utf8')<=4000).describe('UTF-8 bytes.').optional(),
         priority: z.preprocess(v=>DUTCH_PRIORITY[v]??v,z.enum(['low','medium','high'])).optional(), deadline: z.union([z.literal(''),z.string().regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)]).optional(),
-      }, validate: validWork, query: a => a.priority ? { ...a, priority: PLUGIN_PRIORITY[a.priority] } : a },
+      }, validate: validWork, invalid: invalidWork, present: pickupView, query: a => a.priority ? { ...a, priority: PLUGIN_PRIORITY[a.priority] } : a },
     plan_changes: { description: 'Draft only; copy action_origin. Targets: post_id/attachment_id; redirects source_url/redirect_id, all fields set. Delete: acknowledge_deletion=true; image: original library URL.',
       schema:fieldProposalSchema,fieldPlan:true,path:()=>'/changes/proposals',validate:validFieldProposal,invalid:invalidFieldProposal },
     execute_change_set: { description: 'Unavailable.', schema: {} },
