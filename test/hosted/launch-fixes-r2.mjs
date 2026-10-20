@@ -68,6 +68,20 @@ await fix('P1-6 other operation needs work_id and revision', async () => {
 await fix('P1-6 importance form', async () => {
   await call([], 'update_work_item', { ...importance, work_id: 'manual_fixture' }, out => { assert.match(value(out).message, /importance\.update/); });
 });
+await fix('P1-6 importance fields on a pickup get pickup advice', async () => {
+  await call([], 'update_work_item', { ...pickup, post_id: 5 }, out => {
+    const m = value(out).message; assert.match(m, /post_id belong to importance\.update only; remove it/);
+    assert.match(m, /work\.pickup takes signal_id, snapshot_hash, target_keys, research_operation and title/); assert.doesNotMatch(m, /needs work_id|takes work_id/);
+  });
+  await call([], 'update_work_item', { ...note, value: 'important' }, out => { assert.match(value(out).message, /note takes work_id|work\.note takes work_id and expected_revision/); });
+});
+await fix('P1-6 local description names the importance form', async () => {
+  const { registerWorkflowTools } = await import('../../src/workflow-tools.js');
+  const registered = new Map();
+  registerWorkflowTools({ registerTool: (name, config) => { registered.set(name, config); return { enabled: true }; } }, { get: async () => ({}), post: async () => ({}) },
+    { capabilities: { work_administration: { available: true, operations: ['work.note'] } } });
+  assert.match(registered.get('update_work_item').description, /importance\.update: post_id \+ expected_value \+ value, no work_id or expected_revision/);
+});
 await fix('P1-6 description states the rules', async () => {
   const f = await connect({}, { capabilities: caps() });
   try {

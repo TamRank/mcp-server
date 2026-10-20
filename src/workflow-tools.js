@@ -138,7 +138,8 @@ function invalidWork(a) {
     return `importance.update needs ${list(IMPORTANCE_FIELDS)} and accepts nothing else (no work_id or expected_revision)${missing.length?`; missing ${list(missing)}`:''}${extra.length?`; remove ${list(extra)}`:''}${end}`;
   }
   const stray=present(IMPORTANCE_FIELDS);
-  if(stray.length) return `${list(stray)} belong to importance.update only; ${op} works on a work_id with its expected_revision${end}`;
+  if(stray.length) return `${list(stray)} belong to importance.update only; remove ${stray.length>1?'them':'it'}. ${op==='work.pickup'?'work.pickup takes signal_id, snapshot_hash, target_keys, research_operation and title (no work_id or expected_revision)'
+    :`${op} takes work_id and expected_revision`}${end}`;
   if(op==='work.pickup'){
     const missing=absent(PICKUP_REQUIRED), extra=Object.keys(a).filter(k=>!['client_request_id','operation',...pickupFields].includes(k));
     if(extra.length||missing.length) return `work.pickup ${missing.length?`needs ${list(missing)}`:''}${missing.length&&extra.length?' and ':''}${extra.length?`refuses ${list(extra)}`:''}`
@@ -297,7 +298,7 @@ export function workflowDefinitions() {
     live_check: { description: 'Fetch one own page now; url or post_id.', schema: { url: siteUrl.optional(), post_id: pageId.optional() },
       validate: a => a.url!==undefined || a.post_id!==undefined, invalid: () => 'live_check needs url or post_id; nothing was sent.',
       path: () => '/live-check', present: liveCheckView, capability: 'live_check' },
-    update_work_item: { description: 'Pickup: title, no revision. Others: work_id + expected_revision. Notes replace; empty clears.',
+    update_work_item: { description: 'Pickup: title, no revision. importance.update: post_id + expected_value + value, no work_id or expected_revision. Others: work_id + expected_revision. Notes replace; empty clears.',
       write: true, path: () => '/work-items', schema: {
         client_request_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{7,79}$/),
         operation: z.enum(['work.review_target','work.complete','work.reopen','work.pickup','work.note','importance.update']), work_id: z.string().regex(/^(?:pickup_[a-f0-9]{32}|manual_[A-Za-z0-9][A-Za-z0-9_.:-]{0,151})$/).optional(),
