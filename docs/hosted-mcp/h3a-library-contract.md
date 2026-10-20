@@ -30,28 +30,37 @@ every independent request context.
 | Field | Shape and authority |
 | --- | --- |
 | validatedInstallation | installation_id UUID; blog_id positive safe integer; canonical_home_url HTTPS; rest_base_url full HTTPS namespace on the same origin; rest_style pretty/query; link_id safe identifier; generation positive safe integer; workflow_profile safe-beta-1 |
-| grantContext | grant_id UUID; account_id/client_id safe identifiers; unique scopes[] drawn from the seven site scopes |
+| grantContext | grant_id UUID; account_id/client_id safe identifiers; unique scopes[] drawn from the ten site scopes |
 | filteredCapabilities | JSON capabilities object, contract_version 2 and safe-beta-1 compatibility or full_v2_compatible; VPS has filtered grant ∩ site ∩ membership ∩ profile |
 | auditContext | grantLabel exactly grant:<grant_id>, at most 80 UTF-8 bytes; clientLabel nonempty safe label at most 80 bytes; request_id safe identifier |
 | transport | request(input) async; optional synchronous redact(text) returning a string |
 | authorizer | authorizeOperation(toolName, parsedArgs), recordValidatedResult(toolName, parsedArgs, result) |
 
 Grant scopes: site:read, meta:write, audit:read, rollback, changes:write,
-tasks:write, importance:write. No inference of additional grant scopes from a
-wider site's capabilities. H3b owns current authorization, including zero-site
-grant refusal. Factory rejects specialist/legacy/preview/recovery/receipt-store
-contexts; the hosted tool profile is core only. No schema/redirect writes,
-scan execution, recovery mode or legacy aliases are available.
+tasks:write, importance:write, redirects:write, scans:plan, scans:execute.
+No inference of additional grant scopes from a wider site's capabilities. H3b
+owns current authorization, including zero-site grant refusal. Factory rejects
+specialist/legacy/preview/recovery/receipt-store contexts; the hosted tool
+profile is core. Hosted writes are metadata/social fields, attachment alt text
+and redirects (redirect-only sets, scope redirects:write; never mixed with
+field items). No schema writes, recovery mode, schema-source scans or legacy
+aliases are available.
 
-The capable core catalog is the fifteen names: get_site_context,
-get_capabilities, get_work_queue, get_signals, search_pages, get_page,
-diagnose_page, get_outcomes, list_changes, live_check, update_work_item,
-plan_changes, execute_change_set, get_changes, rollback_change_set. Where the
-site advertises index_checks (scope scans:execute), start_scan and
-get_scan_status are listed too, for targeted index checks only (type index,
-urls / check_id); PageSpeed and schema scans stay unavailable hosted.
-list_changes is listed where reads.get_outcomes is, live_check where
-live_check.available is true. get_capabilities returns
+The hosted catalog is at most 22 names; the VPS adds list_sites (its
+multi-site router), so a connection with everything advertised lists 23
+(measured live on tamrank.com, 20 October 2026). The fifteen core names:
+get_site_context, get_capabilities, get_work_queue, get_signals, search_pages,
+get_page, diagnose_page, get_outcomes, list_changes, live_check,
+update_work_item, plan_changes, execute_change_set, get_changes,
+rollback_change_set. Five stored-data reads where specialist_reads.<tool>
+.available is true: get_site_diagnostics, get_gsc_pages, get_redirects,
+get_images_missing_alt, get_topical_authority. start_scan and get_scan_status
+where the site advertises index_checks (targeted index checks, type index,
+urls / check_id; scope scans:execute) or pagespeed_execution (PageSpeed
+measurements: plan, explicit chat approval, start; scans:plan to plan, plus
+scans:execute to start). Schema-source scans and close_scan stay
+unavailable hosted. list_changes is listed where reads.get_outcomes is,
+live_check where live_check.available is true. get_capabilities returns
 filteredCapabilities; when it carries `as_of` (ISO time the API read the
 capabilities from the site) the library adds `cache_age_s`, counted per call. Reduced capabilities hide unavailable tools in tools/list,
 but a direct call still passes argument validation and current authorization.

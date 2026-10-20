@@ -168,9 +168,13 @@ When the owned test site's exact operation is available:
    obtain **new** approval. Changed current values, unsupported contexts or
    missing evidence can prevent rollback. Not everything is reversible.
 
-The current `safe-beta-1` profile executes only metadata/social fields and
-attachment alt text. Redirect, schema and scan execution remain disabled
-server-side even though separately gated development implementations exist.
+What can be executed follows what the site advertises in `get_capabilities`:
+metadata/social fields, attachment alt text and, where the site offers
+`redirect_execution`, redirects (redirect-only sets). The hosted connection
+(mcp.tamrank.com) additionally starts PageSpeed measurements (plan, then
+explicit chat approval) and targeted index checks (only when asked) where the
+site offers them. Schema execution remains disabled server-side even though a
+separately gated development implementation exists.
 There are no page-body/builder writes, automatic internal links, arbitrary
 JSON-LD or new schema templates. Stored fields are not automatically proof of
 effective frontend output. GSC outcome measurement is Phase 5, not a

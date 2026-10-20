@@ -6,7 +6,10 @@ import {receiptReference,recoveryAcks} from './scan-recovery-chat.js';
 import {maintenanceAcks,sourceMaintenanceAcks,discoverSourceScans} from './scan-maintenance.js';
 import { rateLimitAdvice } from './workflow-rest.js';
 import { isRefusalStatus } from './hosted/error-map.js';
-import {fieldProposalSchema,fieldProposalItem,validFieldProposal} from './field-proposals.js';
+import {fieldProposalSchema,fieldProposalItem,validFieldProposal,invalidFieldProposal} from './field-proposals.js';
+import {invalidArgumentsMessage} from './argument-errors.js';
+import {changeReadView,withWarnings,draftReadRefusal} from './change-views.js';
+import {pageCursor,pageFromCursor,validPageCursor,invalidPageCursor} from './page-cursor.js';
 import {schemaPreviewItem,validSchemaPreviewResponse} from './schema-preview.js';
 import {workflowCatalog} from './workflow-catalog.js';
 import {clampToToolProfile} from './workflow-profile.js';
@@ -15,7 +18,7 @@ import {hostedScopeChallengeMeta} from './hosted/auth-challenge.js';
 import {sourceConfirmation,validSourceStart,sourcePath,sourceArgs} from './source-scans.js';
 import {hostedScanDefinitions,hostedPageSpeed,hostedPageSpeedOffered,hostedPageSpeedReadable} from './pagespeed-hosted.js';
 import {scanConfirmation,pagespeedRoute,pagespeedSupport,discoverPageSpeedScans,validPageSpeedStart,
-  validPageSpeedProposal,validPageSpeedProgress,pageSpeedStartBody,pageSpeedProgress} from './pagespeed-scans.js';
+  validPageSpeedProposal,validPageSpeedProgress,pageSpeedStartBody,pageSpeedProgress,pageSpeedMeasuring} from './pagespeed-scans.js';
 import {executionSchema,rollbackSchema,confirmationBody,isFieldExecutionPlan,validExecutionResponse,fieldOperations} from './field-execution.js';
 import {validSchemaExecutionResponse,schemaForwardToken,schemaInverseToken,schemaForwardExecutionSchema,schemaInverseExecutionSchema,schemaMixedExecutionSchema,
   schemaConfirmationBody,isSchemaExecutionPlan,matchesSchemaExecutionRequest} from './schema-execution.js';
@@ -162,13 +165,13 @@ const siteUrl=z.string().min(1).max(2048).refine(validDiagnosisUrl);
 // since is a date on the site's own calendar (site_timezone), sent as is: PRO compares created_from with its
 // site-clock column. The same day with or without a known zone; a UTC day would miss the site's first hours.
 const outcomesQuery=a=>Object.fromEntries(Object.entries({ change_set_id: a.change_set_id, status: a.status, post_id: a.post_id, url: a.url,
-  created_from: a.since===undefined?undefined:a.since+' 00:00:00', per_page: a.limit, page: a.cursor }).filter(([,v])=>v!==undefined));
-function outcomesView(data,zone){
+  created_from: a.since===undefined?undefined:a.since+' 00:00:00', per_page: a.limit, page: pageFromCursor(a.cursor) }).filter(([,v])=>v!==undefined));
+function outcomesView(data,zone,cursorFor=page=>String(page)){
   const page=data?.pagination;
   if(data?.contract_version!==2||!Array.isArray(data.items)||!page||typeof page!=='object'||!Number.isSafeInteger(page.page))return null;
   // site_timezone: the site's zone as WordPress names it, so a Z time can be put back on the site's clock.
   return {contract_version:2,items:data.items.map(item=>outcomeItem(item,zone)),total:count(page.total),
-    next_cursor:page.has_more===true?String(page.page+1):null,site_timezone:zone?.name??null,...(zone?{}:{times_note:TIMES_NOTE})};
+    next_cursor:page.has_more===true?cursorFor(page.page+1):null,site_timezone:zone?.name??null,...(zone?{}:{times_note:TIMES_NOTE})};
 }
 // Fuller descriptions where the connection is set up in a chat app: the model there has no README, so the
 // listing is what tells it what a tool is for. Local sessions keep the short ones (catalog budget).
@@ -181,9 +184,9 @@ const HOSTED_DESCRIPTIONS={
   get_page:'One page\'s saved fields: overview, metadata (meta title and description, social fields), content, and importance (standard, important, money). Read importance before proposing a change to the page.',
   diagnose_page:'Saved diagnosis for one page (post_id) or URL: Search Console clicks, impressions and position, index status, PageSpeed (page speed test results from Google PageSpeed Insights / Lighthouse: performance score, FCP, LCP, TBT and CLS, with the Core Web Vitals LCP and CLS; INP is not available: it is a field measurement, not part of a Lighthouse lab run), stability, a before/after comparison and keywords. Saved data, not a live check (where live_check is listed, it reads the page as it is now); each part says when it was read. A missing value means unknown, not zero. Index for a url the site does not manage as a page: not_applicable with reason url_not_a_managed_page, which means the url is not one of the site pages, not a missing check. Keywords: window and compare_to from adjacent available_windows. section overview only lists the sections (diagnosis_status not_applicable, reason overview_lists_sections_only): it says nothing about data, so read a section. A part without saved data (for example snapshot_missing_or_expired) stays empty: this connection cannot refresh or investigate it, so tell the user it is not measured yet. A diagnosis is not a cause. Page speed: use this instead of calling the PageSpeed Insights API yourself; if a site has no key, get_capabilities says how to add one.',
   update_work_item:'Update work in the dashboard queue: pick up a research item, review a target, replace a note, complete or reopen, or set a page\'s importance. Notes replace the saved text; empty clears. Only on the user\'s instruction; pass the current revision from get_work_queue.',
-  plan_changes:'Prepare an exact plan for meta titles and descriptions, social fields, image alt text or redirects. Nothing changes on the site yet. Copy action_origin, or describe the user\'s request. Targets: post_id/attachment_id; redirects source_url/redirect_id, all fields set. Delete: acknowledge_deletion=true; image: original library URL. Show every target, value and warning, then ask the user to approve it in chat.',
+  plan_changes:'Prepare an exact plan for meta titles and descriptions, social fields, image alt text or redirects. Nothing changes on the site yet. Copy action_origin, or describe the user\'s request. Targets: post_id/attachment_id; redirects source_url/redirect_id, all fields set. Delete: acknowledge_deletion=true; image: original library URL. One item per page, image or redirect: meta fields together in one item, social fields in a separate plan. Show every target, value and warning (warnings[].text), then ask the user to approve it in chat.',
   execute_change_set:'Apply a plan from plan_changes exactly as the user approved it in chat; copy its acknowledgements. Check delivery.result.outcome_measurement before promising to measure the result. If the reply is unclear, read get_changes(kind=execution) before anything else.',
-  get_changes:'Read one change plan by change_set_id. kind=execution shows what was applied per item and what can be undone; read it after a timeout before retrying. For the results in Google Search, use get_outcomes where listed.',
+  get_changes:'Read one change plan by change_set_id: by default (kind=execution) its state, what was applied per item and what can be undone, with a summary; read it after a timeout before retrying. For the results in Google Search, use get_outcomes where listed.',
   rollback_change_set:'Prepare an undo for applied items of a change set. This only makes a new plan; applying it needs fresh approval in chat and execute_change_set. Newer edits to the same field are kept.',
   get_site_diagnostics:'Saved site-wide checks: metadata gaps, index status, structured data and 404 errors (404_urls, or 404_events for one url or text). Start with section overview (overview: section only). q is case-sensitive.',
   get_gsc_pages:'Saved Google Search Console figures per page (clicks, impressions, CTR, position) over the last 28 days, sortable. Only that stored window exists (periods in get_capabilities); another period returns no items with reason period_not_in_snapshot and available_periods, and this connection cannot refresh it. Use it to find pages that matter or underperform. q is case-sensitive.',
@@ -247,14 +250,14 @@ export function workflowDefinitions() {
     get_outcomes: { description: 'Search result per applied change; since (site date).', schema: { change_set_id: scanId.optional(),
       status: z.enum(outcomeStatuses).optional(), post_id: pageId.optional(), url: siteUrl.optional(), since: z.string().refine(validDay).optional(), ...paging },
       // The site pages by number; next_cursor carries it. Checked here, not in the schema, to keep the listing small.
-      validate: a => a.cursor===undefined || /^[1-9][0-9]{0,5}$/.test(a.cursor), invalid: () => 'cursor must be a next_cursor from get_outcomes; nothing was sent.',
-      path: () => '/outcomes', present: (data,a,zone) => outcomesView(data,zone), query: outcomesQuery, siteTime: true },
+      validate: a => validPageCursor('get_outcomes',a), invalid: a => invalidPageCursor('get_outcomes',a),
+      path: () => '/outcomes', present: (data,a,zone) => outcomesView(data,zone,page=>pageCursor('get_outcomes',a,page)), query: outcomesQuery, siteTime: true },
     // The same site rows as get_outcomes, cut to what changed where (Sam, 14 Oct 2026: every connected user
     // of a site sees all of its changes). Listed where the site advertises get_outcomes.
     list_changes: { description: 'Earlier changes; post_id/url, since (site date).', schema: { post_id: pageId.optional(), url: siteUrl.optional(),
       since: z.string().refine(validDay).optional(), ...paging }, readKey: 'get_outcomes',
-      validate: a => a.cursor===undefined || /^[1-9][0-9]{0,5}$/.test(a.cursor), invalid: () => 'cursor must be a next_cursor from list_changes; nothing was sent.',
-      path: () => '/outcomes', present: (data,a,zone) => changesView(data, d => outcomesView(d,zone)), query: outcomesQuery, siteTime: true },
+      validate: a => validPageCursor('list_changes',a), invalid: a => invalidPageCursor('list_changes',a),
+      path: () => '/outcomes', present: (data,a,zone) => changesView(data, d => outcomesView(d,zone,page=>pageCursor('list_changes',a,page))), query: outcomesQuery, siteTime: true },
     // The site fetches its own page (never this bridge or the VPS) and enforces the hourly limit.
     live_check: { description: 'Fetch one own page now; url or post_id.', schema: { url: siteUrl.optional(), post_id: pageId.optional() },
       validate: a => a.url!==undefined || a.post_id!==undefined, invalid: () => 'live_check needs url or post_id; nothing was sent.',
@@ -272,7 +275,7 @@ export function workflowDefinitions() {
         priority: z.preprocess(v=>DUTCH_PRIORITY[v]??v,z.enum(['low','medium','high'])).optional(), deadline: z.union([z.literal(''),z.string().regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)]).optional(),
       }, validate: validWork, query: a => a.priority ? { ...a, priority: PLUGIN_PRIORITY[a.priority] } : a },
     plan_changes: { description: 'Draft only; copy action_origin. Targets: post_id/attachment_id; redirects source_url/redirect_id, all fields set. Delete: acknowledge_deletion=true; image: original library URL.',
-      schema:fieldProposalSchema,fieldPlan:true,path:()=>'/changes/proposals',validate:validFieldProposal },
+      schema:fieldProposalSchema,fieldPlan:true,path:()=>'/changes/proposals',validate:validFieldProposal,invalid:invalidFieldProposal },
     execute_change_set: { description: 'Unavailable.', schema: {} },
     get_changes: { description: 'Old draft; cannot be applied as is.',
       schema:{change_set_id:scanId},fieldRead:true,path:a=>'/changes/'+a.change_set_id,omit:['change_set_id'] },
@@ -330,6 +333,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
   const redirectRecovery=capability(redirects,'recovery_available')&&capability(redirects,'read_available');
   const schemaRecovery=schemaExecutionRead&&capability(schemaExecution,'recovery_available')
     &&schemaExecution.recovery_contract==='schema_journal_recovery_v1';
+  const executionReadable=!maintenanceOnly&&(capability(execution,'read_available')||capability(redirects,'read_available')||schemaExecutionRead);
   if(!maintenanceOnly&&schemaExecutionRead)defs.get_changes={...defs.get_changes,
     description:'A plan; kind=execution: what was applied.',schema:{...defs.get_changes.schema,kind:z.enum(['draft','execution']).optional()}};
   if(!maintenanceOnly&&execution?.contract_version===1){
@@ -416,9 +420,16 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         ...(!readOnly&&def.path&&!def.indexCheck&&canonical!=='start_scan'?{idempotentHint:true}:{}) } }, async input => {
       if (!hostedContext && !preflight.ok) return failure(preflight.code || 'workflow_unavailable', preflight.message || 'TamRank could not start for this website. Nothing was sent.',rateLimitAdvice(preflight));
       const parsed = schema.safeParse(input || {});
-      if (!parsed.success) return failure('invalid_request','Invalid or unknown tool arguments; nothing was sent.');
-      if (def.validate && !def.validate(parsed.data))
-        return failure('invalid_request',def.invalid?.(parsed.data) || 'Invalid or unknown tool arguments; nothing was sent.');
+      if (!parsed.success) return failure('invalid_request',invalidArgumentsMessage(parsed.error));
+      if (def.validate && !def.validate(parsed.data)){
+        // invalid: a sentence, or {code,message,assistant_note} where the refusal has a code of its own.
+        const said=def.invalid?.(parsed.data);
+        if(said&&typeof said==='object')return failure(said.code,said.message,said.assistant_note?noted(said.assistant_note):undefined);
+        return failure('invalid_request',said || 'Invalid or unknown tool arguments; nothing was sent.');
+      }
+      // Launch test 20 Oct: get_changes without kind read the draft, which PRO 0.9.57 never returns for a plan
+      // from plan_changes. Where the site reads executions, a plan is readable there in every state (planned too).
+      if(def.fieldRead&&parsed.data.kind===undefined&&executionReadable)parsed.data.kind='execution';
       const authorizedArgs=hostedContext?structuredClone(parsed.data):null;
       if(hostedContext){
         let permission;
@@ -515,7 +526,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
             :validPageSpeedProposal(data,a)))return failure('pagespeed_incompatible_response','Read the same proposal or execution. Do not start a replacement scan or retry automatically.',
               {automatic_retry:false,proposal_id:a.proposal_id,execution_id:a.execution_id,client_request_id:a.client_request_id});
           const display=progress?pageSpeedProgress(data):data;
-          if(pagespeedRead&&a.execution_id&&data.dispatch_state==='reconciliation_required'&&recovery
+          if(pagespeedRead&&a.execution_id&&data.dispatch_state==='reconciliation_required'&&!pageSpeedMeasuring(data)&&recovery
             &&capabilities?.scan_recovery?.retained_receipt_review_available===true){
             try{display.retained_result_review=await recovery.reviewServer(a.execution_id);}
             catch(err){display.retained_result_state=err.status===404&&err.code==='scan_result_not_retained'?'not_retained':'unavailable';
@@ -616,9 +627,12 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
             :fieldAllowed&&!redirectPlan&&!redirectExecute&&!schemaPlan&&!schemaExecute&&!schemaRollback&&validExecutionResponse(data,id,hash);
           if(!valid||(!isSchema&&def.fieldExecution==='execute'&&data?.record?.history&&!matchesHistoricalExecution(data,a)))
             return failure('field_execution_incompatible_response','TamRank could not confirm the result of this change. Do not try it again yet.',noted('Read this set with get_changes(kind=execution) before anything else; never repeat writes automatically.'));
-          return result(data);
+          return result(nativeRead&&!isSchema?changeReadView(data):(nativePlan||rollback)&&!isSchema?withWarnings(data):data);
         }catch(err){if(nativePlan&&err.code==='change_plan_target_unavailable'&&err.status===404&&err.data?.outcome_unknown===false)
           return failure(err.code,`The website turned this down. ${err.message}`,err.data);
+          // A read changes nothing: a site refusal is its answer, never "may or may not have been applied".
+          if(nativeRead&&siteAnswered(err))return failure(err.code,`The website answered: ${err.message}`,
+            noted('Check the change_set_id; list_changes shows earlier change sets of this site.',hostedContext?err.data:undefined));
           return failure(err.code||'field_execution_uncertain','The website did not confirm this change; it may or may not have been applied.',
           {automatic_retry:false,assistant_note:'Read the same set with get_changes(kind=execution) before anything else; no automatic retry.',...(hostedContext?err.data:err.status===429?rateLimitAdvice(err.data):{})});}
       }
@@ -694,11 +708,19 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         if(canonical==='get_capabilities'&&!hostedContext)shown={...shown,as_of:new Date().toISOString(),cache_age_s:0};
         if(def.present){shown=def.present(data,parsed.data,zone);
           if(!shown)return failure('outcome_incompatible_response','The website sent an answer TamRank could not read. Nothing was changed.');}
+        // PRO fix/mcp-launch-fixes answers a draft read of a plan from plan_changes with the execution body
+        // ({contract_version:1, record}); same shape out, through the same plain view as kind=execution.
+        if(def.fieldRead&&(validExecutionResponse(shown,parsed.data.change_set_id)||validRedirectExecutionResponse(shown,parsed.data.change_set_id,null,null)))
+          shown=changeReadView(shown);
+        else if((def.fieldPlan||def.fieldRead)&&shown&&typeof shown==='object')shown=withWarnings(shown);
         return result(hostedContext&&canonical==='get_capabilities'?capabilitiesAge(hostedCapabilitiesView(hostedContext.filteredCapabilities))
           :deprecated ? { deprecated: true, replacement: canonical, remove_in: '0.5.0', data:shown } : shown);
       } catch (err) { const details=limitDetails(err.data),said=limitMessage(err.code,details);
         if(said)return failure(err.code,said,{...details,automatic_retry:false});
         const refused=typeof err.code==='string'&&def.refused?.(parsed.data,err.code);
+        // PRO 0.9.57 answers every draft read of a plan with change_store_integrity: say what it means, not "corrupt".
+        if(def.fieldRead&&err.code==='change_store_integrity'){const [code,message,advice]=draftReadRefusal(executionReadable);
+          return failure(code,message,hostedContext?{...strip(err.data??{},['code','message']),...advice}:advice);}
         if(err.code==='workflow_read_changed')return failure(err.code,'The website\'s data changed while it was being read, so this answer was not used. Restart the read from the first page.',
           {retryable:true,outcome_unknown:false,...changedSources(err.data),assistant_note:`Call ${canonical} again without cursor and with the same filters; never combine pages from before and after.`});
         const elsewhere=canonical==='diagnose_page'&&siteAnswered(err)&&otherSiteUrl(parsed.data.url,hostedContext?.validatedInstallation.canonical_home_url??client.base);

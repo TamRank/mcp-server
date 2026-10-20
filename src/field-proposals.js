@@ -54,7 +54,25 @@ export const fieldProposalSchema={
   ]),
   items:z.array(item).min(1).max(25),
 };
+const targetKey=v=>v.operation==='redirect.create'?'redirect-source:'+v.target.source_url:
+  v.operation.startsWith('redirect.')?'redirect-id:'+v.target.redirect_id:v.operation==='schema_settings.update'?'site:current':'post:'+(v.target.post_id??v.target.attachment_id);
 export const validFieldProposal=a=>Buffer.byteLength(JSON.stringify(a),'utf8')<=262144
   &&a.items.every(v=>v.operation!=='schema_settings.update'||(a.items.length===1&&a.origin.kind==='user_request'))
-  &&new Set(a.items.map(v=>v.operation==='redirect.create'?'redirect-source:'+v.target.source_url:
-    v.operation.startsWith('redirect.')?'redirect-id:'+v.target.redirect_id:v.operation==='schema_settings.update'?'site:current':'post:'+ (v.target.post_id??v.target.attachment_id))).size===a.items.length;
+  &&new Set(a.items.map(targetKey)).size===a.items.length;
+// PRO refuses a second item on the same post, attachment or redirect (posts and attachments share one id
+// space; change_plan_duplicate_target), so say which target repeats and how to split instead of a bare refusal.
+export function invalidFieldProposal(a){
+  if(!Array.isArray(a?.items))return undefined;
+  if(Buffer.byteLength(JSON.stringify(a),'utf8')>262144)return 'This plan is too large (at most 256 KB); plan fewer items at a time. Nothing was sent.';
+  if(a.items.some(v=>v.operation==='schema_settings.update')&&(a.items.length!==1||a.origin?.kind!=='user_request'))
+    return 'A site-wide structured data change must be the only item in its plan and come from the user\'s own request. Nothing was sent.';
+  const seen=new Map(),twice=[];
+  for(const v of a.items){const key=targetKey(v);if(seen.has(key)&&!twice.some(t=>t.key===key))twice.push({key,operations:[seen.get(key),v.operation]});else if(!seen.has(key))seen.set(key,v.operation);}
+  if(!twice.length)return undefined;
+  const named=twice.map(({key,operations})=>{const [kind,id]=[key.slice(0,key.indexOf(':')),key.slice(key.indexOf(':')+1)];
+    return `${kind==='post'?'page or image '+id:kind==='redirect-id'?'redirect '+id:'redirect from '+id} (${[...new Set(operations)].join(' and ')})`;});
+  // Code and sentence agreed with the PRO side (fix/mcp-launch-fixes, 20 Oct); the details are for the assistant.
+  return {code:'change_plan_duplicate_target',message:'One item per page per plan: this plan has two items for the same page or image. Split them into two plans.',
+    assistant_note:`Repeated: ${named.join(', ')}. Put all fields of one kind in one item (meta_title and meta_description together; social_title, `
+      +'social_description and social_image together) and make a separate plan for the other kind on the same page. Nothing was sent.'};
+}

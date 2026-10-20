@@ -112,9 +112,15 @@ export function pageSpeedStartBody(a,clientInfo){
   return {proposal_id:a.proposal_id,client_request_id:a.client_request_id,
     confirmation:{...provenance,acknowledgements:[...a.confirmation.acknowledgements]}};
 }
+// PRO fix/mcp-launch-fixes: measuring (the site is measuring right now) and reconcile_after (unix time after which an
+// unsettled run counts as stuck, or null). reconciliation_required while measuring is normal running, not a stuck run.
+export const pageSpeedMeasuring=d=>d?.dispatch_state==='reconciliation_required'&&d.measuring===true;
 export function pageSpeedProgress(d){
   return {contract_version:2,type:'pagespeed',execution_id:d.execution_id,proposal_id:d.proposal_id,proposal_hash:d.proposal_hash,
     state:d.progress.state,dispatch_state:d.dispatch_state,scheduled_at:d.scheduled_at,worker_liveness:'unknown',
+    ...(typeof d.measuring==='boolean'?{measuring:d.measuring}:{}),
+    ...(d.reconcile_after===null||positive(d.reconcile_after)?{reconcile_after:d.reconcile_after}:{}),
+    ...(pageSpeedMeasuring(d)?{status_note:'Measuring, read again shortly.'}:{}),
     runtime_hash:d.progress.runtime_hash,reservation_state:d.progress.runtime.reservation_state,automatic_retry_allowed:false,
     target_count:d.proposal.targets.length,measurement_count:d.progress.runtime.measurements.length,
     targets:d.proposal.targets.map((t,i)=>({...t,devices:d.progress.runtime.measurements.slice(i*2,i*2+2).map((m,j)=>({

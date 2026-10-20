@@ -1,5 +1,6 @@
 /** Hosted redirects and the stored-data specialist reads, through the real factory and SDK. */
 import assert from 'node:assert/strict';
+import { changeReadView, withWarnings } from '../../src/change-views.js';
 import { createWorkflowServer } from '../../src/hosted/factory.js';
 import { createStubVps } from './stub-vps.mjs';
 import { hostedRedirectCapability, hostedRedirectItems, validRedirectExecutionResponse } from '../../src/redirect-execution.js';
@@ -27,6 +28,8 @@ const reply = (state = 'planned', { inverse = false, operation = 'redirect.creat
 const execute = (token = 'trcx1.', acks = []) => ({ change_set_id: id, change_token: token + 'c'.repeat(64),
   confirmation: { plan_hash: hash, confirmed: true, acknowledgements: acks } });
 const body = call => JSON.parse(new TextDecoder().decode(call.bodyBytes));
+// What the assistant sees: an execution read through the plain change view, a plan with its warnings in words.
+const shown = (name, answer) => name === 'get_changes' ? changeReadView(answer) : ['plan_changes', 'rollback_change_set'].includes(name) ? withWarnings(answer) : answer;
 let checks = 0; const ok = (v, label) => { checks++; assert.ok(v, label); }, eq = (a, b, label) => { checks++; assert.deepEqual(a, b, label); };
 
 // 1. The factory knows redirects:write; an unknown scope still fails the whole context.
@@ -173,7 +176,7 @@ for (const [label, operations, released] of [['history-only field item beside a 
       eq(fixture.stub.calls.length, 1, `${label}/${name}: the site answered`);
       if (released) {
         eq(output.isError, undefined, `${label}/${name}: released: ${JSON.stringify(output)}`);
-        eq(value(output), answer, `${label}/${name}: released unchanged`);
+        eq(value(output), shown(name, answer), `${label}/${name}: released unchanged (reads through the plain change view)`);
         eq(fixture.stub.recorded.map(r => r.toolName), [name], `${label}/${name}: recorded`);
       } else {
         eq(value(output).code, 'field_execution_incompatible_response', `${label}/${name}`);

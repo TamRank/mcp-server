@@ -240,4 +240,18 @@ for (const [dispatch, said] of [['not_scheduled', /did not schedule it/], ['expi
     assert.equal(out.code, 'scan_not_owned'); assert.equal(f.stub.calls.length, 0);
   } finally { await f.close(); }
 }
+// PRO fix/mcp-launch-fixes (20 Oct): reconciliation_required while measuring is normal running; measuring and
+// reconcile_after pass through, and the status says to read again shortly instead of "stopped".
+for (const measuring of [true, false]) {
+  const reply = progress(); reply.dispatch_state = 'reconciliation_required'; reply.scheduled_at = null;
+  reply.measuring = measuring; reply.reconcile_after = measuring ? at + 600 : null;
+  reply.progress.state = reply.progress.runtime.state = 'running';
+  const f = await connect({ responses: [{ body: reply }] }, { capabilities: caps() });
+  try {
+    const out = value(await f.client.callTool({ name: 'get_scan_status', arguments: { type: 'pagespeed', execution_id: execution } }));
+    assert.equal(out.measuring, measuring, JSON.stringify(out)); assert.equal(out.reconcile_after, measuring ? at + 600 : null);
+    if (measuring) { assert.equal(out.status_note, 'Measuring, read again shortly.'); assert.match(out.explanation, /measuring these pages right now/); }
+    else { assert.equal(out.status_note, undefined); assert.doesNotMatch(out.explanation, /right now/); }
+  } finally { await f.close(); }
+}
 console.log('hosted golf3: ok');
