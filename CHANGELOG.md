@@ -27,8 +27,15 @@ project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html
   - `plan_changes` and `rollback_change_set` add `warnings`: per warning code a plain sentence
     (`warning_codes` stays as it was).
   - `plan_changes` with two items on the same page, image or redirect (for example `meta.update`
-    and `social.update` on one post) says which target repeats and how to split, instead of a bare
-    `invalid_request`. PRO refuses the same (`change_plan_duplicate_target`), so it stays refused.
+    and `social.update` on one post) is refused with PRO's own code `change_plan_duplicate_target`
+    and "One item per page per plan: ... Split them into two plans." (`assistant_note` names the
+    target and how to group fields), instead of a bare `invalid_request`. PRO refuses it too.
+  - PRO `fix/mcp-launch-fixes` contract: a draft read (`GET /changes/{id}`) of a plan from
+    `plan_changes` may answer with the execution body (`contract_version: 1`); that one route now
+    accepts v1 and shows it through the same view. PageSpeed progress passes `measuring` and
+    `reconcile_after`; `reconciliation_required` while `measuring` is true says "Measuring, read
+    again shortly." and skips the retained-result review. Builder/template reasons on `get_page`
+    content and `action_origin_target_count` / a UUID `action_id` in the work queue pass through.
   - Argument refusals name the argument and the form it takes (`since must be a date as
     YYYY-MM-DD ...`), hosted too (the SDK's pre-handler validation), without echoing the value.
   - `get_outcomes` and `list_changes` return an opaque `next_cursor` (`pc1.<page>.<tag>`) bound to

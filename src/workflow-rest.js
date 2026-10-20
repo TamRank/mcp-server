@@ -149,7 +149,10 @@ export class WorkflowClient {
       }
       // Native execution has its own versioned policy/envelope. Accept v1 only
       // on these exact method/route pairs; every older read/draft remains v2.
-      if (data.contract_version !== (fieldExecution || liveCheckRoute(method, path) ? 1 : 2)) throw new ApiError(409, 'workflow_upgrade_required', 'The TamRank plugin on this website does not match this connection. Nothing else was tried.');
+      // A draft read of a plan from plan_changes answers with the execution body (v1) since PRO fix/mcp-launch-fixes;
+      // a real draft stays v2. Only that read accepts both.
+      const draftRead=method==='GET'&&/^\/changes\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(path);
+      if (!(draftRead && data.contract_version === 1) && data.contract_version !== (fieldExecution || liveCheckRoute(method, path) ? 1 : 2)) throw new ApiError(409, 'workflow_upgrade_required', 'The TamRank plugin on this website does not match this connection. Nothing else was tried.');
       // Native schema rollback IDs share a prefix with private scan receipts.
       // Exempt only the exact envelope field after validating the whole closed
       // semantic response on an execution route, never error data or metadata.

@@ -10,7 +10,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { pagespeedRoute, pagespeedAcks, validPageSpeedProposal, validPageSpeedProgress,
-  pageSpeedStartBody, pageSpeedProgress } from './pagespeed-scans.js';
+  pageSpeedStartBody, pageSpeedProgress, pageSpeedMeasuring } from './pagespeed-scans.js';
 import { limitDetails, limitMessage, indexCheckDefinitions, pageSpeedEnableHelp, ENABLE_NOTE } from './live-checks.js';
 import { scanId } from './scan-maintenance.js';
 
@@ -92,10 +92,11 @@ const EXPLAIN = {
   completed: 'Done. Each page shows a mobile and a desktop result; a failed device has its error code.',
   cancelled: 'This measurement was cancelled before it finished. Nothing more will be measured for it. The site gives no reason here; a page Google cannot reach (for example a local, private or password-protected address) is cancelled before anything is sent.',
 };
+const MEASURING = 'The site is measuring these pages right now. Read the status again shortly with the same execution_id; do not start it again.';
 /** A started measurement as shown: per page and device, without the site's internal bookkeeping hashes. */
 export function hostedProgressView(data) {
   const { runtime_hash, reservation_state, proposal_hash, worker_liveness, limitations, ...shown } = pageSpeedProgress(data);
-  const explanation = shown.state === 'reserved' && WAITING[shown.dispatch_state] ? WAITING[shown.dispatch_state] : EXPLAIN[shown.state] ?? EXPLAIN.blocked;
+  const explanation = pageSpeedMeasuring(data) ? MEASURING : shown.state === 'reserved' && WAITING[shown.dispatch_state] ? WAITING[shown.dispatch_state] : EXPLAIN[shown.state] ?? EXPLAIN.blocked;
   return { ...shown, explanation };
 }
 

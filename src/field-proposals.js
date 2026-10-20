@@ -71,7 +71,8 @@ export function invalidFieldProposal(a){
   if(!twice.length)return undefined;
   const named=twice.map(({key,operations})=>{const [kind,id]=[key.slice(0,key.indexOf(':')),key.slice(key.indexOf(':')+1)];
     return `${kind==='post'?'page or image '+id:kind==='redirect-id'?'redirect '+id:'redirect from '+id} (${[...new Set(operations)].join(' and ')})`;});
-  return `A plan can change each page, image or redirect only once, and ${named.join(', ')} appears more than once. `
-    +'Put all fields of one kind in one item (meta_title and meta_description together; social_title, social_description and social_image together), '
-    +'and make a separate plan for the other kind on the same page. Nothing was sent.';
+  // Code and sentence agreed with the PRO side (fix/mcp-launch-fixes, 20 Oct); the details are for the assistant.
+  return {code:'change_plan_duplicate_target',message:'One item per page per plan: this plan has two items for the same page or image. Split them into two plans.',
+    assistant_note:`Repeated: ${named.join(', ')}. Put all fields of one kind in one item (meta_title and meta_description together; social_title, `
+      +'social_description and social_image together) and make a separate plan for the other kind on the same page. Nothing was sent.'};
 }

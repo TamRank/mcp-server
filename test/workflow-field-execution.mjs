@@ -107,9 +107,11 @@ try{
     check(requests===before+1,'Oversized response causes no automatic retry');
   }
   wireBytes=0;
-  for(const path of ['/pages','/changes/'+id]){
+  for(const path of ['/pages']){
     await assert.rejects(wire.get(path),e=>e.code==='workflow_upgrade_required');checks++;
   }
+  // PRO fix/mcp-launch-fixes: a draft read of a plan from plan_changes answers with the execution body (v1).
+  await wire.get('/changes/'+id);checks++;
   wireVersion=2;
   for(const [method,path]of routes){
     await assert.rejects(wire[method](path,{}),e=>e.code==='workflow_upgrade_required');checks++;

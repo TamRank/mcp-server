@@ -58,6 +58,27 @@ await call([wp(404, 'change_execution_not_found', 'This change set is not availa
 });
 });
 
+// 1. PRO fix/mcp-launch-fixes answers a draft read of a plan from plan_changes with the execution body: same shape out, plain view.
+await fix('fix 1 draft read with execution body', async () => {
+await call([{ body: executed() }], 'get_changes', { change_set_id: id, kind: 'draft' }, (out, stub) => {
+  const v = value(out);
+  assert.equal(out.isError, undefined, out.content[0].text);
+  assert.equal(new URL(stub.calls[0].url).pathname, `/wp-json/tamrank/v2/changes/${id}`);
+  assert.equal(v.contract_version, 1); assert.equal(v.record.state, 'executed'); assert.equal(v.record.envelope.plan_hash, hash);
+  assert.equal(out.content[0].text.includes('"lease_until"'), false); assert.match(v.summary, /^Applied\./);
+});
+});
+
+// 4 (PRO side). Builder/template reasons on get_page content and the work queue's action fields pass through unchanged.
+await fix('PRO passthrough get_page/get_work_queue', async () => {
+const page = { contract_version: 2, post_id: 265, section: 'content', items: [], next_cursor: null, empty_reason: 'page_builder',
+  page_builder: 'elementor', page_template: 'elementor_canvas', assistant_note: 'Built with a page builder; content is not read.' };
+await call([{ body: page }], 'get_page', { post_id: 265, section: 'content' }, out => assert.deepEqual(value(out), page));
+const queue = { contract_version: 2, items: [{ work_id: 'grp_alt_images', action_id: '0b8f0a3e-1c2d-4e5f-8a9b-0c1d2e3f4a5b',
+  action_origin_target_count: 15, website_write_available: true }], next_cursor: null };
+await call([{ body: queue }], 'get_work_queue', {}, out => assert.deepEqual(value(out), queue));
+});
+
 // 2. Two items on one post (meta + social on 410): refused here, as PRO refuses it, with what repeats and how to split.
 await fix('fix 2 one item per page', async () => {
 {
@@ -66,9 +87,10 @@ await fix('fix 2 one item per page', async () => {
     { operation: 'social.update', target: { post_id: 410 }, fields: { social_title: { mode: 'set', value: 'OG title' } } }] };
   await call([], 'plan_changes', args, (out, stub) => {
     const v = value(out);
-    assert.equal(out.isError, true); assert.equal(v.code, 'invalid_request'); assert.equal(stub.calls.length, 0);
-    assert.match(v.message, /page or image 410 \(meta\.update and social\.update\)/);
-    assert.match(v.message, /separate plan/); assert.doesNotMatch(v.message, /Invalid or unknown tool arguments/);
+    // Code and sentence as agreed with the PRO side (fix/mcp-launch-fixes); the details go to the assistant.
+    assert.equal(out.isError, true); assert.equal(v.code, 'change_plan_duplicate_target'); assert.equal(stub.calls.length, 0);
+    assert.equal(v.message, 'One item per page per plan: this plan has two items for the same page or image. Split them into two plans.');
+    assert.match(v.assistant_note, /page or image 410 \(meta\.update and social\.update\)/); assert.match(v.assistant_note, /separate plan/);
   });
 }
 });

@@ -18,7 +18,7 @@ import {hostedScopeChallengeMeta} from './hosted/auth-challenge.js';
 import {sourceConfirmation,validSourceStart,sourcePath,sourceArgs} from './source-scans.js';
 import {hostedScanDefinitions,hostedPageSpeed,hostedPageSpeedOffered,hostedPageSpeedReadable} from './pagespeed-hosted.js';
 import {scanConfirmation,pagespeedRoute,pagespeedSupport,discoverPageSpeedScans,validPageSpeedStart,
-  validPageSpeedProposal,validPageSpeedProgress,pageSpeedStartBody,pageSpeedProgress} from './pagespeed-scans.js';
+  validPageSpeedProposal,validPageSpeedProgress,pageSpeedStartBody,pageSpeedProgress,pageSpeedMeasuring} from './pagespeed-scans.js';
 import {executionSchema,rollbackSchema,confirmationBody,isFieldExecutionPlan,validExecutionResponse,fieldOperations} from './field-execution.js';
 import {validSchemaExecutionResponse,schemaForwardToken,schemaInverseToken,schemaForwardExecutionSchema,schemaInverseExecutionSchema,schemaMixedExecutionSchema,
   schemaConfirmationBody,isSchemaExecutionPlan,matchesSchemaExecutionRequest} from './schema-execution.js';
@@ -421,8 +421,12 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
       if (!hostedContext && !preflight.ok) return failure(preflight.code || 'workflow_unavailable', preflight.message || 'TamRank could not start for this website. Nothing was sent.',rateLimitAdvice(preflight));
       const parsed = schema.safeParse(input || {});
       if (!parsed.success) return failure('invalid_request',invalidArgumentsMessage(parsed.error));
-      if (def.validate && !def.validate(parsed.data))
-        return failure('invalid_request',def.invalid?.(parsed.data) || 'Invalid or unknown tool arguments; nothing was sent.');
+      if (def.validate && !def.validate(parsed.data)){
+        // invalid: a sentence, or {code,message,assistant_note} where the refusal has a code of its own.
+        const said=def.invalid?.(parsed.data);
+        if(said&&typeof said==='object')return failure(said.code,said.message,said.assistant_note?noted(said.assistant_note):undefined);
+        return failure('invalid_request',said || 'Invalid or unknown tool arguments; nothing was sent.');
+      }
       // Launch test 20 Oct: get_changes without kind read the draft, which PRO 0.9.57 never returns for a plan
       // from plan_changes. Where the site reads executions, a plan is readable there in every state (planned too).
       if(def.fieldRead&&parsed.data.kind===undefined&&executionReadable)parsed.data.kind='execution';
@@ -522,7 +526,7 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
             :validPageSpeedProposal(data,a)))return failure('pagespeed_incompatible_response','Read the same proposal or execution. Do not start a replacement scan or retry automatically.',
               {automatic_retry:false,proposal_id:a.proposal_id,execution_id:a.execution_id,client_request_id:a.client_request_id});
           const display=progress?pageSpeedProgress(data):data;
-          if(pagespeedRead&&a.execution_id&&data.dispatch_state==='reconciliation_required'&&recovery
+          if(pagespeedRead&&a.execution_id&&data.dispatch_state==='reconciliation_required'&&!pageSpeedMeasuring(data)&&recovery
             &&capabilities?.scan_recovery?.retained_receipt_review_available===true){
             try{display.retained_result_review=await recovery.reviewServer(a.execution_id);}
             catch(err){display.retained_result_state=err.status===404&&err.code==='scan_result_not_retained'?'not_retained':'unavailable';
@@ -704,7 +708,11 @@ export function registerWorkflowTools(server, client, { profile = 'core', prefli
         if(canonical==='get_capabilities'&&!hostedContext)shown={...shown,as_of:new Date().toISOString(),cache_age_s:0};
         if(def.present){shown=def.present(data,parsed.data,zone);
           if(!shown)return failure('outcome_incompatible_response','The website sent an answer TamRank could not read. Nothing was changed.');}
-        if((def.fieldPlan||def.fieldRead)&&shown&&typeof shown==='object')shown=withWarnings(shown);
+        // PRO fix/mcp-launch-fixes answers a draft read of a plan from plan_changes with the execution body
+        // ({contract_version:1, record}); same shape out, through the same plain view as kind=execution.
+        if(def.fieldRead&&(validExecutionResponse(shown,parsed.data.change_set_id)||validRedirectExecutionResponse(shown,parsed.data.change_set_id,null,null)))
+          shown=changeReadView(shown);
+        else if((def.fieldPlan||def.fieldRead)&&shown&&typeof shown==='object')shown=withWarnings(shown);
         return result(hostedContext&&canonical==='get_capabilities'?capabilitiesAge(hostedCapabilitiesView(hostedContext.filteredCapabilities))
           :deprecated ? { deprecated: true, replacement: canonical, remove_in: '0.5.0', data:shown } : shown);
       } catch (err) { const details=limitDetails(err.data),said=limitMessage(err.code,details);
