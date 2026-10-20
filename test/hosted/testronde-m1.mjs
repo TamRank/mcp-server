@@ -22,8 +22,8 @@ for (const code of ['manual_task_unavailable', 'workflow_work_unavailable']) {
       assert.doesNotMatch(v.message, /did not go through|No reason was given/);
     });
 }
-// M1: any other refused write still has an unknown outcome.
-await run([wp(409, 'workflow_work_changed', 'Synthetic')], 'update_work_item',
+// M1: any other refused write still has an unknown outcome (a stale revision is its own case since the launch test of 20 Oct).
+await run([wp(409, 'workflow_request_conflict', 'Synthetic')], 'update_work_item',
   { client_request_id: 'synthetic-work-001', operation: 'work.note', work_id: 'manual_fixture', expected_revision: 'a'.repeat(64), note: 'x' },
   out => { const v = value(out); assert.equal(v.code, 'site_unavailable'); assert.equal(v.outcome_unknown, true); });
 

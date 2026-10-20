@@ -11,6 +11,9 @@ project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 ## [Unreleased]
 
 ### Changed
+- Hosted `update_work_item`: a 409 for an outdated request (`workflow_work_changed`, `importance_value_changed`, `signal_pickup_snapshot_changed`, `pickup_note_origin_changed`) is now `work_item_changed` with `outcome_unknown: false`, and says to read again and send a new request, instead of `site_unavailable` with an unknown outcome.
+- `update_work_item` refusals name the rule (pickup needs `title` and refuses `expected_revision`; other operations need `work_id` and `expected_revision`; importance has its own fields), and the tool descriptions state it.
+- A pickup answer no longer shows `source_selection_reused` and `details_applied_to_new_work_only`; reused work gets an `assistant_note`.
 
 - Launch-readiness test of 20 Oct 2026 (tamrank.com, PRO 0.9.57):
   - `get_changes` without `kind` reads the execution record where the site offers execution
