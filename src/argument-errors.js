@@ -18,8 +18,12 @@ const FORMATS = {
 function describe(issue) {
   const path = issue.path, last = path.filter(p => typeof p === 'string').at(-1);
   const field = path.map((p, i) => typeof p === 'number' ? `[${p}]` : (i ? '.' : '') + p).join('') || 'arguments';
-  if (issue.code === 'unrecognized_keys')
-    return `unknown argument${issue.keys.length > 1 ? 's' : ''} ${issue.keys.join(', ')}${path.length ? ` in ${field}` : ''}`;
+  if (issue.code === 'unrecognized_keys') {
+    // Argument names come from the caller: show a few, each cut short.
+    const shown = issue.keys.slice(0, 5).map(k => k.length > 40 ? k.slice(0, 40) + '…' : k).join(', ');
+    return `unknown argument${issue.keys.length > 1 ? 's' : ''} ${shown}${issue.keys.length > 5 ? ` (and ${issue.keys.length - 5} more)` : ''}`
+      + (path.length ? ` in ${field.slice(0, 80)}` : '');
+  }
   if (issue.code === 'invalid_type' && issue.received === 'undefined') return `${field} is required`;
   if (issue.code === 'invalid_type') return `${field} must be ${issue.expected === 'integer' ? 'a whole number' : `a ${issue.expected}`}`;
   if (issue.code === 'invalid_enum_value') return `${field} must be one of ${issue.options.join(', ')}`;
@@ -38,5 +42,6 @@ function describe(issue) {
 export function invalidArgumentsMessage(error) {
   const said = [...new Set((error?.issues ?? []).map(describe))];
   if (!said.length) return 'Invalid or unknown tool arguments; nothing was sent.';
-  return `Invalid tool arguments: ${said.slice(0, 3).join('; ')}${said.length > 3 ? ` (and ${said.length - 3} more)` : ''}; nothing was sent.`;
+  const list = `${said.slice(0, 3).join('; ')}${said.length > 3 ? ` (and ${said.length - 3} more)` : ''}`;
+  return `Invalid tool arguments: ${list.length > 600 ? list.slice(0, 600) + '…' : list}; nothing was sent.`;
 }

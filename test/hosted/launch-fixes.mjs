@@ -104,6 +104,13 @@ for (const [name, args, field, form] of [
   assert.ok(v.message.includes(field), `${name}: ${v.message}`); assert.match(v.message, form, name);
   assert.doesNotMatch(v.message, /gisteren|yesterday|abc/, 'the value itself is never echoed');
 }, { capabilities: { ...fullCaps(), reads: { ...fullCaps().reads, get_outcomes: { available: true } } } });
+// Many long unknown argument names stay a short message (Greptile on PR #30).
+const flood = Object.fromEntries(Array.from({ length: 200 }, (_, i) => [`unknown_${i}_${'x'.repeat(300)}`, true]));
+await call([], 'get_signals', flood, out => {
+  const v = value(out);
+  assert.equal(v.code, 'invalid_request'); assert.ok(v.message.length <= 700, `length ${v.message.length}`);
+  assert.match(v.message, /unknown arguments .*\(and 195 more\)/);
+});
 });
 
 // 5. get_changes(kind=execution): no internal bookkeeping, a short summary, warnings in words; what later steps need stays.
