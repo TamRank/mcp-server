@@ -1,5 +1,6 @@
 /** Closed historical display/bridge regression; native ownership is tested in PHP. */
 import assert from 'node:assert/strict';
+import {changeReadView} from '../src/change-views.js';
 import {validHistoricalExecution} from '../src/execution-history.js';
 import {validExecutionResponse} from '../src/field-execution.js';
 import {validRedirectExecutionResponse} from '../src/redirect-execution.js';
@@ -43,7 +44,7 @@ for(const redirect of [false,true])for(const inverse of [false,true]){
   check(validator(response,id,hash),'Native-shaped historical family');
   for(const [name,input]of[['get_changes',{kind:'execution',change_set_id:id}],['execute_change_set',args]]){
     const reply=await tools.get(name)(input);check(!reply.isError,`${redirect}/${inverse}/${name}: ${reply.content[0].text}`);
-    checks++;assert.deepEqual(JSON.parse(reply.content[0].text),response);
+    checks++;assert.deepEqual(JSON.parse(reply.content[0].text),name==='get_changes'?changeReadView(response):response);
   }
   check(calls.length===2,'One request per operation, no automatic retry');calls=[];
   const mutations=[v=>{v.record.history_record={record:{history:v.record.history,security:{owner_key:'private-canary'}}};delete v.record.history;},

@@ -2,14 +2,25 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerWorkflowTools, WORKFLOW_INSTRUCTIONS } from './workflow-tools.js';
 import { workflowIdentity } from './workflow-identity.js';
+import { invalidArgumentsMessage } from './argument-errors.js';
 import { hostedPageSpeedOffered, hostedPageSpeedReadable } from './pagespeed-hosted.js';
 
-const invalidRequest = () => ({ isError: true, content: [{ type: 'text', text: JSON.stringify({ code: 'invalid_request',
-  message: 'Invalid or unsupported tool request; nothing was sent.' }) }] });
+const invalidRequest = (message = 'Invalid or unsupported tool request; nothing was sent.') => ({ isError: true,
+  content: [{ type: 'text', text: JSON.stringify({ code: 'invalid_request', message }) }] });
+// Marks a refusal this server worded itself; any other error text stays behind the bounded generic message.
+const ARGUMENT_REFUSAL = '\u0000tamrank-arguments:';
 class HostedWorkflowServer extends McpServer {
   // The pinned SDK validates inputs before invoking handlers. Preserve that
-  // validation while returning our bounded error instead of schema internals.
-  createToolError() { return invalidRequest(); }
+  // validation while returning our bounded error instead of schema internals:
+  // the argument and the form it takes, never the SDK's schema dump or the value.
+  async validateToolInput(tool, args, toolName) {
+    const parsed = typeof tool.inputSchema?.safeParse === 'function' ? tool.inputSchema.safeParse(args ?? {}) : null;
+    if (parsed && !parsed.success) throw new Error(ARGUMENT_REFUSAL + invalidArgumentsMessage(parsed.error));
+    return super.validateToolInput(tool, args, toolName);
+  }
+  createToolError(message) {
+    return invalidRequest(typeof message === 'string' && message.startsWith(ARGUMENT_REFUSAL) ? message.slice(ARGUMENT_REFUSAL.length) : undefined);
+  }
 }
 const native = (caps, key) => [caps.field_execution, caps.redirect_execution].some(v => v?.contract_version === 1 && v[key] === true);
 // Stored-data specialist reads a hosted connection may list; scans and schema stay specialist-only.

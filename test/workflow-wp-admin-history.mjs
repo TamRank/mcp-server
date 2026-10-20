@@ -1,5 +1,6 @@
 /** A rollback confirmed in WordPress admin (PRO wp_admin_confirmed) reads back through the bridge; agent input stays chat-only. */
 import assert from 'node:assert/strict';
+import {changeReadView} from '../src/change-views.js';
 import {validExecutionResponse} from '../src/field-execution.js';
 import {registerWorkflowTools} from '../src/workflow-tools.js';
 const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',itemId='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',executionId='cccccccc-cccc-4ccc-8ccc-cccccccccccc',
@@ -33,7 +34,7 @@ const read=async()=>{const reply=await registry().get('get_changes')({kind:'exec
 response=fixture(wpAdmin());
 check(validExecutionResponse(response,id,hash),'wp_admin_confirmed history parses');
 {const reply=await read();check(!reply.isError,`get_changes releases the wp-admin set: ${reply.content[0].text}`);
-  checks++;assert.deepEqual(JSON.parse(reply.content[0].text),response);}
+  checks++;assert.deepEqual(JSON.parse(reply.content[0].text),changeReadView(response));}
 
 // 2. chat_attested history is unchanged.
 response=fixture(chat());

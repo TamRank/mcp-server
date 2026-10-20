@@ -61,7 +61,7 @@ assert.match(parse(await tool.h({ cursor: 'abc' })).message, /next_cursor/);
   assert.deepEqual(item.after, { from: '2026-10-15', to: '2026-10-28', clicks: 30, impressions: 1200, ctr_percent: 2.5, average_position: 6.1 });
   assert.equal(item.click_change_percent, 50); assert.equal(item.relative_to_site_percent, 45); assert.equal(item.measured_at, '2026-11-01T02:00:00Z');
   assert.equal(item.page_url, 'https://site.example.invalid/pricing/'); assert.equal(item.first_result_expected, null);
-  assert.match(item.explanation, /not proof/); assert.equal(out.next_cursor, '2');
+  assert.match(item.explanation, /not proof/); assert.match(out.next_cursor, /^pc1\.2\.[a-f0-9]{16}$/);
 }
 // The other states explain themselves; an unknown status is shown as unknown, never as a status the site did not report.
 for (const [status, text] of [['low_data', /Too little search traffic/], ['no_gsc', /Search Console was not connected/],

@@ -12,6 +12,30 @@ project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ### Changed
 
+- Launch-readiness test of 20 Oct 2026 (tamrank.com, PRO 0.9.57):
+  - `get_changes` without `kind` reads the execution record where the site offers execution
+    reads (a plan from `plan_changes` is readable there in every state, `planned` too) instead of
+    the draft, which PRO 0.9.57 answers with `change_store_integrity` for every plan. A draft read
+    that still gets that answer returns `change_draft_unavailable` (`site_code` keeps the site's
+    code) and says the plan and the site are not damaged. A refused execution read says what the
+    site answered instead of "may or may not have been applied".
+  - `get_changes(kind=execution)` leaves out internal bookkeeping (site binding, `token_id`,
+    `operator_id`, leases, budgets, audit ids, dependency/source hashes) and adds `summary`,
+    `warnings` and `assistant_note`. Everything a later step uses stays (`change_set_id`,
+    `plan_hash`, `change_token`, `policy_version`, item ids, states, before/after, delivery
+    result). Schema execution records are unchanged (already a curated view).
+  - `plan_changes` and `rollback_change_set` add `warnings`: per warning code a plain sentence
+    (`warning_codes` stays as it was).
+  - `plan_changes` with two items on the same page, image or redirect (for example `meta.update`
+    and `social.update` on one post) says which target repeats and how to split, instead of a bare
+    `invalid_request`. PRO refuses the same (`change_plan_duplicate_target`), so it stays refused.
+  - Argument refusals name the argument and the form it takes (`since must be a date as
+    YYYY-MM-DD ...`), hosted too (the SDK's pre-handler validation), without echoing the value.
+  - `get_outcomes` and `list_changes` return an opaque `next_cursor` (`pc1.<page>.<tag>`) bound to
+    the filters, like the other reads; a cursor used with other filters is refused. A bare page
+    number is still accepted. Guarded by `test/hosted/launch-fixes.mjs`.
+  - `HOSTED-MCP.md` (and its handoff copy) matches what runs hosted: ten scopes, redirect writes,
+    PageSpeed and index measurements, up to 22 library tools plus `list_sites` from the VPS.
 - Everything the assistant can pass on to a user is plain language. Refusal messages no longer
   name internal terms (workflow, hosted, legacy writers, specialist, token, scope ids), tool
   names or HTTP statuses; what the assistant must do next (for example reading a set with
@@ -29,7 +53,8 @@ project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html
   result is expected, 14 days plus 3 days Search Console delay). Filters `change_set_id`,
   `status`, `since` (a date); pages with `next_cursor`. Reads the site's existing
   `/tamrank/v2/outcomes`; hosted lists it only when the site advertises
-  `reads.get_outcomes.available`. Core profile: 13 tools, specialist 21.
+  `reads.get_outcomes.available`. (Counts as of 20 Oct 2026: stdio core 15 tools, specialist 23;
+  hosted at most 22 library tools, plus `list_sites` from the VPS = 23 live.)
 - `get_capabilities` says how old it is: `as_of` (ISO time the capabilities were read from the
   site) and `cache_age_s`. Local sessions read live (`cache_age_s: 0`); hosted shows the API's
   `as_of` and counts the age per call, since the session keeps the copy it opened with.
