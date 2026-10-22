@@ -133,11 +133,14 @@ export function workflowCatalog(server,{hosted=false}={}){
     publish(){server.server.setRequestHandler(ListToolsRequestSchema,()=>({tools:entries.filter(({tool})=>tool.enabled).map(({name,tool,config})=>{
       const input=normalizeObjectSchema(tool.inputSchema);
       const published=input?compactWorkflowSchema(toJsonSchemaCompat(input,{strictUnions:true,pipeStrategy:'input'})):{type:'object'};
-      // Some hosted connectors add one private argument while validating the
-      // advertised schema, even for a zero-argument tool. This is a listing-only
-      // allowance; the SDK's registered Zod schema remains strict at invocation.
-      const inputSchema=hosted&&name==='get_capabilities'&&published.type==='object'&&published.maxProperties===0
-        ?{type:'object',maxProperties:1}:published;
+      // ChatGPT adds one private argument while validating an open (not closed)
+      // advertised schema, even for a zero-argument tool, so maxProperties:0 broke it.
+      // A count limit cannot hold that slot either: the multi-site router (tamrank-api)
+      // adds a required `site` next to it, and maxProperties:1 then refuses {site}.
+      // List a zero-argument hosted tool as an open object without a count; the SDK's
+      // registered Zod schema stays strict at invocation and refuses unknown arguments.
+      const inputSchema=hosted&&published.type==='object'&&published.maxProperties===0
+        &&Object.keys(published).length===2?{type:'object',properties:{}}:published;
       const result={name,title:tool.title,description:tool.description,
         inputSchema,
         annotations:tool.annotations,execution:compactWorkflowExecution(tool.execution),_meta:tool._meta};
